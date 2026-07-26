@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=Roo Term
+Comment=SSH host manager using Ásbrú Connection Manager config
+Exec=@bindir@/rooterm
+TryExec=@bindir@/rooterm
+Icon=org.roojs.rooterm
+Terminal=false
+Type=Application
+Categories=Utility;TerminalEmulator;GTK;Network;
+StartupNotify=true
+StartupWMClass=org.roojs.rooterm
+Keywords=ssh;terminal;asbru;connection;

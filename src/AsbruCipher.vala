@@ -24,14 +24,6 @@ namespace RooTerm
 	public class AsbruCipher
 	{
 		private static bool gcrypt_ready = false;
-		private static GLib.Regex hex_re;
-		private static GLib.Regex pair_re;
-
-		static construct
-		{
-			hex_re = new GLib.Regex("^[0-9a-fA-F]+$");
-			pair_re = new GLib.Regex("(..)");
-		}
 
 		/**
 		 * Decrypt a hex-encoded Ásbrú ``pass`` / ``passphrase`` field.
@@ -58,24 +50,18 @@ namespace RooTerm
 				GLib.warning("asbru decrypt failed for blob length=%d", hex.length);
 				return "";
 			}
-
-			if (!AsbruCipher.hex_re.match(hex)) {
+			if (!GLib.Regex.match_simple("^[0-9a-fA-F]+$", hex)) {
 				GLib.warning("asbru decrypt failed for blob length=%d", hex.length);
 				return "";
 			}
 
 			var bin = new uint8[hex.length / 2];
-			GLib.MatchInfo info;
-			AsbruCipher.pair_re.match(hex, 0, out info);
 			var i = 0;
-			while (info.matches()) {
-				bin[i] = (uint8) uint64.parse("0x" + info.fetch(1));
+			while (i < bin.length) {
+				bin[i] = (uint8) uint64.parse("0x" + hex.substring(i * 2, 2));
 				i++;
-				if (!info.next()) {
-					break;
-				}
 			}
-			if (i != bin.length || bin.length < 16) {
+			if (bin.length < 16) {
 				GLib.warning("asbru decrypt failed for blob length=%d", hex.length);
 				return "";
 			}

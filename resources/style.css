@@ -1,0 +1,30 @@
+/* RooTerm application styles — pulldown selection matches OLLMchat pulldown.css */
+
+entry.suggestion {
+	padding-right: 24px;
+}
+
+popover.menu {
+	margin-top: 6px;
+	padding: 0;
+	min-width: 0;
+}
+
+popover.menu listview {
+	margin: 8px 0;
+}
+
+popover.menu listview > row {
+	padding: 8px;
+	min-width: 0;
+}
+
+popover.menu listview > row:selected {
+	outline-color: alpha(@accent_bg_color, 0.35);
+	color: @accent_fg_color;
+	background-color: alpha(@accent_bg_color, 0.45);
+}
+
+button.session-icon.session-active {
+	color: #2ec27e;
+}

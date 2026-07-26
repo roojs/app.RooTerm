@@ -34,6 +34,18 @@ namespace RooTerm
 			default = new Gee.ArrayList<Connection>();
 		}
 		public string path = "";
+		/**
+		 * Global ``defaults.terminal font`` (e.g. ``Monospace 9``).
+		 */
+		public string terminal_font = "Monospace 9";
+		/**
+		 * Global ``defaults.terminal windows hsize``.
+		 */
+		public int window_width = 1024;
+		/**
+		 * Global ``defaults.terminal windows vsize``.
+		 */
+		public int window_height = 768;
 
 		/**
 		 * Load config from the default Ásbrú path or an override.
@@ -60,6 +72,7 @@ namespace RooTerm
 			this.roots.clear();
 
 			var at_root = false;
+			var in_defaults = false;
 			var in_environments = false;
 			var in_connection = false;
 			var skip_depth = 0;
@@ -89,12 +102,17 @@ namespace RooTerm
 
 				switch (event.type) {
 					case Yaml.EventType.MAPPING_START:
-						if (!at_root && !in_environments && !in_connection) {
+						if (!at_root && !in_environments && !in_connection && !in_defaults) {
 							at_root = true;
 							want_key = true;
 							continue;
 						}
-						if (at_root && !in_environments && !in_connection && key == "environments") {
+						if (at_root && !in_environments && !in_connection && !in_defaults && key == "defaults") {
+							in_defaults = true;
+							want_key = true;
+							continue;
+						}
+						if (at_root && !in_environments && !in_connection && !in_defaults && key == "environments") {
 							in_environments = true;
 							want_key = true;
 							continue;
@@ -110,6 +128,11 @@ namespace RooTerm
 						continue;
 
 					case Yaml.EventType.MAPPING_END:
+						if (in_defaults) {
+							in_defaults = false;
+							want_key = true;
+							continue;
+						}
 						if (!in_connection && in_environments) {
 							in_environments = false;
 							want_key = true;
@@ -131,14 +154,14 @@ namespace RooTerm
 						}
 						var conn = new Connection() {
 							uuid = uuid,
-							name = fields.has_key("name") ? fields.get("name") : "",
-							parent_uuid = fields.has_key("parent") ? fields.get("parent") : "",
-							method = fields.has_key("method") ? fields.get("method") : "",
-							ip = fields.has_key("ip") ? fields.get("ip") : "",
-							user = fields.has_key("user") ? fields.get("user") : "",
-							auth_type = fields.has_key("auth type") ? fields.get("auth type") : "",
-							public_key = fields.has_key("public key") ? fields.get("public key") : "",
-							options = fields.has_key("options") ? fields.get("options") : "",
+							name = fields.has_key("name") ? fields.get("name").strip() : "",
+							parent_uuid = fields.has_key("parent") ? fields.get("parent").strip() : "",
+							method = fields.has_key("method") ? fields.get("method").strip() : "",
+							ip = fields.has_key("ip") ? fields.get("ip").strip() : "",
+							user = fields.has_key("user") ? fields.get("user").strip() : "",
+							auth_type = fields.has_key("auth type") ? fields.get("auth type").strip() : "",
+							public_key = fields.has_key("public key") ? fields.get("public key").strip() : "",
+							options = fields.has_key("options") ? fields.get("options").strip() : "",
 							is_group = (group == "1" || group.down() == "true"),
 							port = port,
 							pass = AsbruCipher.decrypt_hex(fields.has_key("pass") ? fields.get("pass") : ""),
@@ -169,6 +192,19 @@ namespace RooTerm
 							want_key = false;
 							continue;
 						}
+						if (in_defaults) {
+							if (key == "terminal font" && val.length > 0) {
+								this.terminal_font = val;
+							}
+							if (key == "terminal windows hsize" && val.length > 0) {
+								this.window_width = int.parse(val);
+							}
+							if (key == "terminal windows vsize" && val.length > 0) {
+								this.window_height = int.parse(val);
+							}
+							want_key = true;
+							continue;
+						}
 						if (in_connection) {
 							fields.set(key, val);
 						}
@@ -192,7 +228,17 @@ namespace RooTerm
 				this.by_uuid.get(conn.parent_uuid).children.add(conn);
 			}
 
-			GLib.debug("loaded connections=%d roots=%d from %s", this.by_uuid.size, this.roots.size, this.path);
+			this.roots.sort((a, b) => {
+				return a.name.collate(b.name);
+			});
+			foreach (var conn in this.by_uuid.values) {
+				conn.children.sort((a, b) => {
+					return a.name.collate(b.name);
+				});
+			}
+
+			GLib.debug("loaded connections=%d roots=%d font=%s size=%dx%d from %s",
+				this.by_uuid.size, this.roots.size, this.terminal_font, this.window_width, this.window_height, this.path);
 		}
 	}
 }

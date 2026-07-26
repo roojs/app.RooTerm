@@ -19,35 +19,23 @@
 namespace RooTerm
 {
 	/**
-	 * Ásbrú connection or group (``is_group``).
+	 * Outer stack of {@link HostPage}s keyed by connection uuid.
 	 */
-	public class Connection : GLib.Object
+	public class HostStack : Gtk.Box
 	{
-		public string uuid = "";
-		public string name { get; set; default = ""; }
-		public bool is_group = false;
-		public string parent_uuid = "";
-		public string method = "";
-		public string ip = "";
-		public int port = 22;
-		public string user = "";
-		public string pass = "";
-		public string passphrase = "";
-		public string auth_type = "";
-		public string public_key = "";
-		public string options = "";
+		public Gtk.Stack pages;
+
 		/**
-		 * Open terminal tabs for this host (one tree icon each).
+		 * Empty stack; pages are added by {@link SessionController}.
 		 */
-		public int open_count { get; set; default = 0; }
-		/**
-		 * Index of the focused tab for this host (``-1`` if none).
-		 */
-		public int active_tab { get; set; default = -1; }
-		public Gee.ArrayList<Connection> children {
-			get;
-			set;
-			default = new Gee.ArrayList<Connection>();
+		public HostStack()
+		{
+			Object(orientation: Gtk.Orientation.VERTICAL, spacing: 0, hexpand: true, vexpand: true);
+			this.pages = new Gtk.Stack() {
+				hexpand = true,
+				vexpand = true
+			};
+			this.append(this.pages);
 		}
 	}
 }

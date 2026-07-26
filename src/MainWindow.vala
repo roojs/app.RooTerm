@@ -19,106 +19,164 @@
 namespace RooTerm
 {
 	/**
-	 * Main window: header, host tree, and a sanity VTE shell.
+	 * Main window: header, host search, host tree, and host terminal stack.
+	 * Window close closes the current terminal (then shows another if any).
 	 */
 	public class MainWindow : Adw.ApplicationWindow
 	{
 		private Adw.HeaderBar header_bar;
-		private Gtk.Entry search_entry;
-		private Gtk.Stack host_stack;
-		private Vte.Terminal terminal;
+		private HostSearchPulldown host_search;
 		private HostTree host_tree;
+		private HostStack host_stack;
+		private SessionController sessions;
 		private AsbruConfig asbru_config;
+		private Gtk.Paned paned;
 
 		/**
-		 * Builds the window: title, search stub, host tree, local VTE.
+		 * Builds the window: title, search pulldown, host tree, session stack.
 		 *
 		 * @param app Owning {@link Application}
 		 */
 		public MainWindow(Application app)
 		{
-			Object(
-				application: app,
-				title: "Roo Term",
-				default_width: 1100,
-				default_height: 700
-			);
-
-			this.header_bar = new Adw.HeaderBar();
-			var title_label = new Gtk.Label("Roo Term");
-			title_label.add_css_class("heading");
-			this.header_bar.pack_start(title_label);
-
-			this.search_entry = new Gtk.Entry() {
-				placeholder_text = "Ctrl+Shift+O",
-				hexpand = true,
-				width_request = 320
-			};
-			this.header_bar.set_title_widget(this.search_entry);
-
-			this.asbru_config = new AsbruConfig();
+			var config = new AsbruConfig();
 			try {
-				this.asbru_config.load();
+				config.load();
 			} catch (GLib.Error e) {
 				GLib.warning("asbru config load failed: %s", e.message);
 			}
-			this.host_tree = new HostTree(this.asbru_config);
-			this.host_tree.connection_activated.connect((conn) => {
-				GLib.debug("activate connection name=%s uuid=%s", conn.name, conn.uuid);
-			});
 
-			this.host_stack = new Gtk.Stack();
-			this.terminal = new Vte.Terminal() {
-				hexpand = true,
-				vexpand = true
-			};
-			this.terminal.set_size(80, 24);
-
-			var scrolled = new Gtk.ScrolledWindow() {
-				child = this.terminal,
-				hexpand = true,
-				vexpand = true
-			};
-			this.host_stack.add_named(scrolled, "local");
-			this.host_stack.set_visible_child_name("local");
-
-			var shell = GLib.Environment.get_variable("SHELL");
-			if (shell == null || shell.length == 0) {
-				shell = "/bin/bash";
-			}
-
-			this.terminal.spawn_async(
-				Vte.PtyFlags.DEFAULT,
-				null,
-				{ shell },
-				null,
-				GLib.SpawnFlags.SEARCH_PATH,
-				null,
-				-1,
-				null,
-				(term, pid, error) => {
-					if (error != null) {
-						GLib.warning("local shell spawn failed: %s", error.message);
-						return;
-					}
-					GLib.debug("local shell pid=%d", pid);
-				}
+			Object(
+				application: app,
+				title: "Roo Term",
+				icon_name: "org.roojs.rooterm",
+				default_width: config.window_width,
+				default_height: config.window_height
 			);
 
-			var paned = new Gtk.Paned(Gtk.Orientation.HORIZONTAL) {
+			var css = new Gtk.CssProvider();
+			css.load_from_resource("/rooterm/style.css");
+			Gtk.StyleContext.add_provider_for_display(
+				this.get_display(),
+				css,
+				Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+			);
+
+			this.asbru_config = config;
+
+			this.header_bar = new Adw.HeaderBar();
+			var logo = new Gtk.Image.from_icon_name("utilities-terminal-symbolic") {
+				pixel_size = 20,
+				valign = Gtk.Align.CENTER
+			};
+			var title_label = new Gtk.Label("Roo Term") {
+				valign = Gtk.Align.CENTER
+			};
+			title_label.add_css_class("heading");
+			var brand = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 8) {
+				valign = Gtk.Align.CENTER
+			};
+			brand.append(logo);
+			brand.append(title_label);
+			this.header_bar.pack_start(brand);
+
+			this.host_search = new HostSearchPulldown(this.asbru_config) {
+				halign = Gtk.Align.CENTER,
+				hexpand = false
+			};
+			this.header_bar.set_title_widget(this.host_search);
+
+			this.host_stack = new HostStack();
+			this.sessions = new SessionController(this.host_stack);
+			this.sessions.terminal_font = this.asbru_config.terminal_font;
+			this.sessions.display_changed.connect(() => {
+				this.title = this.sessions.display;
+				if (this.sessions.display == "Roo Term") {
+					this.host_search.placeholder_text = "Ctrl+Shift+O";
+					return;
+				}
+				this.host_search.placeholder_text = this.sessions.display;
+			});
+
+			this.host_tree = new HostTree();
+			this.host_tree.fill(this.asbru_config);
+			this.host_tree.connection_activated.connect((conn) => {
+				this.sessions.open(conn);
+			});
+			this.host_tree.connection_highlighted.connect((conn) => {
+				var page = this.host_stack.pages.get_child_by_name(conn.uuid) as HostPage;
+				if (page == null) {
+					return;
+				}
+				this.host_stack.pages.visible_child = page;
+				this.sessions.focus();
+			});
+			this.host_tree.terminal_selected.connect((conn, index) => {
+				var page = this.host_stack.pages.get_child_by_name(conn.uuid) as HostPage;
+				if (page == null || index < 0 || index >= page.tab_view.n_pages) {
+					return;
+				}
+				this.host_tree.select(conn);
+				this.host_stack.pages.visible_child = page;
+				page.tab_view.selected_page = page.tab_view.get_nth_page(index);
+				this.sessions.focus();
+			});
+			this.host_search.connection_selected.connect((conn) => {
+				this.host_tree.select(conn);
+				var page = this.host_stack.pages.get_child_by_name(conn.uuid) as HostPage;
+				if (page == null || page.tab_view.n_pages == 0) {
+					this.sessions.open(conn);
+					return;
+				}
+				this.host_stack.pages.visible_child = page;
+				page.tab_view.selected_page = page.tab_view.get_nth_page(0);
+				this.sessions.focus();
+				var term = page.tab_view.selected_page.child as SshTerminal;
+				if (term == null) {
+					return;
+				}
+				term.terminal.grab_focus();
+			});
+
+			var search_action = new GLib.SimpleAction("search", null);
+			search_action.activate.connect(() => {
+				this.host_search.grab_focus();
+				this.host_search.entry.select_region(0, -1);
+			});
+			this.add_action(search_action);
+			app.set_accels_for_action("win.search", { "<Control><Shift>o" });
+
+			var tree_pos = (int) (config.window_width * 0.30);
+			this.paned = new Gtk.Paned(Gtk.Orientation.HORIZONTAL) {
 				start_child = this.host_tree,
 				end_child = this.host_stack,
 				resize_start_child = false,
-				shrink_start_child = false,
-				position = 280,
+				shrink_start_child = true,
+				position = tree_pos,
 				hexpand = true,
 				vexpand = true
 			};
 
 			var content = new Gtk.Box(Gtk.Orientation.VERTICAL, 0);
 			content.append(this.header_bar);
-			content.append(paned);
+			content.append(this.paned);
 			this.content = content;
+
+			this.close_request.connect(() => {
+				if (this.sessions.close_current()) {
+					return true;
+				}
+				return false;
+			});
+		}
+
+		public override void size_allocate(int width, int height, int baseline)
+		{
+			base.size_allocate(width, height, baseline);
+			if (this.host_search == null) {
+				return;
+			}
+			this.host_search.width_request = (int) (width * 0.50);
 		}
 	}
 }

@@ -108,6 +108,7 @@ namespace RooTerm
 				application_id: "org.roojs.rooterm",
 				flags: GLib.ApplicationFlags.HANDLES_COMMAND_LINE
 			);
+			Gtk.Window.set_default_icon_name("org.roojs.rooterm");
 
 			GLib.Log.set_default_handler((dom, lvl, msg) => {
 				RooTerm.debug_log("rooterm", dom != null ? dom : "", lvl, msg);

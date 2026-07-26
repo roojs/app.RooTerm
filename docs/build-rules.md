@@ -6,14 +6,12 @@ Canonical build workflow for this project. Written for **AI agents** — **manda
 
 ## Dependencies
 
-- GTK4, Libadwaita, Vala, Meson, Ninja, Gee, **libgcrypt** (`libgcrypt20-dev`)
-- **VTE GTK4** (`libvte-2.91-gtk4-dev`) — preferred system install:
-
 ```bash
-sudo apt-get install -y libvte-2.91-gtk4-dev libgtk-4-dev libadwaita-1-dev libgcrypt20-dev libgee-0.8-dev valac meson ninja-build
+sudo apt-get install -y \
+  libvte-2.91-gtk4-0 libvte-2.91-gtk4-dev \
+  libgtk-4-dev libadwaita-1-dev libgcrypt20-dev libgee-0.8-dev \
+  valac meson ninja-build
 ```
-
-If the system package is missing, a local extract under `.deps/prefix` can be used (see below).
 
 ## Building the Project
 
@@ -23,15 +21,6 @@ If the system package is missing, a local extract under `.deps/prefix` can be us
 
 ```bash
 meson setup build
-ninja -C build
-```
-
-### With local VTE GTK4 prefix
-
-```bash
-export PKG_CONFIG_PATH=$PWD/.deps/prefix/usr/lib/x86_64-linux-gnu/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}
-export LD_LIBRARY_PATH=$PWD/.deps/prefix/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
-meson setup build   # or: meson setup --reconfigure build
 ninja -C build
 ./build/rooterm --debug
 ```
@@ -45,7 +34,22 @@ meson setup --reconfigure build
 ninja -C build
 ```
 
+### Install (desktop entry + icon)
+
+Default prefix is `/usr` (traditional). Needs root:
+
+```bash
+meson setup --reconfigure build
+ninja -C build
+sudo meson install -C build
+```
+
+Installs `/usr/bin/rooterm`, `/usr/share/applications/org.roojs.rooterm.desktop`,
+and `/usr/share/icons/hicolor/scalable/apps/org.roojs.rooterm.svg`.
+
+**Do not** install to `~/.local` — use `/usr` only.
+
 ## Notes
 
 - Never call `valac` directly — always use `ninja -C build`
-- `meson.build` adds `--vapidir` for `.deps/prefix/.../vapi` when that directory exists
+- In-tree `vapi/` is only for thin bindings not shipped by the distro (`yaml-0.1`, `libgcrypt`)
