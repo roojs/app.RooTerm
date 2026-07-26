@@ -97,19 +97,7 @@ namespace RooTerm
 			this.entry.add_controller(focus_controller);
 
 			this.item_store = new GLib.ListStore(typeof(Connection));
-			var hosts = new Gee.ArrayList<Connection>();
-			foreach (var conn in config.by_uuid.values) {
-				if (conn.is_group) {
-					continue;
-				}
-				hosts.add(conn);
-			}
-			hosts.sort((a, b) => {
-				return a.name.collate(b.name);
-			});
-			foreach (var conn in hosts) {
-				this.item_store.append(conn);
-			}
+			this.fill(config);
 
 			this.string_filter = new Gtk.StringFilter(
 				new Gtk.PropertyExpression(typeof(Connection), null, "name")
@@ -232,6 +220,29 @@ namespace RooTerm
 			});
 			widget_scroll_controller.propagation_phase = Gtk.PropagationPhase.BUBBLE;
 			this.add_controller(widget_scroll_controller);
+		}
+
+		/**
+		 * Rebuild the host list from ``config`` (skips groups and soft-deleted hosts).
+		 *
+		 * @param config Connection tree source
+		 */
+		public void fill(AsbruConfig config)
+		{
+			this.item_store.remove_all();
+			var hosts = new Gee.ArrayList<Connection>();
+			foreach (var conn in config.by_uuid.values) {
+				if (conn.is_group || conn.deleted) {
+					continue;
+				}
+				hosts.add(conn);
+			}
+			hosts.sort((a, b) => {
+				return a.name.collate(b.name);
+			});
+			foreach (var conn in hosts) {
+				this.item_store.append(conn);
+			}
 		}
 
 		public override bool grab_focus()

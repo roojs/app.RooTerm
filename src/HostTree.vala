@@ -53,6 +53,27 @@ namespace RooTerm
 		public signal void terminal_selected(Connection connection, int tab_index);
 
 		/**
+		 * Emitted for group context menu **Add connection**.
+		 *
+		 * @param group Parent group for the new host
+		 */
+		public signal void add_connection(Connection group);
+
+		/**
+		 * Emitted for host context menu **Edit connection**.
+		 *
+		 * @param host Host to edit
+		 */
+		public signal void edit_connection(Connection host);
+
+		/**
+		 * Emitted for context menu **Delete** (after the user picks the item; confirm in window).
+		 *
+		 * @param connection Host or group to soft-delete
+		 */
+		public signal void delete_connection(Connection connection);
+
+		/**
 		 * Highlight ``connection`` in the tree (no spawn).
 		 *
 		 * @param connection Host to select (same instance as in the config tree)
@@ -79,6 +100,9 @@ namespace RooTerm
 
 			var walk = new Gee.ArrayList<Connection>();
 			foreach (var root in config.roots) {
+				if (root.deleted) {
+					continue;
+				}
 				this.root_store.append(root);
 			}
 			for (var i = config.roots.size - 1; i >= 0; i--) {
@@ -86,6 +110,9 @@ namespace RooTerm
 			}
 			while (walk.size > 0) {
 				var conn = walk.remove_at(walk.size - 1);
+				if (conn.deleted) {
+					continue;
+				}
 				this.hosts.append(conn);
 				for (var i = conn.children.size - 1; i >= 0; i--) {
 					walk.add(conn.children.get(i));
@@ -119,7 +146,13 @@ namespace RooTerm
 					}
 					var child_store = new GLib.ListStore(typeof(Connection));
 					foreach (var child in conn.children) {
+						if (child.deleted) {
+							continue;
+						}
 						child_store.append(child);
+					}
+					if (child_store.get_n_items() == 0) {
+						return null;
 					}
 					return child_store;
 				}
@@ -158,6 +191,69 @@ namespace RooTerm
 				row_box.append(type_icon);
 				row_box.append(name_label);
 				row_box.append(mark_box);
+				var menu_click = new Gtk.GestureClick() {
+					button = Gdk.BUTTON_SECONDARY
+				};
+				menu_click.pressed.connect((n_press, x, y) => {
+					var menu_conn = row_box.get_data<Connection>("menu-conn");
+					if (menu_conn == null) {
+						return;
+					}
+					var pop = new Gtk.Popover();
+					var box = new Gtk.Box(Gtk.Orientation.VERTICAL, 0);
+					if (menu_conn.is_group) {
+						var add_item = new Gtk.Button.with_label("Add connection") {
+							has_frame = false,
+							halign = Gtk.Align.FILL
+						};
+						add_item.clicked.connect(() => {
+							pop.popdown();
+							this.add_connection(menu_conn);
+						});
+						box.append(add_item);
+						var can_delete = true;
+						foreach (var child in menu_conn.children) {
+							if (!child.deleted) {
+								can_delete = false;
+								break;
+							}
+						}
+						var del_item = new Gtk.Button.with_label("Delete") {
+							has_frame = false,
+							halign = Gtk.Align.FILL,
+							sensitive = can_delete
+						};
+						del_item.clicked.connect(() => {
+							pop.popdown();
+							this.delete_connection(menu_conn);
+						});
+						box.append(del_item);
+					} else {
+						var edit_item = new Gtk.Button.with_label("Edit connection") {
+							has_frame = false,
+							halign = Gtk.Align.FILL
+						};
+						edit_item.clicked.connect(() => {
+							pop.popdown();
+							this.edit_connection(menu_conn);
+						});
+						box.append(edit_item);
+						var del_item = new Gtk.Button.with_label("Delete") {
+							has_frame = false,
+							halign = Gtk.Align.FILL
+						};
+						del_item.clicked.connect(() => {
+							pop.popdown();
+							this.delete_connection(menu_conn);
+						});
+						box.append(del_item);
+					}
+					pop.child = box;
+					pop.set_parent(row_box);
+					pop.pointing_to = Gdk.Rectangle() { x = (int) x, y = (int) y, width = 1, height = 1 };
+					pop.popup();
+				});
+				row_box.add_controller(menu_click);
 				var expander = new Gtk.TreeExpander() {
 					child = row_box
 				};
@@ -193,6 +289,7 @@ namespace RooTerm
 				if (conn == null) {
 					return;
 				}
+				row_box.set_data("menu-conn", conn);
 				if (conn.is_group) {
 					type_icon.icon_name = "folder";
 				}

@@ -212,7 +212,8 @@ namespace RooTerm
 					return;
 				}
 				if (GLib.Regex.match_simple("passphrase.*:\\s*$", line, GLib.RegexCompileFlags.CASELESS, 0)
-					&& this.connection.passphrase.length > 0) {
+					&& this.connection.passphrase.length > 0
+					&& this.connection.auth_type != "manual") {
 					this.sent_secret = true;
 					this.hide_input = false;
 					var passphrase = this.connection.passphrase + "\n";
@@ -221,7 +222,10 @@ namespace RooTerm
 					return;
 				}
 				if (GLib.Regex.match_simple("password:\\s*$", line, GLib.RegexCompileFlags.CASELESS, 0)
-					&& this.connection.pass.length > 0) {
+					&& this.connection.pass.length > 0
+					&& this.connection.auth_type != "manual"
+					&& this.connection.auth_type != "ssh_key"
+					&& this.connection.auth_type != "publickey") {
 					this.sent_secret = true;
 					this.hide_input = false;
 					var password = this.connection.pass + "\n";
@@ -306,7 +310,13 @@ namespace RooTerm
 			argv += "ssh";
 			argv += "-p";
 			argv += this.connection.port.to_string();
-			if (this.connection.auth_type == "publickey" && this.connection.public_key.length > 0) {
+			foreach (var fwd in this.connection.forwards) {
+				argv += "-L";
+				argv += fwd.local_host + ":" + fwd.local_port.to_string()
+					+ ":" + fwd.remote_host + ":" + fwd.remote_port.to_string();
+			}
+			if ((this.connection.auth_type == "publickey" || this.connection.auth_type == "ssh_key")
+					&& this.connection.public_key.length > 0) {
 				argv += "-i";
 				argv += this.connection.public_key;
 			}

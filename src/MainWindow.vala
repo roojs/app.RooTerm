@@ -121,6 +121,40 @@ namespace RooTerm
 				page.tab_view.selected_page = page.tab_view.get_nth_page(index);
 				this.sessions.focus();
 			});
+			this.host_tree.add_connection.connect((group) => {
+				var dlg = new ConnDialog(null, group);
+				dlg.saved.connect((conn) => {
+					this.asbru_config.by_uuid.set(conn.uuid, conn);
+					this.host_tree.fill(this.asbru_config);
+					this.host_search.fill(this.asbru_config);
+				});
+				dlg.present(this);
+			});
+			this.host_tree.edit_connection.connect((host) => {
+				var dlg = new ConnDialog(host, null);
+				dlg.saved.connect((conn) => {
+					this.host_tree.fill(this.asbru_config);
+					this.host_search.fill(this.asbru_config);
+				});
+				dlg.present(this);
+			});
+			this.host_tree.delete_connection.connect((conn) => {
+				var alert = new Adw.AlertDialog("Delete " + conn.name + "?", null);
+				alert.add_response("cancel", "Cancel");
+				alert.add_response("delete", "Delete");
+				alert.set_response_appearance("delete", Adw.ResponseAppearance.DESTRUCTIVE);
+				alert.default_response = "cancel";
+				alert.close_response = "cancel";
+				alert.response.connect((response) => {
+					if (response != "delete") {
+						return;
+					}
+					conn.deleted = true;
+					this.host_tree.fill(this.asbru_config);
+					this.host_search.fill(this.asbru_config);
+				});
+				alert.present(this);
+			});
 			this.host_search.connection_selected.connect((conn) => {
 				this.host_tree.select(conn);
 				var page = this.host_stack.pages.get_child_by_name(conn.uuid) as HostPage;

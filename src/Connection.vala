@@ -37,6 +37,18 @@ namespace RooTerm
 		public string public_key = "";
 		public string options = "";
 		/**
+		 * Soft-deleted hosts/groups are hidden from tree and search.
+		 */
+		public bool deleted = false;
+		/**
+		 * Local port forwards for ``ssh -L``.
+		 */
+		public Gee.ArrayList<Forward> forwards {
+			get;
+			set;
+			default = new Gee.ArrayList<Forward>();
+		}
+		/**
 		 * Open terminal tabs for this host (one tree icon each).
 		 */
 		public int open_count { get; set; default = 0; }
