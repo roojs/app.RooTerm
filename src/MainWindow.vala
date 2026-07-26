@@ -19,7 +19,7 @@
 namespace RooTerm
 {
 	/**
-	 * Main window: header (Roo Term + search placeholder) and a sanity VTE shell.
+	 * Main window: header, host tree, and a sanity VTE shell.
 	 */
 	public class MainWindow : Adw.ApplicationWindow
 	{
@@ -27,9 +27,11 @@ namespace RooTerm
 		private Gtk.Entry search_entry;
 		private Gtk.Stack host_stack;
 		private Vte.Terminal terminal;
+		private HostTree host_tree;
+		private AsbruConfig asbru_config;
 
 		/**
-		 * Builds the phase-1 shell: title, search stub, and one local VTE page.
+		 * Builds the window: title, search stub, host tree, local VTE.
 		 *
 		 * @param app Owning {@link Application}
 		 */
@@ -42,7 +44,7 @@ namespace RooTerm
 				default_height: 700
 			);
 
-		this.header_bar = new Adw.HeaderBar();
+			this.header_bar = new Adw.HeaderBar();
 			var title_label = new Gtk.Label("Roo Term");
 			title_label.add_css_class("heading");
 			this.header_bar.pack_start(title_label);
@@ -53,6 +55,17 @@ namespace RooTerm
 				width_request = 320
 			};
 			this.header_bar.set_title_widget(this.search_entry);
+
+			this.asbru_config = new AsbruConfig();
+			try {
+				this.asbru_config.load();
+			} catch (GLib.Error e) {
+				GLib.warning("asbru config load failed: %s", e.message);
+			}
+			this.host_tree = new HostTree(this.asbru_config);
+			this.host_tree.connection_activated.connect((conn) => {
+				GLib.debug("activate connection name=%s uuid=%s", conn.name, conn.uuid);
+			});
 
 			this.host_stack = new Gtk.Stack();
 			this.terminal = new Vte.Terminal() {
@@ -92,9 +105,19 @@ namespace RooTerm
 				}
 			);
 
+			var paned = new Gtk.Paned(Gtk.Orientation.HORIZONTAL) {
+				start_child = this.host_tree,
+				end_child = this.host_stack,
+				resize_start_child = false,
+				shrink_start_child = false,
+				position = 280,
+				hexpand = true,
+				vexpand = true
+			};
+
 			var content = new Gtk.Box(Gtk.Orientation.VERTICAL, 0);
 			content.append(this.header_bar);
-			content.append(this.host_stack);
+			content.append(paned);
 			this.content = content;
 		}
 	}

@@ -6,11 +6,11 @@ Canonical build workflow for this project. Written for **AI agents** — **manda
 
 ## Dependencies
 
-- GTK4, Libadwaita, Vala, Meson, Ninja
+- GTK4, Libadwaita, Vala, Meson, Ninja, Gee, **libgcrypt** (`libgcrypt20-dev`)
 - **VTE GTK4** (`libvte-2.91-gtk4-dev`) — preferred system install:
 
 ```bash
-sudo apt-get install -y libvte-2.91-gtk4-dev libgtk-4-dev libadwaita-1-dev valac meson ninja-build
+sudo apt-get install -y libvte-2.91-gtk4-dev libgtk-4-dev libadwaita-1-dev libgcrypt20-dev libgee-0.8-dev valac meson ninja-build
 ```
 
 If the system package is missing, a local extract under `.deps/prefix` can be used (see below).

@@ -37,11 +37,11 @@ namespace RooTerm
 	 * Same pattern as OLLMchat ``ApplicationInterface.debug_log``.
 	 *
 	 * @param app_id Log file basename stem
-	 * @param in_domain GLib log domain (may be null)
+	 * @param in_domain GLib log domain (empty if unset)
 	 * @param level Log level flags
 	 * @param message Log message text
 	 */
-	public static void debug_log(string app_id, string? in_domain, GLib.LogLevelFlags level, string message)
+	public static void debug_log(string app_id, string in_domain, GLib.LogLevelFlags level, string message)
 	{
 		if (debug_log_in_progress) {
 			return;
@@ -51,13 +51,11 @@ namespace RooTerm
 		var should_output = debug_on || (level & GLib.LogLevelFlags.LEVEL_CRITICAL) != 0;
 
 		if (should_output) {
-			GLib.stderr.printf(
-				timestamp + ": " + level.to_string() + " : " + (in_domain == null ? "" : in_domain) + " : " + message + "\n"
-			);
+			GLib.stderr.printf(timestamp + ": " + level.to_string() + " : " + in_domain + " : " + message + "\n");
 		}
 
 		if ((level & GLib.LogLevelFlags.LEVEL_CRITICAL) != 0 && debug_critical_enabled) {
-			GLib.error("Critical warning: [" + (in_domain == null ? "" : in_domain) + "] " + message);
+			GLib.error("Critical warning: [" + in_domain + "] " + message);
 		}
 
 		debug_log_in_progress = true;
@@ -112,7 +110,7 @@ namespace RooTerm
 			);
 
 			GLib.Log.set_default_handler((dom, lvl, msg) => {
-				RooTerm.debug_log("rooterm", dom, lvl, msg);
+				RooTerm.debug_log("rooterm", dom != null ? dom : "", lvl, msg);
 			});
 
 			this.activate.connect(() => {
@@ -137,10 +135,7 @@ namespace RooTerm
 				opt_context.parse(ref unowned_args);
 			} catch (GLib.OptionError e) {
 				command_line.printerr("error: %s\n", e.message);
-				command_line.printerr(
-					"Run '%s --help' to see a full list of available command line options.\n",
-					args[0]
-				);
+				command_line.printerr("Run '%s --help' to see a full list of available command line options.\n", args[0]);
 				return 1;
 			}
 
