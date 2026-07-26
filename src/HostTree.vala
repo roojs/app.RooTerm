@@ -89,11 +89,11 @@ namespace RooTerm
 		}
 
 		/**
-		 * Replace tree contents from a loaded {@link AsbruConfig}.
+		 * Replace tree contents from a loaded {@link Config}.
 		 *
-		 * @param config Loaded Ásbrú config
+		 * @param config Loaded RooTerm config
 		 */
-		public void fill(AsbruConfig config)
+		public void fill(Config config)
 		{
 			this.root_store.remove_all();
 			this.hosts.remove_all();

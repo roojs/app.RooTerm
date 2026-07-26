@@ -157,9 +157,9 @@ namespace RooTerm
 							name = fields.has_key("name") ? fields.get("name").strip() : "",
 							parent_uuid = fields.has_key("parent") ? fields.get("parent").strip() : "",
 							method = fields.has_key("method") ? fields.get("method").strip() : "",
-							ip = fields.has_key("ip") ? fields.get("ip").strip() : "",
+							host = fields.has_key("ip") ? fields.get("ip").strip() : "",
 							user = fields.has_key("user") ? fields.get("user").strip() : "",
-							auth_type = fields.has_key("auth type") ? fields.get("auth type").strip() : "",
+							auth = fields.has_key("auth type") ? fields.get("auth type").strip() : "",
 							public_key = fields.has_key("public key") ? fields.get("public key").strip() : "",
 							options = fields.has_key("options") ? fields.get("options").strip() : "",
 							is_group = (group == "1" || group.down() == "true"),
@@ -239,6 +239,50 @@ namespace RooTerm
 
 			GLib.debug("loaded connections=%d roots=%d font=%s size=%dx%d from %s",
 				this.by_uuid.size, this.roots.size, this.terminal_font, this.window_width, this.window_height, this.path);
+		}
+
+		/**
+		 * Build a RooTerm {@link Config} from this loaded tree (passwords go to libsecret).
+		 *
+		 * @return New RooTerm config ready to save
+		 */
+		public Config to_config()
+		{
+			var config = new Config();
+			config.terminal_font = this.terminal_font;
+			config.window_width = this.window_width;
+			config.window_height = this.window_height;
+			foreach (var conn in this.by_uuid.values) {
+				if (conn.auth == "publickey") {
+					conn.auth = "ssh_key";
+				}
+				if (conn.pass.length > 0) {
+					try {
+						Secret.password_store_sync(
+							new Secret.Schema(
+								"org.roojs.rooterm.Connection",
+								Secret.SchemaFlags.NONE,
+								"uuid", Secret.SchemaAttributeType.STRING
+							),
+							Secret.COLLECTION_DEFAULT,
+							"RooTerm " + conn.uuid,
+							conn.pass,
+							null,
+							"uuid", conn.uuid
+						);
+					} catch (GLib.Error e) {
+						GLib.warning("secret import failed uuid=%s: %s", conn.uuid, e.message);
+					}
+					conn.pass = "";
+				}
+				conn.passphrase = "";
+				config.by_uuid.set(conn.uuid, conn);
+				config.connections.add(conn);
+			}
+			foreach (var root in this.roots) {
+				config.roots.add(root);
+			}
+			return config;
 		}
 	}
 }

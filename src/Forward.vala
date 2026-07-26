@@ -21,11 +21,38 @@ namespace RooTerm
 	/**
 	 * One SSH local port forward (``-L``).
 	 */
-	public class Forward : GLib.Object
+	public class Forward : Object, Json.Serializable
 	{
 		public string local_host { get; set; default = "127.0.0.1"; }
 		public int local_port { get; set; default = 0; }
 		public string remote_host { get; set; default = ""; }
 		public int remote_port { get; set; default = 0; }
+
+		public unowned ParamSpec? find_property(string name)
+		{
+			return ((ObjectClass) typeof(Forward).class_ref()).find_property(name);
+		}
+
+		public new void Json.Serializable.set_property(ParamSpec pspec, Value value)
+		{
+			((Object) this).set_property(pspec.get_name(), value);
+		}
+
+		public new Value Json.Serializable.get_property(ParamSpec pspec)
+		{
+			Value val = Value(pspec.value_type);
+			((Object) this).get_property(pspec.get_name(), ref val);
+			return val;
+		}
+
+		public Json.Node serialize_property(string property_name, Value value, ParamSpec pspec)
+		{
+			return default_serialize_property(property_name, value, pspec);
+		}
+
+		public bool deserialize_property(string property_name, out Value value, ParamSpec pspec, Json.Node property_node)
+		{
+			return default_deserialize_property(property_name, out value, pspec, property_node);
+		}
 	}
 }

@@ -213,7 +213,7 @@ namespace RooTerm
 				}
 				if (GLib.Regex.match_simple("passphrase.*:\\s*$", line, GLib.RegexCompileFlags.CASELESS, 0)
 					&& this.connection.passphrase.length > 0
-					&& this.connection.auth_type != "manual") {
+					&& this.connection.auth != "manual") {
 					this.sent_secret = true;
 					this.hide_input = false;
 					var passphrase = this.connection.passphrase + "\n";
@@ -222,10 +222,28 @@ namespace RooTerm
 					return;
 				}
 				if (GLib.Regex.match_simple("password:\\s*$", line, GLib.RegexCompileFlags.CASELESS, 0)
-					&& this.connection.pass.length > 0
-					&& this.connection.auth_type != "manual"
-					&& this.connection.auth_type != "ssh_key"
-					&& this.connection.auth_type != "publickey") {
+					&& this.connection.auth != "manual"
+					&& this.connection.auth != "ssh_key"
+					&& this.connection.auth != "publickey") {
+					if (this.connection.pass.length == 0) {
+						try {
+							var pass = Secret.password_lookup_sync(
+								new Secret.Schema(
+									"org.roojs.rooterm.Connection",
+									Secret.SchemaFlags.NONE,
+									"uuid", Secret.SchemaAttributeType.STRING
+								),
+								null,
+								"uuid", this.connection.uuid
+							);
+							this.connection.pass = pass != null ? pass : "";
+						} catch (GLib.Error e) {
+							GLib.warning("secret load failed uuid=%s: %s", this.connection.uuid, e.message);
+						}
+					}
+					if (this.connection.pass.length == 0) {
+						return;
+					}
 					this.sent_secret = true;
 					this.hide_input = false;
 					var password = this.connection.pass + "\n";
@@ -315,7 +333,7 @@ namespace RooTerm
 				argv += fwd.local_host + ":" + fwd.local_port.to_string()
 					+ ":" + fwd.remote_host + ":" + fwd.remote_port.to_string();
 			}
-			if ((this.connection.auth_type == "publickey" || this.connection.auth_type == "ssh_key")
+			if ((this.connection.auth == "publickey" || this.connection.auth == "ssh_key")
 					&& this.connection.public_key.length > 0) {
 				argv += "-i";
 				argv += this.connection.public_key;
@@ -326,8 +344,8 @@ namespace RooTerm
 				}
 				argv += opt;
 			}
-			argv += this.connection.user + "@" + this.connection.ip;
-			var target = this.connection.user + "@" + this.connection.ip + ":" + this.connection.port.to_string();
+			argv += this.connection.user + "@" + this.connection.host;
+			var target = this.connection.user + "@" + this.connection.host + ":" + this.connection.port.to_string();
 			var banner = "Connecting to " + target + " …\r\n";
 			this.terminal.feed(banner.data);
 

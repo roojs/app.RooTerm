@@ -49,60 +49,36 @@ namespace RooTerm
 		public signal void saved(Connection connection);
 
 		/**
-		 * Add a host under ``parent_group``, or edit ``edit`` when non-null.
-		 *
-		 * @param edit Existing host to edit, or ``null`` to add
-		 * @param parent_group Group for a new host (ignored when editing)
+		 * Build the dialog UI (call {@link fill} before presenting).
 		 */
-		public ConnDialog(Connection? edit, Connection? parent_group)
+		public ConnDialog()
 		{
-			this.parent_group = parent_group;
+			this.target = new Connection();
 			this.content_width = 560;
 			this.content_height = 520;
-			this.is_new = edit == null;
-			if (edit != null) {
-				this.target = edit;
-				this.title = "Edit connection";
-			} else {
-				this.target = new Connection() {
-					uuid = GLib.Uuid.string_random(),
-					is_group = false,
-					parent_uuid = parent_group != null ? parent_group.uuid : "",
-					port = 22,
-					auth_type = "password",
-					user = GLib.Environment.get_user_name()
-				};
-				this.title = "Add connection";
-			}
+			this.title = "Connection";
 
-			this.name_entry = new Gtk.Entry() { text = this.target.name, hexpand = true };
-			this.host_entry = new Gtk.Entry() { text = this.target.ip, hexpand = true };
+			this.name_entry = new Gtk.Entry() { hexpand = true };
+			this.host_entry = new Gtk.Entry() { hexpand = true };
 			this.port_entry = new Gtk.Entry() {
-				text = this.target.port.to_string(),
 				input_purpose = Gtk.InputPurpose.DIGITS,
 				hexpand = true
 			};
-			this.user_entry = new Gtk.Entry() { text = this.target.user, hexpand = true };
+			this.user_entry = new Gtk.Entry() { hexpand = true };
 			this.pass_entry = new Gtk.PasswordEntry() {
-				text = this.target.pass,
 				show_peek_icon = true,
 				hexpand = true
 			};
 
-			this.auth_password = new Gtk.CheckButton.with_label("Password");
+			this.auth_password = new Gtk.CheckButton.with_label("Password") {
+				active = true
+			};
 			this.auth_key = new Gtk.CheckButton.with_label("SSH key") {
 				group = this.auth_password
 			};
 			this.auth_manual = new Gtk.CheckButton.with_label("Manual") {
 				group = this.auth_password
 			};
-			if (this.target.auth_type == "publickey" || this.target.auth_type == "ssh_key") {
-				this.auth_key.active = true;
-			} else if (this.target.auth_type == "manual") {
-				this.auth_manual.active = true;
-			} else {
-				this.auth_password.active = true;
-			}
 
 			this.pass_box = new Gtk.Box(Gtk.Orientation.VERTICAL, 6);
 			this.pass_box.append(new Gtk.Label("Password") { xalign = 0 });
@@ -140,17 +116,9 @@ namespace RooTerm
 			this.auth_manual.toggled.connect(() => {
 				this.pass_box.visible = this.auth_password.active;
 			});
-			this.pass_box.visible = this.auth_password.active;
+			this.pass_box.visible = true;
 
 			this.forward_store = new GLib.ListStore(typeof(Forward));
-			foreach (var fwd in this.target.forwards) {
-				this.forward_store.append(new Forward() {
-					local_host = fwd.local_host,
-					local_port = fwd.local_port,
-					remote_host = fwd.remote_host,
-					remote_port = fwd.remote_port
-				});
-			}
 
 			this.forward_view = new Gtk.ColumnView(null) {
 				hexpand = true,
@@ -371,44 +339,7 @@ namespace RooTerm
 				css_classes = { "suggested-action" }
 			};
 			save.clicked.connect(() => {
-				if (this.name_entry.text.strip().length == 0) {
-					return;
-				}
-				if (this.host_entry.text.strip().length == 0) {
-					return;
-				}
-				var port = int.parse(this.port_entry.text.strip());
-				if (port <= 0 || port > 65535) {
-					return;
-				}
-				this.target.name = this.name_entry.text.strip();
-				this.target.ip = this.host_entry.text.strip();
-				this.target.port = port;
-				this.target.user = this.user_entry.text.strip();
-				if (this.auth_password.active) {
-					this.target.auth_type = "password";
-					this.target.pass = this.pass_entry.text;
-				} else if (this.auth_key.active) {
-					this.target.auth_type = "ssh_key";
-					this.target.pass = "";
-					this.target.public_key = "";
-				} else {
-					this.target.auth_type = "manual";
-					this.target.pass = "";
-				}
-				this.target.forwards = new Gee.ArrayList<Forward>();
-				for (var i = 0; i < this.forward_store.get_n_items(); i++) {
-					var item = this.forward_store.get_item(i) as Forward;
-					if (item == null) {
-						continue;
-					}
-					this.target.forwards.add(item);
-				}
-				if (this.is_new && this.parent_group != null) {
-					this.parent_group.children.add(this.target);
-				}
-				this.saved(this.target);
-				this.close();
+				this.on_save();
 			});
 
 			var header = new Adw.HeaderBar() {
@@ -420,6 +351,146 @@ namespace RooTerm
 			toolbar.add_top_bar(header);
 			toolbar.content = stack;
 			this.child = toolbar;
+		}
+
+		/**
+		 * Validate widgets, write {@link target}, persist secret, emit {@link saved}.
+		 */
+		private void on_save()
+		{
+			if (this.name_entry.text.strip().length == 0) {
+				return;
+			}
+			if (this.host_entry.text.strip().length == 0) {
+				return;
+			}
+			var port = int.parse(this.port_entry.text.strip());
+			if (port <= 0 || port > 65535) {
+				return;
+			}
+
+			this.target.name = this.name_entry.text.strip();
+			this.target.host = this.host_entry.text.strip();
+			this.target.port = port;
+			this.target.user = this.user_entry.text.strip();
+
+			if (this.auth_password.active) {
+				this.target.auth = "password";
+				this.target.pass = this.pass_entry.text;
+			} else if (this.auth_key.active) {
+				this.target.auth = "ssh_key";
+				this.target.pass = "";
+				this.target.public_key = "";
+			} else {
+				this.target.auth = "manual";
+				this.target.pass = "";
+			}
+
+			try {
+				var schema = new Secret.Schema(
+					"org.roojs.rooterm.Connection",
+					Secret.SchemaFlags.NONE,
+					"uuid", Secret.SchemaAttributeType.STRING
+				);
+				if (this.target.auth == "password" && this.target.pass.length > 0) {
+					Secret.password_store_sync(
+						schema,
+						Secret.COLLECTION_DEFAULT,
+						"RooTerm " + this.target.uuid,
+						this.target.pass,
+						null,
+						"uuid", this.target.uuid
+					);
+				} else {
+					Secret.password_clear_sync(schema, null, "uuid", this.target.uuid);
+				}
+			} catch (GLib.Error e) {
+				GLib.warning("secret save failed uuid=%s: %s", this.target.uuid, e.message);
+			}
+
+			this.target.forwards = new Gee.ArrayList<Forward>();
+			for (var i = 0; i < this.forward_store.get_n_items(); i++) {
+				var item = this.forward_store.get_item(i) as Forward;
+				if (item == null) {
+					continue;
+				}
+				this.target.forwards.add(item);
+			}
+			if (this.is_new && this.parent_group != null) {
+				this.parent_group.children.add(this.target);
+			}
+			this.saved(this.target);
+			this.close();
+		}
+
+		/**
+		 * Load add/edit state into the widgets.
+		 *
+		 * @param edit Existing host to edit, or ``null`` to add
+		 * @param parent_group Group for a new host (ignored when editing)
+		 */
+		public void fill(Connection? edit, Connection? parent_group)
+		{
+			this.parent_group = parent_group;
+			this.is_new = edit == null;
+			if (edit != null) {
+				this.target = edit;
+				this.title = "Edit connection";
+			} else {
+				this.target = new Connection() {
+					uuid = GLib.Uuid.string_random(),
+					is_group = false,
+					parent_uuid = parent_group != null ? parent_group.uuid : "",
+					port = 22,
+					auth = "password",
+					user = GLib.Environment.get_user_name()
+				};
+				this.title = "Add connection";
+			}
+
+			this.name_entry.text = this.target.name;
+			this.host_entry.text = this.target.host;
+			this.port_entry.text = this.target.port.to_string();
+			this.user_entry.text = this.target.user;
+
+			var pass_text = this.target.pass;
+			if (edit != null && this.target.auth != "ssh_key" && this.target.auth != "manual"
+					&& this.target.auth != "publickey" && pass_text.length == 0) {
+				try {
+					var pass = Secret.password_lookup_sync(
+						new Secret.Schema(
+							"org.roojs.rooterm.Connection",
+							Secret.SchemaFlags.NONE,
+							"uuid", Secret.SchemaAttributeType.STRING
+						),
+						null,
+						"uuid", this.target.uuid
+					);
+					pass_text = pass != null ? pass : "";
+				} catch (GLib.Error e) {
+					GLib.warning("secret load failed uuid=%s: %s", this.target.uuid, e.message);
+				}
+			}
+			this.pass_entry.text = pass_text;
+
+			if (this.target.auth == "publickey" || this.target.auth == "ssh_key") {
+				this.auth_key.active = true;
+			} else if (this.target.auth == "manual") {
+				this.auth_manual.active = true;
+			} else {
+				this.auth_password.active = true;
+			}
+			this.pass_box.visible = this.auth_password.active;
+
+			this.forward_store.remove_all();
+			foreach (var fwd in this.target.forwards) {
+				this.forward_store.append(new Forward() {
+					local_host = fwd.local_host,
+					local_port = fwd.local_port,
+					remote_host = fwd.remote_host,
+					remote_port = fwd.remote_port
+				});
+			}
 		}
 	}
 }

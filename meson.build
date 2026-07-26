@@ -16,6 +16,9 @@ gee_dep = dependency('gee-0.8')
 gcrypt_dep = dependency('libgcrypt')
 yaml_dep = dependency('yaml-0.1')
 
+json_dep = dependency('json-glib-1.0')
+secret_dep = dependency('libsecret-1')
+
 rooterm_resources = gnome.compile_resources(
   'rooterm-resources',
   'resources/gresources.xml',
@@ -32,6 +35,7 @@ executable('rooterm',
     'src/Forward.vala',
     'src/ForwardDialog.vala',
     'src/ConnDialog.vala',
+    'src/Config.vala',
     'src/AsbruConfig.vala',
     'src/AsbruCipher.vala',
     'src/HostTree.vala',
@@ -42,7 +46,7 @@ executable('rooterm',
     'src/SessionController.vala',
   ),
   rooterm_resources,
-  dependencies: [gtk_dep, adw_dep, vte_dep, gee_dep, gcrypt_dep, yaml_dep],
+  dependencies: [gtk_dep, adw_dep, vte_dep, gee_dep, gcrypt_dep, yaml_dep, json_dep, secret_dep],
   vala_args: [
     '--vapidir', meson.project_source_root() / 'vapi',
   ],

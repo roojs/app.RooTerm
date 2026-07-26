@@ -19,46 +19,31 @@
 namespace RooTerm
 {
 	/**
-	 * Ásbrú connection or group (``is_group``).
+	 * Connection or group (``is_group``); JSON via {@link Json.Serializable}.
 	 */
-	public class Connection : GLib.Object
+	public class Connection : Object, Json.Serializable
 	{
-		public string uuid = "";
+		public string uuid { get; set; default = ""; }
 		public string name { get; set; default = ""; }
-		public bool is_group = false;
-		public string parent_uuid = "";
-		public string method = "";
-		public string ip = "";
-		public int port = 22;
-		public string user = "";
-		public string pass = "";
-		public string passphrase = "";
-		public string auth_type = "";
-		public string public_key = "";
-		public string options = "";
-		/**
-		 * Soft-deleted hosts/groups are hidden from tree and search.
-		 */
-		public bool deleted = false;
-		/**
-		 * Local port forwards for ``ssh -L``.
-		 */
+		public bool is_group { get; set; default = false; }
+		public string parent_uuid { get; set; default = ""; }
+		public string method { get; set; default = ""; }
+		public string host { get; set; default = ""; }
+		public int port { get; set; default = 22; }
+		public string user { get; set; default = ""; }
+		public string pass { get; set; default = ""; }
+		public string passphrase { get; set; default = ""; }
+		public string auth { get; set; default = ""; }
+		public string public_key { get; set; default = ""; }
+		public string options { get; set; default = ""; }
+		public bool deleted { get; set; default = false; }
 		public Gee.ArrayList<Forward> forwards {
 			get;
 			set;
 			default = new Gee.ArrayList<Forward>();
 		}
-		/**
-		 * Open terminal tabs for this host (one tree icon each).
-		 */
 		public int open_count { get; set; default = 0; }
-		/**
-		 * Index of the focused tab for this host (``-1`` if none).
-		 */
 		public int active_tab { get; set; default = -1; }
-		/**
-		 * Per-tab display labels (same order as tree session icons).
-		 */
 		public Gee.ArrayList<string> tab_titles {
 			get;
 			set;
@@ -68,6 +53,67 @@ namespace RooTerm
 			get;
 			set;
 			default = new Gee.ArrayList<Connection>();
+		}
+
+		public unowned ParamSpec? find_property(string name)
+		{
+			return ((ObjectClass) typeof(Connection).class_ref()).find_property(name);
+		}
+
+		public new void Json.Serializable.set_property(ParamSpec pspec, Value value)
+		{
+			((Object) this).set_property(pspec.get_name(), value);
+		}
+
+		public new Value Json.Serializable.get_property(ParamSpec pspec)
+		{
+			Value val = Value(pspec.value_type);
+			((Object) this).get_property(pspec.get_name(), ref val);
+			return val;
+		}
+
+		public Json.Node serialize_property(string property_name, Value value, ParamSpec pspec)
+		{
+			switch (property_name) {
+				case "pass":
+				case "passphrase":
+				case "open-count":
+				case "active-tab":
+				case "tab-titles":
+				case "children":
+					return null;
+				case "forwards":
+					var arr = new Json.Array();
+					foreach (var fwd in this.forwards) {
+						arr.add_element(Json.gobject_serialize(fwd));
+					}
+					var node = new Json.Node(Json.NodeType.ARRAY);
+					node.take_array(arr);
+					return node;
+				default:
+					return default_serialize_property(property_name, value, pspec);
+			}
+		}
+
+		public bool deserialize_property(string property_name, out Value value, ParamSpec pspec, Json.Node property_node)
+		{
+			if (property_name != "forwards") {
+				return default_deserialize_property(property_name, out value, pspec, property_node);
+			}
+			this.forwards.clear();
+			if (property_node.get_node_type() == Json.NodeType.ARRAY) {
+				var json_array = property_node.get_array();
+				for (var i = 0; i < json_array.get_length(); i++) {
+					var fwd = Json.gobject_deserialize(typeof(Forward), json_array.get_element(i)) as Forward;
+					if (fwd == null) {
+						continue;
+					}
+					this.forwards.add(fwd);
+				}
+			}
+			value = Value(typeof(Gee.ArrayList));
+			value.set_object(this.forwards);
+			return true;
 		}
 	}
 }

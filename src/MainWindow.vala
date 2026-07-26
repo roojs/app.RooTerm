@@ -29,7 +29,7 @@ namespace RooTerm
 		private HostTree host_tree;
 		private HostStack host_stack;
 		private SessionController sessions;
-		private AsbruConfig asbru_config;
+		private Config config;
 		private Gtk.Paned paned;
 
 		/**
@@ -39,11 +39,12 @@ namespace RooTerm
 		 */
 		public MainWindow(Application app)
 		{
-			var config = new AsbruConfig();
+			Config config;
 			try {
-				config.load();
+				config = Config.load();
 			} catch (GLib.Error e) {
-				GLib.warning("asbru config load failed: %s", e.message);
+				GLib.warning("config load failed: %s", e.message);
+				config = new Config();
 			}
 
 			Object(
@@ -62,7 +63,7 @@ namespace RooTerm
 				Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
 			);
 
-			this.asbru_config = config;
+			this.config = config;
 
 			this.header_bar = new Adw.HeaderBar();
 			var logo = new Gtk.Image.from_icon_name("utilities-terminal-symbolic") {
@@ -80,7 +81,7 @@ namespace RooTerm
 			brand.append(title_label);
 			this.header_bar.pack_start(brand);
 
-			this.host_search = new HostSearchPulldown(this.asbru_config) {
+			this.host_search = new HostSearchPulldown(this.config) {
 				halign = Gtk.Align.CENTER,
 				hexpand = false
 			};
@@ -88,7 +89,7 @@ namespace RooTerm
 
 			this.host_stack = new HostStack();
 			this.sessions = new SessionController(this.host_stack);
-			this.sessions.terminal_font = this.asbru_config.terminal_font;
+			this.sessions.terminal_font = this.config.terminal_font;
 			this.sessions.display_changed.connect(() => {
 				this.title = this.sessions.display;
 				if (this.sessions.display == "Roo Term") {
@@ -99,7 +100,7 @@ namespace RooTerm
 			});
 
 			this.host_tree = new HostTree();
-			this.host_tree.fill(this.asbru_config);
+			this.host_tree.fill(this.config);
 			this.host_tree.connection_activated.connect((conn) => {
 				this.sessions.open(conn);
 			});
@@ -122,19 +123,31 @@ namespace RooTerm
 				this.sessions.focus();
 			});
 			this.host_tree.add_connection.connect((group) => {
-				var dlg = new ConnDialog(null, group);
+				var dlg = new ConnDialog();
+				dlg.fill(null, group);
 				dlg.saved.connect((conn) => {
-					this.asbru_config.by_uuid.set(conn.uuid, conn);
-					this.host_tree.fill(this.asbru_config);
-					this.host_search.fill(this.asbru_config);
+					this.config.by_uuid.set(conn.uuid, conn);
+					try {
+						this.config.save();
+					} catch (GLib.Error e) {
+						GLib.warning("config save failed: %s", e.message);
+					}
+					this.host_tree.fill(this.config);
+					this.host_search.fill(this.config);
 				});
 				dlg.present(this);
 			});
 			this.host_tree.edit_connection.connect((host) => {
-				var dlg = new ConnDialog(host, null);
+				var dlg = new ConnDialog();
+				dlg.fill(host, null);
 				dlg.saved.connect((conn) => {
-					this.host_tree.fill(this.asbru_config);
-					this.host_search.fill(this.asbru_config);
+					try {
+						this.config.save();
+					} catch (GLib.Error e) {
+						GLib.warning("config save failed: %s", e.message);
+					}
+					this.host_tree.fill(this.config);
+					this.host_search.fill(this.config);
 				});
 				dlg.present(this);
 			});
@@ -150,8 +163,13 @@ namespace RooTerm
 						return;
 					}
 					conn.deleted = true;
-					this.host_tree.fill(this.asbru_config);
-					this.host_search.fill(this.asbru_config);
+					try {
+						this.config.save();
+					} catch (GLib.Error e) {
+						GLib.warning("config save failed: %s", e.message);
+					}
+					this.host_tree.fill(this.config);
+					this.host_search.fill(this.config);
 				});
 				alert.present(this);
 			});

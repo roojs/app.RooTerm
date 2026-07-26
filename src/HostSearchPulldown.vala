@@ -51,9 +51,9 @@ namespace RooTerm
 		public signal void connection_selected(Connection connection);
 
 		/**
-		 * @param config Loaded Ásbrú config (SSH hosts become list rows)
+		 * @param config Loaded RooTerm config (SSH hosts become list rows)
 		 */
-		public HostSearchPulldown(AsbruConfig config)
+		public HostSearchPulldown(Config config)
 		{
 			Object();
 
@@ -227,7 +227,7 @@ namespace RooTerm
 		 *
 		 * @param config Connection tree source
 		 */
-		public void fill(AsbruConfig config)
+		public void fill(Config config)
 		{
 			this.item_store.remove_all();
 			var hosts = new Gee.ArrayList<Connection>();
