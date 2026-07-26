@@ -27,11 +27,18 @@ namespace RooTerm
 		public Vte.Terminal terminal;
 		public string cwd = "";
 		private string window_title = "";
+		/**
+		 * Last shell/mysql-style prompt line scraped from the screen (OSC often missing over SSH).
+		 */
+		private string prompt_hint = "";
+		private uint prompt_timeout = 0;
 		private bool sent_secret = false;
 		private GLib.FileStream? session_log = null;
-		private string log_seen = "";
 		private bool hide_input = false;
-		private bool want_output_line = false;
+		/**
+		 * Absolute VTE row to read for the next ``#`` log line (``-1`` = not waiting).
+		 */
+		private long log_line = -1;
 
 		/**
 		 * Emitted when the SSH child process exits.
@@ -135,77 +142,124 @@ namespace RooTerm
 					this.hide_input = false;
 					this.session_log.puts("[password omitted]\n");
 					this.session_log.flush();
-					this.want_output_line = true;
+					long col;
+					long row;
+					this.terminal.get_cursor_position(out col, out row);
+					this.log_line = row + 1;
 					return;
 				}
 				this.session_log.puts(text);
 				this.session_log.flush();
 				if (text.index_of_char('\n') >= 0 || text.index_of_char('\r') >= 0) {
-					this.want_output_line = true;
+					long col;
+					long row;
+					this.terminal.get_cursor_position(out col, out row);
+					this.log_line = row + 1;
 				}
 			});
 			this.terminal.contents_changed.connect(() => {
-				var text = this.terminal.get_text_format(Vte.Format.TEXT);
-				if (text == null || text.length == 0) {
+				if (this.prompt_timeout != 0) {
 					return;
 				}
-				var start = 0;
-				if (text.length > 400) {
-					start = text.length - 400;
+				this.prompt_timeout = GLib.Timeout.add(120, () => {
+					this.prompt_timeout = 0;
+					long col;
+					long row;
+					this.terminal.get_cursor_position(out col, out row);
+					size_t len;
+					var raw = this.terminal.get_text_range_format(Vte.Format.TEXT, row, 0, row, col, out len);
+					var last = raw != null ? raw.replace("\r", "").strip() : "";
+					if (last.length == 0 || last.length > 240) {
+						return false;
+					}
+					if (GLib.Regex.match_simple("(password|passphrase).*:\\s*$", last, GLib.RegexCompileFlags.CASELESS, 0)) {
+						return false;
+					}
+					var is_prompt = GLib.Regex.match_simple("^[^\\s@]+@[^\\s:]+:.*[#$]\\s*$", last, 0, 0)
+						|| GLib.Regex.match_simple("^(MariaDB|mysql|sqlite3?|postgres|plsql)\\b.*>\\s*$", last, GLib.RegexCompileFlags.CASELESS, 0)
+						|| ((last.has_suffix("$") || last.has_suffix("#") || last.has_suffix("%")) && last.length < 160);
+					if (!is_prompt || last == this.prompt_hint) {
+						return false;
+					}
+					this.prompt_hint = last;
+					this.label_changed();
+					return false;
+				});
+			});
+			this.terminal.contents_changed.connect(() => {
+				if (this.hide_input) {
+					return;
 				}
-				var tail = text.substring(start);
-				if (GLib.Regex.match_simple(
+				long col;
+				long row;
+				this.terminal.get_cursor_position(out col, out row);
+				size_t len;
+				var raw = this.terminal.get_text_range_format(Vte.Format.TEXT, row, 0, row, col, out len);
+				var line = raw != null ? raw.replace("\r", "").strip() : "";
+				if (line.length == 0) {
+					return;
+				}
+				if (!GLib.Regex.match_simple(
 					"(password|passphrase|\\[sudo\\]\\s*password).*:\\s*$",
-					tail,
-					GLib.RegexCompileFlags.CASELESS | GLib.RegexCompileFlags.MULTILINE,
+					line,
+					GLib.RegexCompileFlags.CASELESS,
 					0
 				)) {
-					this.hide_input = true;
-					if (!this.sent_secret) {
-						if (GLib.Regex.match_simple("passphrase.*:\\s*$", tail, GLib.RegexCompileFlags.CASELESS | GLib.RegexCompileFlags.MULTILINE, 0)
-							&& this.connection.passphrase.length > 0) {
-							this.sent_secret = true;
-							this.hide_input = false;
-							var passphrase = this.connection.passphrase + "\n";
-							this.terminal.feed_child(passphrase.data);
-							GLib.debug("fed passphrase name=%s", this.connection.name);
-						} else if (GLib.Regex.match_simple("password:\\s*$", tail, GLib.RegexCompileFlags.CASELESS | GLib.RegexCompileFlags.MULTILINE, 0)
-							&& this.connection.pass.length > 0) {
-							this.sent_secret = true;
-							this.hide_input = false;
-							var password = this.connection.pass + "\n";
-							this.terminal.feed_child(password.data);
-							GLib.debug("fed password name=%s", this.connection.name);
-						}
-					}
-				}
-				if (this.session_log == null) {
-					this.log_seen = text;
 					return;
 				}
-				if (text.length < this.log_seen.length) {
-					this.log_seen = text;
+				this.hide_input = true;
+				if (this.sent_secret) {
 					return;
 				}
-				if (text.length == this.log_seen.length) {
+				if (GLib.Regex.match_simple("passphrase.*:\\s*$", line, GLib.RegexCompileFlags.CASELESS, 0)
+					&& this.connection.passphrase.length > 0) {
+					this.sent_secret = true;
+					this.hide_input = false;
+					var passphrase = this.connection.passphrase + "\n";
+					this.terminal.feed_child(passphrase.data);
+					GLib.debug("fed passphrase name=%s", this.connection.name);
 					return;
 				}
-				var delta = text.substring(this.log_seen.length);
-				this.log_seen = text;
-				if (!this.want_output_line || this.hide_input) {
+				if (GLib.Regex.match_simple("password:\\s*$", line, GLib.RegexCompileFlags.CASELESS, 0)
+					&& this.connection.pass.length > 0) {
+					this.sent_secret = true;
+					this.hide_input = false;
+					var password = this.connection.pass + "\n";
+					this.terminal.feed_child(password.data);
+					GLib.debug("fed password name=%s", this.connection.name);
+				}
+			});
+			this.terminal.contents_changed.connect(() => {
+				if (this.session_log == null || this.log_line < 0 || this.hide_input) {
 					return;
 				}
-				if (delta.length > 500 || delta.index_of("\x1b") >= 0) {
-					this.want_output_line = false;
+				long col;
+				long row;
+				this.terminal.get_cursor_position(out col, out row);
+				if (row < this.log_line) {
 					return;
 				}
-				var line = delta.replace("\r", "").strip();
-				var nl = line.index_of_char('\n');
-				if (nl >= 0) {
-					line = line.substring(0, nl).strip();
+				var end_col = row > this.log_line ? this.terminal.get_column_count() : col;
+				if (end_col <= 0) {
+					return;
 				}
-				this.want_output_line = false;
+				size_t len;
+				var raw = this.terminal.get_text_range_format(
+					Vte.Format.TEXT, this.log_line, 0, this.log_line, end_col, out len
+				);
+				var line = raw != null ? raw.replace("\r", "").strip() : "";
 				if (line.length == 0) {
+					if (row > this.log_line) {
+						this.log_line = -1;
+					}
+					return;
+				}
+				this.log_line = -1;
+				if (line.length > 500 || line.index_of("\x1b") >= 0) {
+					return;
+				}
+				if (GLib.Regex.match_simple("^[^\\s@]+@[^\\s:]+:.*[#$]\\s*$", line, 0, 0)
+					|| line.has_suffix("$") || line.has_suffix("#") || line.has_suffix("%")) {
 					return;
 				}
 				this.session_log.puts("# " + line + "\n");
@@ -214,19 +268,33 @@ namespace RooTerm
 		}
 
 		/**
-		 * Tab / title label: host name, plus cwd or shell window title when known.
+		 * Tab / title label: host name, plus prompt, OSC title, or cwd when known.
 		 *
 		 * @return Display string
 		 */
 		public string label()
 		{
-			if (this.cwd.length > 0) {
-				return this.connection.name + "  " + this.cwd;
+			var detail = this.detail();
+			if (detail.length == 0) {
+				return this.connection.name;
+			}
+			return this.connection.name + "  " + detail;
+		}
+
+		/**
+		 * Dynamic part of {@link label} (prompt preferred — OSC is often absent over SSH).
+		 *
+		 * @return Detail string or empty
+		 */
+		private string detail()
+		{
+			if (this.prompt_hint.length > 0) {
+				return this.prompt_hint;
 			}
 			if (this.window_title.length > 0) {
-				return this.connection.name + "  " + this.window_title;
+				return this.window_title;
 			}
-			return this.connection.name;
+			return this.cwd;
 		}
 
 		/**
@@ -288,8 +356,6 @@ namespace RooTerm
 						return;
 					}
 					GLib.debug("ssh pid=%d name=%s", pid, this.connection.name);
-					var text = this.terminal.get_text_format(Vte.Format.TEXT);
-					this.log_seen = text != null ? text : "";
 				}
 			);
 		}

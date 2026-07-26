@@ -59,6 +59,16 @@ namespace RooTerm
 				this.tab_view.close_page_finish(page, true);
 				this.connection.open_count = this.tab_view.n_pages;
 				this.connection.active_tab = -1;
+				var titles = new Gee.ArrayList<string>();
+				for (var i = 0; i < this.tab_view.n_pages; i++) {
+					var term = this.tab_view.get_nth_page(i).child as SshTerminal;
+					if (term == null) {
+						titles.add(this.connection.name);
+						continue;
+					}
+					titles.add(term.label());
+				}
+				this.connection.tab_titles = titles;
 				if (this.tab_view.n_pages == 0) {
 					this.empty();
 					return true;

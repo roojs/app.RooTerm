@@ -44,6 +44,14 @@ namespace RooTerm
 		 * Index of the focused tab for this host (``-1`` if none).
 		 */
 		public int active_tab { get; set; default = -1; }
+		/**
+		 * Per-tab display labels (same order as tree session icons).
+		 */
+		public Gee.ArrayList<string> tab_titles {
+			get;
+			set;
+			default = new Gee.ArrayList<string>();
+		}
 		public Gee.ArrayList<Connection> children {
 			get;
 			set;

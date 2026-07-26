@@ -194,10 +194,10 @@ namespace RooTerm
 					return;
 				}
 				if (conn.is_group) {
-					type_icon.icon_name = "folder-symbolic";
+					type_icon.icon_name = "folder";
 				}
 				if (!conn.is_group) {
-					type_icon.icon_name = "utilities-terminal-symbolic";
+					type_icon.icon_name = "video-display";
 				}
 				var old_nid = mark_box.get_data<ulong>("nid");
 				var old_conn = mark_box.get_data<Connection>("conn");
@@ -209,47 +209,16 @@ namespace RooTerm
 				while (mark_box.get_first_child() != null) {
 					mark_box.remove(mark_box.get_first_child());
 				}
-				for (var i = 0; i < conn.open_count; i++) {
-					var idx = i;
-					var btn = new Gtk.Button.from_icon_name("utilities-terminal-symbolic") {
-						has_frame = false,
-						focus_on_click = false,
-						tooltip_text = "Terminal " + (idx + 1).to_string()
-					};
-					btn.add_css_class("flat");
-					btn.add_css_class("session-icon");
-					if (idx == conn.active_tab) {
-						btn.add_css_class("session-active");
-					}
-					btn.clicked.connect(() => {
-						this.terminal_selected(conn, idx);
-					});
-					mark_box.append(btn);
-				}
+				this.fill_session_marks(mark_box, conn);
 				var nid = conn.notify.connect((o, pspec) => {
-					if (pspec.name != "open-count" && pspec.name != "active-tab") {
+					if (pspec.name != "open-count" && pspec.name != "active-tab"
+							&& pspec.name != "tab-titles") {
 						return;
 					}
 					while (mark_box.get_first_child() != null) {
 						mark_box.remove(mark_box.get_first_child());
 					}
-					for (var i = 0; i < conn.open_count; i++) {
-						var idx = i;
-						var btn = new Gtk.Button.from_icon_name("utilities-terminal-symbolic") {
-							has_frame = false,
-							focus_on_click = false,
-							tooltip_text = "Terminal " + (idx + 1).to_string()
-						};
-						btn.add_css_class("flat");
-						btn.add_css_class("session-icon");
-						if (idx == conn.active_tab) {
-							btn.add_css_class("session-active");
-						}
-						btn.clicked.connect(() => {
-							this.terminal_selected(conn, idx);
-						});
-						mark_box.append(btn);
-					}
+					this.fill_session_marks(mark_box, conn);
 				});
 				mark_box.set_data<ulong>("nid", nid);
 				mark_box.set_data<Connection>("conn", conn);
@@ -300,6 +269,37 @@ namespace RooTerm
 				hscrollbar_policy = Gtk.PolicyType.NEVER
 			};
 			this.append(scrolled);
+		}
+
+		/**
+		 * Build right-side session icons for ``conn`` into ``mark_box``.
+		 *
+		 * @param mark_box Container for icons
+		 * @param conn Host row
+		 */
+		private void fill_session_marks(Gtk.Box mark_box, Connection conn)
+		{
+			for (var i = 0; i < conn.open_count; i++) {
+				var idx = i;
+				var tip = conn.name;
+				if (idx < conn.tab_titles.size && conn.tab_titles.get(idx).length > 0) {
+					tip = conn.tab_titles.get(idx);
+				}
+				var btn = new Gtk.Button.from_icon_name("video-display") {
+					has_frame = false,
+					focus_on_click = false,
+					tooltip_text = tip
+				};
+				btn.add_css_class("flat");
+				btn.add_css_class("session-icon");
+				if (idx == conn.active_tab) {
+					btn.add_css_class("session-active");
+				}
+				btn.clicked.connect(() => {
+					this.terminal_selected(conn, idx);
+				});
+				mark_box.append(btn);
+			}
 		}
 	}
 }

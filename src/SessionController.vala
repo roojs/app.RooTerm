@@ -93,12 +93,14 @@ namespace RooTerm
 			});
 			term.label_changed.connect(() => {
 				tab.title = term.label();
+				this.sync_titles(page);
 				this.focus();
 			});
 			term.spawn();
 			page.tab_view.selected_page = tab;
 			connection.open_count = page.tab_view.n_pages;
 			connection.active_tab = page.tab_view.n_pages - 1;
+			this.sync_titles(page);
 			this.stack.pages.visible_child = page;
 			this.focus();
 			term.terminal.grab_focus();
@@ -113,6 +115,7 @@ namespace RooTerm
 		{
 			page.connection.open_count = 0;
 			page.connection.active_tab = -1;
+			page.connection.tab_titles = new Gee.ArrayList<string>();
 			this.stack.pages.remove(page);
 			var visible = this.stack.pages.visible_child as HostPage;
 			if (visible != null && visible.tab_view.n_pages > 0) {
@@ -176,6 +179,25 @@ namespace RooTerm
 			}
 			this.display = term.label();
 			this.display_changed();
+		}
+
+		/**
+		 * Push each tab's {@link SshTerminal.label} onto ``page.connection.tab_titles``.
+		 *
+		 * @param page Host page whose tabs to sync
+		 */
+		private void sync_titles(HostPage page)
+		{
+			var titles = new Gee.ArrayList<string>();
+			for (var i = 0; i < page.tab_view.n_pages; i++) {
+				var term = page.tab_view.get_nth_page(i).child as SshTerminal;
+				if (term == null) {
+					titles.add(page.connection.name);
+					continue;
+				}
+				titles.add(term.label());
+			}
+			page.connection.tab_titles = titles;
 		}
 	}
 }

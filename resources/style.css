@@ -25,6 +25,10 @@ popover.menu listview > row:selected {
 	background-color: alpha(@accent_bg_color, 0.45);
 }
 
+button.session-icon {
+	opacity: 0.5;
+}
+
 button.session-icon.session-active {
-	color: #2ec27e;
+	opacity: 1.0;
 }
