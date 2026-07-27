@@ -311,7 +311,10 @@ namespace RooTerm
 				if (!conn.is_group && conn.lxc_container) {
 					type_icon.icon_name = "drive-harddisk";
 				}
-				if (!conn.is_group && !conn.lxc_container) {
+				if (!conn.is_group && !conn.lxc_container && conn.sudo_after_login) {
+					type_icon.icon_name = "security-high";
+				}
+				if (!conn.is_group && !conn.lxc_container && !conn.sudo_after_login) {
 					type_icon.icon_name = "video-display";
 				}
 				var old_nid = mark_box.get_data<ulong>("nid");

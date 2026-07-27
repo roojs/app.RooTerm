@@ -133,6 +133,8 @@ namespace RooTerm
 				}
 				this.sudo_sent = true;
 				this.sent_secret = false;
+				GLib.debug("sudo -i name=%s auth=%s pass_len=%d",
+					this.connection.name, this.connection.auth, this.connection.pass.length);
 				this.terminal.feed_child("sudo -i\n".data);
 			});
 			this.label_changed.connect(this.on_lxc_ls);
@@ -280,10 +282,17 @@ namespace RooTerm
 			if (line.length == 0) {
 				return;
 			}
-			if (!GLib.Regex.match_simple("(password|passphrase|\\[sudo\\]\\s*password).*:\\s*$", line, GLib.RegexCompileFlags.CASELESS, 0)) {
+			if (!GLib.Regex.match_simple(
+					"(password|passphrase|\\[sudo\\].*password).*:\\s*$",
+					line, GLib.RegexCompileFlags.CASELESS, 0)) {
 				return;
 			}
-			this.hide_input = true;
+			var is_sudo = GLib.Regex.match_simple(
+				"\\[sudo\\].*password.*:\\s*$", line, GLib.RegexCompileFlags.CASELESS, 0
+			);
+			GLib.debug("password line=%s sudo=%d sent=%d auth=%s pass_len=%d name=%s",
+				line, (int) is_sudo, (int) this.sent_secret, this.connection.auth,
+				this.connection.pass.length, this.connection.name);
 			if (this.sent_secret) {
 				return;
 			}
@@ -291,24 +300,23 @@ namespace RooTerm
 				&& this.connection.passphrase.length > 0
 				&& this.connection.auth != "manual") {
 				this.sent_secret = true;
-				this.hide_input = false;
 				this.terminal.feed_child((this.connection.passphrase + "\n").data);
 				GLib.debug("fed passphrase name=%s", this.connection.name);
 				return;
 			}
-			var is_sudo = GLib.Regex.match_simple(
-				"\\[sudo\\]\\s*password.*:\\s*$", line, GLib.RegexCompileFlags.CASELESS, 0
-			);
-			if (!GLib.Regex.match_simple("password:\\s*$", line, GLib.RegexCompileFlags.CASELESS, 0)
+			if (!GLib.Regex.match_simple("password.*:\\s*$", line, GLib.RegexCompileFlags.CASELESS, 0)
 					&& !is_sudo) {
+				GLib.debug("password skip no match name=%s", this.connection.name);
 				return;
 			}
 			if (this.connection.auth == "manual") {
+				GLib.debug("password skip manual name=%s", this.connection.name);
 				return;
 			}
 			if (!is_sudo
 					&& (this.connection.auth == "ssh_key" || this.connection.auth == "publickey")
 					&& !this.install_key) {
+				GLib.debug("password skip ssh_key name=%s", this.connection.name);
 				return;
 			}
 			if (this.connection.pass.length == 0) {
@@ -330,14 +338,23 @@ namespace RooTerm
 				} catch (GLib.Error e) {
 					GLib.warning("secret load failed uuid=%s: %s", secret_uuid, e.message);
 				}
+				GLib.debug("password secret uuid=%s pass_len=%d name=%s",
+					secret_uuid, this.connection.pass.length, this.connection.name);
 			}
 			if (this.connection.pass.length == 0) {
+				GLib.debug("password skip empty name=%s line=%s", this.connection.name, line);
+				if (is_sudo) {
+					this.terminal.feed(
+						"\r\n# RooTerm: no sudo password in keyring — edit connection and save it\r\n".data
+					);
+				}
 				return;
 			}
 			this.sent_secret = true;
-			this.hide_input = false;
+			this.hide_input = true;
 			this.terminal.feed_child((this.connection.pass + "\n").data);
-			GLib.debug("fed password name=%s", this.connection.name);
+			this.hide_input = false;
+			GLib.debug("fed password name=%s sudo=%d", this.connection.name, (int) is_sudo);
 		}
 
 		/**
@@ -363,7 +380,6 @@ namespace RooTerm
 			}
 			var identity = this.install_identity;
 			this.install_key = false;
-			this.install_identity = "";
 			this.key_installed(identity);
 		}
 

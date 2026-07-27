@@ -171,6 +171,11 @@ namespace RooTerm
 					GLib.Source.remove(this.settle_timeout);
 					this.settle_timeout = 0;
 				}
+				if (this.stream.install_identity.length > 0) {
+					this.close_tab();
+					this.exited();
+					return;
+				}
 				if (this.state != SessionState.DEAD) {
 					this.state = SessionState.DEAD;
 					this.state_changed();
@@ -372,6 +377,32 @@ namespace RooTerm
 			this.stream.list_sent = false;
 			this.stream.list_parsed = false;
 			this.stream.lxc_sent = false;
+			this.stream.sent_secret = false;
+			if (this.connection.pass.length == 0
+					&& this.connection.auth != "manual"
+					&& (this.connection.auth == "password"
+						|| this.connection.sudo_after_login
+						|| this.stream.install_key)) {
+				var secret_uuid = this.connection.uuid;
+				if (this.connection.lxc_container && this.connection.parent_uuid.length > 0) {
+					secret_uuid = this.connection.parent_uuid;
+				}
+				try {
+					var pass = Secret.password_lookup_sync(
+						new Secret.Schema(
+							"org.roojs.rooterm.Connection", Secret.SchemaFlags.NONE,
+							"uuid", Secret.SchemaAttributeType.STRING
+						),
+						null,
+						"uuid", secret_uuid
+					);
+					this.connection.pass = pass != null ? pass : "";
+					GLib.debug("spawn secret uuid=%s pass_len=%d name=%s",
+						secret_uuid, this.connection.pass.length, this.connection.name);
+				} catch (GLib.Error e) {
+					GLib.warning("secret load failed uuid=%s: %s", secret_uuid, e.message);
+				}
+			}
 			var target = this.connection.user + "@" + this.connection.host
 				+ ":" + this.connection.port.to_string();
 			string[] argv;

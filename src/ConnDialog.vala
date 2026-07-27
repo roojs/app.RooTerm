@@ -32,20 +32,24 @@ namespace RooTerm
 		private Gtk.Entry port_entry;
 		private Gtk.Entry user_entry;
 		private Gtk.PasswordEntry pass_entry;
+		private Gtk.Label pass_label;
 		private Gtk.CheckButton auth_password;
 		private Gtk.CheckButton auth_key;
 		private Gtk.CheckButton auth_manual;
 		private Gtk.Box pass_box;
 		private Gtk.CheckButton sudo_check;
 		private Gtk.CheckButton lxc_host_check;
-		private Gtk.Entry lxc_name_entry;
-		private Gtk.Box lxc_name_box;
+		private Gtk.Button fetch_hosts_btn;
 		private Gtk.Button setup_key_btn;
 		private GLib.ListStore forward_store;
 		private Gtk.SingleSelection forward_selection;
 		private Gtk.ColumnView forward_view;
 		private Gtk.Button edit_forward_btn;
 		private weak MainWindow window;
+		/**
+		 * Identity path from a successful ``ssh-copy-id``; applied on Save.
+		 */
+		private string pending_key_identity = "";
 
 		/**
 		 * Emitted after Save writes fields onto ``target``.
@@ -90,7 +94,8 @@ namespace RooTerm
 			};
 
 			this.pass_box = new Gtk.Box(Gtk.Orientation.VERTICAL, 6);
-			this.pass_box.append(new Gtk.Label("Password") { xalign = 0 });
+			this.pass_label = new Gtk.Label("Password") { xalign = 0 };
+			this.pass_box.append(this.pass_label);
 			this.pass_box.append(this.pass_entry);
 
 			var auth_box = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 12);
@@ -117,47 +122,100 @@ namespace RooTerm
 			basic.append(this.pass_box);
 
 			this.sudo_check = new Gtk.CheckButton.with_label("sudo -i after login");
-			this.lxc_host_check = new Gtk.CheckButton.with_label("LXC host");
-			this.lxc_name_entry = new Gtk.Entry() {
-				hexpand = true,
-				placeholder_text = "container name"
+			this.lxc_host_check = new Gtk.CheckButton.with_label("LXC host") {
+				sensitive = false
 			};
-			this.lxc_name_box = new Gtk.Box(Gtk.Orientation.VERTICAL, 6);
-			this.lxc_name_box.append(new Gtk.Label("LXC container (optional)") { xalign = 0 });
-			this.lxc_name_box.append(this.lxc_name_entry);
+			this.fetch_hosts_btn = new Gtk.Button.with_label("Fetch hosts") {
+				halign = Gtk.Align.START,
+				visible = false
+			};
+			this.fetch_hosts_btn.clicked.connect(() => {
+				this.target.sudo_after_login = this.sudo_check.active;
+				this.target.lxc_host = this.lxc_host_check.active;
+				if (this.pass_entry.text.length > 0) {
+					this.target.pass = this.pass_entry.text;
+				}
+				this.target.refresh_containers(this.window);
+			});
 			this.setup_key_btn = new Gtk.Button.with_label("Set up SSH key login") {
 				halign = Gtk.Align.START
 			};
 			this.setup_key_btn.clicked.connect(() => {
+				if (this.pass_entry.text.length > 0) {
+					this.target.pass = this.pass_entry.text;
+				}
 				var stream = new SshStream();
 				stream.install_key = true;
 				var term = this.window.sessions.open(this.target, stream);
-				term.stream.key_installed.connect(this.on_key_installed);
-				this.close();
+				term.stream.key_installed.connect((identity) => {
+					this.pending_key_identity = identity;
+					this.auth_key.active = true;
+					this.pass_box.visible = this.auth_password.active || this.sudo_check.active;
+					this.pass_label.label = this.auth_key.active && this.sudo_check.active
+						? "Password (required for sudo)"
+						: "Password";
+					this.setup_key_btn.visible = this.auth_password.active
+						&& !this.is_new
+						&& this.target != null
+						&& !this.target.lxc_container;
+				});
 			});
-			basic.append(this.sudo_check);
-			basic.append(this.lxc_host_check);
-			basic.append(this.lxc_name_box);
+			var sudo_row = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 12);
+			sudo_row.append(this.sudo_check);
+			sudo_row.append(this.lxc_host_check);
+			basic.append(sudo_row);
+			basic.append(this.fetch_hosts_btn);
 			basic.append(this.setup_key_btn);
 
 			this.auth_password.toggled.connect(() => {
-				this.pass_box.visible = this.auth_password.active;
-				this.setup_key_btn.visible = this.auth_password.active;
+				this.pass_box.visible = this.auth_password.active || this.sudo_check.active;
+				this.pass_label.label = this.auth_key.active && this.sudo_check.active
+					? "Password (required for sudo)"
+					: "Password";
+				this.setup_key_btn.visible = this.auth_password.active
+					&& !this.is_new
+					&& this.target != null
+					&& !this.target.lxc_container;
 			});
 			this.auth_key.toggled.connect(() => {
-				this.pass_box.visible = this.auth_password.active;
-				this.setup_key_btn.visible = this.auth_password.active;
+				this.pass_box.visible = this.auth_password.active || this.sudo_check.active;
+				this.pass_label.label = this.auth_key.active && this.sudo_check.active
+					? "Password (required for sudo)"
+					: "Password";
+				this.setup_key_btn.visible = this.auth_password.active
+					&& !this.is_new
+					&& this.target != null
+					&& !this.target.lxc_container;
 			});
 			this.auth_manual.toggled.connect(() => {
-				this.pass_box.visible = this.auth_password.active;
-				this.setup_key_btn.visible = this.auth_password.active;
+				this.pass_box.visible = this.auth_password.active || this.sudo_check.active;
+				this.pass_label.label = this.auth_key.active && this.sudo_check.active
+					? "Password (required for sudo)"
+					: "Password";
+				this.setup_key_btn.visible = this.auth_password.active
+					&& !this.is_new
+					&& this.target != null
+					&& !this.target.lxc_container;
+			});
+			this.sudo_check.toggled.connect(() => {
+				this.lxc_host_check.sensitive = this.sudo_check.active;
+				if (!this.sudo_check.active) {
+					this.lxc_host_check.active = false;
+				}
+				this.pass_box.visible = this.auth_password.active || this.sudo_check.active;
+				this.pass_label.label = this.auth_key.active && this.sudo_check.active
+					? "Password (required for sudo)"
+					: "Password";
+				this.setup_key_btn.visible = this.auth_password.active
+					&& !this.is_new
+					&& this.target != null
+					&& !this.target.lxc_container;
 			});
 			this.lxc_host_check.toggled.connect(() => {
-				this.lxc_name_box.visible = this.lxc_host_check.active;
+				this.fetch_hosts_btn.visible = this.lxc_host_check.active;
 			});
 			this.pass_box.visible = true;
 			this.setup_key_btn.visible = true;
-			this.lxc_name_box.visible = false;
 
 			this.forward_store = new GLib.ListStore(typeof(Forward));
 
@@ -420,11 +478,35 @@ namespace RooTerm
 				this.target.pass = this.pass_entry.text;
 			} else if (this.auth_key.active) {
 				this.target.auth = "ssh_key";
-				this.target.pass = "";
-				this.target.public_key = "";
+				this.target.pass = this.sudo_check.active ? this.pass_entry.text : "";
+				if (this.pending_key_identity.length > 0) {
+					this.target.public_key = this.pending_key_identity;
+				}
 			} else {
 				this.target.auth = "manual";
 				this.target.pass = "";
+			}
+
+			if (this.sudo_check.active && this.target.pass.length == 0) {
+				try {
+					var existing = Secret.password_lookup_sync(
+						new Secret.Schema(
+							"org.roojs.rooterm.Connection", Secret.SchemaFlags.NONE,
+							"uuid", Secret.SchemaAttributeType.STRING
+						),
+						null,
+						"uuid", this.target.uuid
+					);
+					if (existing == null || existing.length == 0) {
+						this.pass_entry.grab_focus();
+						return;
+					}
+					this.target.pass = existing;
+				} catch (GLib.Error e) {
+					GLib.warning("secret load failed uuid=%s: %s", this.target.uuid, e.message);
+					this.pass_entry.grab_focus();
+					return;
+				}
 			}
 
 			try {
@@ -432,7 +514,9 @@ namespace RooTerm
 					"org.roojs.rooterm.Connection", Secret.SchemaFlags.NONE,
 					"uuid", Secret.SchemaAttributeType.STRING
 				);
-				if (this.target.auth == "password" && this.target.pass.length > 0) {
+				var keep_secret = this.target.pass.length > 0
+					&& (this.target.auth == "password" || this.sudo_check.active);
+				if (keep_secret) {
 					Secret.password_store_sync(
 						schema,
 						Secret.COLLECTION_DEFAULT,
@@ -441,7 +525,7 @@ namespace RooTerm
 						null,
 						"uuid", this.target.uuid
 					);
-				} else {
+				} else if (this.target.auth != "ssh_key" || !this.sudo_check.active) {
 					Secret.password_clear_sync(schema, null, "uuid", this.target.uuid);
 				}
 			} catch (GLib.Error e) {
@@ -458,9 +542,6 @@ namespace RooTerm
 			}
 			this.target.sudo_after_login = this.sudo_check.active;
 			this.target.lxc_host = this.lxc_host_check.active;
-			var lxc_name = this.lxc_name_entry.text.strip();
-			this.target.lxc_name = (this.target.lxc_container || this.lxc_host_check.active)
-				? lxc_name : "";
 			if (this.is_new && this.parent_group != null) {
 				this.parent_group.children.add(this.target);
 			}
@@ -499,8 +580,9 @@ namespace RooTerm
 			this.user_entry.text = this.target.user;
 
 			var pass_text = this.target.pass;
-			if (edit != null && this.target.auth != "ssh_key" && this.target.auth != "manual"
-					&& this.target.auth != "publickey" && pass_text.length == 0) {
+			if (edit != null && pass_text.length == 0 && this.target.auth != "manual"
+					&& ((this.target.auth != "ssh_key" && this.target.auth != "publickey")
+						|| this.target.sudo_after_login)) {
 				try {
 					var pass = Secret.password_lookup_sync(
 						new Secret.Schema(
@@ -524,15 +606,20 @@ namespace RooTerm
 			} else {
 				this.auth_password.active = true;
 			}
-			this.pass_box.visible = this.auth_password.active;
-			this.setup_key_btn.visible = this.auth_password.active && !this.is_new
-				&& !this.target.lxc_container;
 			this.sudo_check.active = this.target.sudo_after_login;
 			this.sudo_check.visible = !this.target.lxc_container;
-			this.lxc_host_check.active = this.target.lxc_host;
+			this.lxc_host_check.active = this.target.lxc_host && this.target.sudo_after_login;
+			this.lxc_host_check.sensitive = this.sudo_check.active;
 			this.lxc_host_check.visible = !this.target.lxc_container;
-			this.lxc_name_entry.text = this.target.lxc_name;
-			this.lxc_name_box.visible = this.target.lxc_host || this.target.lxc_container;
+			this.fetch_hosts_btn.visible = this.lxc_host_check.active && !this.is_new;
+			this.pending_key_identity = "";
+			this.pass_box.visible = this.auth_password.active || this.sudo_check.active;
+			this.pass_label.label = this.auth_key.active && this.sudo_check.active
+				? "Password (required for sudo)"
+				: "Password";
+			this.setup_key_btn.visible = this.auth_password.active
+				&& !this.is_new
+				&& !this.target.lxc_container;
 
 			this.forward_store.remove_all();
 			foreach (var fwd in this.target.forwards) {
@@ -543,38 +630,6 @@ namespace RooTerm
 					remote_port = fwd.remote_port
 				});
 			}
-		}
-
-		/**
-		 * After a successful key install: switch auth, clear secret, save config.
-		 *
-		 * @param identity Private key path used by ``ssh-copy-id``
-		 */
-		private void on_key_installed(string identity)
-		{
-			this.target.auth = "ssh_key";
-			this.target.public_key = identity;
-			this.target.pass = "";
-			try {
-				Secret.password_clear_sync(
-					new Secret.Schema(
-						"org.roojs.rooterm.Connection", Secret.SchemaFlags.NONE,
-						"uuid", Secret.SchemaAttributeType.STRING
-					),
-					null,
-					"uuid",
-					this.target.uuid
-				);
-			} catch (GLib.Error e) {
-				GLib.warning("secret clear failed uuid=%s: %s", this.target.uuid, e.message);
-			}
-			try {
-				this.window.config.save();
-			} catch (GLib.Error e) {
-				GLib.warning("config save failed: %s", e.message);
-			}
-			this.window.host_tree.fill(this.window.config);
-			this.window.host_search.fill(this.window.config);
 		}
 	}
 }
