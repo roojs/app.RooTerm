@@ -30,6 +30,14 @@ namespace RooTerm
 		 * VTE font from Ásbrú defaults (``Monospace 9`` etc.).
 		 */
 		public string terminal_font = "Monospace 9";
+		/**
+		 * Open host pages by connection uuid (same key as {@link Gtk.Stack} names).
+		 */
+		private Gee.HashMap<string, HostPage> by_uuid = new Gee.HashMap<string, HostPage>();
+		/**
+		 * Uuid of the currently visible host page (empty when none).
+		 */
+		private string shown_uuid = "";
 
 		/**
 		 * Fired when {@link display} changes.
@@ -42,6 +50,19 @@ namespace RooTerm
 		public SessionController(HostStack stack)
 		{
 			this.stack = stack;
+			this.stack.pages.notify["visible-child"].connect(() => {
+				var next = this.stack.pages.visible_child as HostPage;
+				var next_uuid = next != null ? next.connection.uuid : "";
+				if (this.shown_uuid.length > 0 && this.shown_uuid != next_uuid
+						&& this.by_uuid.has_key(this.shown_uuid)) {
+					this.by_uuid.get(this.shown_uuid).view(false);
+				}
+				if (next != null) {
+					next.view(true);
+				}
+				this.shown_uuid = next_uuid;
+				this.focus();
+			});
 		}
 
 		/**
@@ -51,56 +72,29 @@ namespace RooTerm
 		 */
 		public void open(Connection connection)
 		{
-			var page = this.stack.pages.get_child_by_name(connection.uuid) as HostPage;
-			if (page == null) {
+			HostPage page;
+			if (this.by_uuid.has_key(connection.uuid)) {
+				page = this.by_uuid.get(connection.uuid);
+			} else {
 				page = new HostPage(connection);
 				page.empty.connect(() => {
 					this.close(page);
 				});
-				page.tab_view.notify["selected-page"].connect(() => {
-					page.connection.open_count = page.tab_view.n_pages;
-					page.connection.active_tab = -1;
-					if (page.tab_view.selected_page == null) {
-						this.focus();
-						return;
-					}
-					for (var i = 0; i < page.tab_view.n_pages; i++) {
-						if (page.tab_view.get_nth_page(i) != page.tab_view.selected_page) {
-							continue;
-						}
-						page.connection.active_tab = i;
-						break;
-					}
+				page.changed.connect(() => {
 					this.focus();
 				});
+				this.by_uuid.set(connection.uuid, page);
 				this.stack.pages.add_named(page, connection.uuid);
 			}
 
 			var term = new SshTerminal(connection, this.terminal_font);
-			var tab = page.tab_view.append(term);
+			var tab = page.add(term);
 			tab.title = term.label();
-			term.exited.connect(() => {
-				GLib.Timeout.add_seconds(10, () => {
-					for (var i = 0; i < page.tab_view.n_pages; i++) {
-						if (page.tab_view.get_nth_page(i) != tab) {
-							continue;
-						}
-						page.tab_view.close_page(tab);
-						break;
-					}
-					return false;
-				});
-			});
-			term.label_changed.connect(() => {
-				tab.title = term.label();
-				this.sync_titles(page);
-				this.focus();
+			term.close_tab.connect(() => {
+				page.tab_view.close_page(tab);
 			});
 			term.spawn();
 			page.tab_view.selected_page = tab;
-			connection.open_count = page.tab_view.n_pages;
-			connection.active_tab = page.tab_view.n_pages - 1;
-			this.sync_titles(page);
 			this.stack.pages.visible_child = page;
 			this.focus();
 			term.terminal.grab_focus();
@@ -116,21 +110,20 @@ namespace RooTerm
 			page.connection.open_count = 0;
 			page.connection.active_tab = -1;
 			page.connection.tab_titles = new Gee.ArrayList<string>();
+			page.connection.tab_states = new Gee.ArrayList<SessionState>();
+			this.by_uuid.unset(page.connection.uuid);
+			if (this.shown_uuid == page.connection.uuid) {
+				this.shown_uuid = "";
+			}
 			this.stack.pages.remove(page);
 			var visible = this.stack.pages.visible_child as HostPage;
-			if (visible != null && visible.tab_view.n_pages > 0) {
+			if (visible != null && visible.current != null) {
 				this.focus();
 				return;
 			}
-			for (var child = this.stack.pages.get_first_child();
-					 child != null; child = child.get_next_sibling()) {
-				var other = child as HostPage;
-				if (other == null || other.tab_view.n_pages == 0) {
-					continue;
-				}
+			var other = this.stack.pages.get_first_child() as HostPage;
+			if (other != null) {
 				this.stack.pages.visible_child = other;
-				this.focus();
-				return;
 			}
 			this.focus();
 		}
@@ -143,10 +136,10 @@ namespace RooTerm
 		 */
 		public bool close_current()
 		{
-			var page = this.stack.pages.visible_child as HostPage;
-			if (page == null || page.tab_view.n_pages == 0) {
+			if (this.shown_uuid.length == 0 || !this.by_uuid.has_key(this.shown_uuid)) {
 				return false;
 			}
+			var page = this.by_uuid.get(this.shown_uuid);
 			if (page.tab_view.selected_page == null) {
 				return false;
 			}
@@ -160,18 +153,12 @@ namespace RooTerm
 		 */
 		public void focus()
 		{
-			var page = this.stack.pages.visible_child as HostPage;
-			if (page == null || page.tab_view.n_pages == 0) {
+			if (this.shown_uuid.length == 0 || !this.by_uuid.has_key(this.shown_uuid)) {
 				this.display = "Roo Term";
 				this.display_changed();
 				return;
 			}
-			if (page.tab_view.selected_page == null) {
-				this.display = "Roo Term";
-				this.display_changed();
-				return;
-			}
-			var term = page.tab_view.selected_page.child as SshTerminal;
+			var term = this.by_uuid.get(this.shown_uuid).current;
 			if (term == null) {
 				this.display = "Roo Term";
 				this.display_changed();
@@ -179,25 +166,6 @@ namespace RooTerm
 			}
 			this.display = term.label();
 			this.display_changed();
-		}
-
-		/**
-		 * Push each tab's {@link SshTerminal.label} onto ``page.connection.tab_titles``.
-		 *
-		 * @param page Host page whose tabs to sync
-		 */
-		private void sync_titles(HostPage page)
-		{
-			var titles = new Gee.ArrayList<string>();
-			for (var i = 0; i < page.tab_view.n_pages; i++) {
-				var term = page.tab_view.get_nth_page(i).child as SshTerminal;
-				if (term == null) {
-					titles.add(page.connection.name);
-					continue;
-				}
-				titles.add(term.label());
-			}
-			page.connection.tab_titles = titles;
 		}
 	}
 }

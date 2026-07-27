@@ -19,7 +19,7 @@
 namespace RooTerm
 {
 	/**
-	 * Host search pulldown — adapted from OLLMchat ``SearchableDropdown`` /
+	 * Host search pulldown, adapted from OLLMchat ``SearchableDropdown`` /
 	 * ``SearchablePulldown`` (entry + popover + filtered list).
 	 * Up/Down highlight in the popover only; Enter/click opens or focuses the host.
 	 */

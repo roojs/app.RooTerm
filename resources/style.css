@@ -27,8 +27,40 @@ popover.menu listview > row:selected {
 
 button.session-icon {
 	opacity: 0.5;
+	min-width: 24px;
+	min-height: 24px;
+	padding: 2px;
 }
 
 button.session-icon.session-active {
 	opacity: 1.0;
+}
+
+button.session-icon.session-idle {
+	opacity: 0.4;
+}
+
+button.session-icon.session-busy {
+	opacity: 0.55;
+}
+
+button.session-icon.session-ready {
+	opacity: 1.0;
+}
+
+button.session-icon.session-ready image {
+	color: #1e4a8c;
+}
+
+button.session-icon.session-dead {
+	opacity: 1.0;
+}
+
+button.session-icon.session-dead image {
+	color: #b01020;
+}
+
+/* Dead-session close countdown */
+progressbar {
+	min-height: 6px;
 }

@@ -309,7 +309,7 @@ namespace RooTerm
 				this.fill_session_marks(mark_box, conn);
 				var nid = conn.notify.connect((o, pspec) => {
 					if (pspec.name != "open-count" && pspec.name != "active-tab"
-							&& pspec.name != "tab-titles") {
+							&& pspec.name != "tab-titles" && pspec.name != "tab-states") {
 						return;
 					}
 					while (mark_box.get_first_child() != null) {
@@ -382,15 +382,47 @@ namespace RooTerm
 				if (idx < conn.tab_titles.size && conn.tab_titles.get(idx).length > 0) {
 					tip = conn.tab_titles.get(idx);
 				}
-				var btn = new Gtk.Button.from_icon_name("video-display") {
+				var mark = SessionState.IDLE;
+				if (idx < conn.tab_states.size) {
+					mark = conn.tab_states.get(idx);
+				}
+				var is_active = idx == conn.active_tab;
+				var btn = new Gtk.Button() {
 					has_frame = false,
 					focus_on_click = false,
 					tooltip_text = tip
 				};
+				if (!is_active && mark == SessionState.BUSY) {
+					btn.child = new Gtk.Spinner() {
+						spinning = true,
+						width_request = 16,
+						height_request = 16
+					};
+				} else {
+					btn.icon_name = "video-display";
+				}
 				btn.add_css_class("flat");
 				btn.add_css_class("session-icon");
-				if (idx == conn.active_tab) {
+				if (is_active) {
 					btn.add_css_class("session-active");
+				} else {
+					switch (mark) {
+						case SessionState.BUSY:
+							btn.add_css_class("session-busy");
+							break;
+
+						case SessionState.READY:
+							btn.add_css_class("session-ready");
+							break;
+
+						case SessionState.DEAD:
+							btn.add_css_class("session-dead");
+							break;
+
+						default:
+							btn.add_css_class("session-idle");
+							break;
+					}
 				}
 				btn.clicked.connect(() => {
 					this.terminal_selected(conn, idx);

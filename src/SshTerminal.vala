@@ -25,20 +25,22 @@ namespace RooTerm
 	{
 		public Connection connection;
 		public Vte.Terminal terminal;
+		public SshStream stream;
 		public string cwd = "";
 		private string window_title = "";
 		/**
-		 * Last shell/mysql-style prompt line scraped from the screen (OSC often missing over SSH).
+		 * Mark for the host-tree session icon (active look is focus, not this).
 		 */
-		private string prompt_hint = "";
-		private uint prompt_timeout = 0;
-		private bool sent_secret = false;
-		private GLib.FileStream? session_log = null;
-		private bool hide_input = false;
-		/**
-		 * Absolute VTE row to read for the next ``#`` log line (``-1`` = not waiting).
-		 */
-		private long log_line = -1;
+		public SessionState state = SessionState.IDLE;
+		private bool selected = true;
+		private uint settle_timeout = 0;
+		private Gtk.Box close_bar;
+		private Gtk.Label close_label;
+		private Gtk.ProgressBar close_progress;
+		private uint close_tick = 0;
+		private int close_left = 0;
+		private bool close_paused = false;
+		private bool close_armed = false;
 
 		/**
 		 * Emitted when the SSH child process exits.
@@ -46,9 +48,19 @@ namespace RooTerm
 		public signal void exited();
 
 		/**
+		 * Emitted when the close countdown finishes (tab should be closed).
+		 */
+		public signal void close_tab();
+
+		/**
 		 * Emitted when {@link cwd} (and thus {@link label}) changes.
 		 */
 		public signal void label_changed();
+
+		/**
+		 * Emitted when {@link state} changes (busy / ready / idle / dead).
+		 */
+		public signal void state_changed();
 
 		/**
 		 * Build a scrolled VTE for ``connection`` (call {@link spawn} to start SSH).
@@ -71,6 +83,42 @@ namespace RooTerm
 				hexpand = true,
 				vexpand = true
 			});
+			this.close_progress = new Gtk.ProgressBar() {
+				fraction = 1.0,
+				hexpand = true
+			};
+			this.close_label = new Gtk.Label("Closing in 30 seconds…") {
+				hexpand = true,
+				xalign = 0.0f
+			};
+			var keep = new Gtk.Button.with_label("Keep open");
+			keep.clicked.connect(() => {
+				this.close_paused = true;
+				if (this.close_tick != 0) {
+					GLib.Source.remove(this.close_tick);
+					this.close_tick = 0;
+				}
+				this.close_label.label = "Kept open - Enter to reconnect";
+				this.close_progress.fraction = 1.0;
+			});
+			var close_row = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 8);
+			close_row.append(this.close_label);
+			close_row.append(keep);
+			this.close_bar = new Gtk.Box(Gtk.Orientation.VERTICAL, 4) {
+				visible = false,
+				margin_start = 8,
+				margin_end = 8,
+				margin_top = 4,
+				margin_bottom = 6
+			};
+			this.close_bar.append(this.close_progress);
+			this.close_bar.append(close_row);
+			this.append(this.close_bar);
+
+			this.stream = new SshStream(this.terminal, this.connection);
+			this.stream.label_changed.connect(() => {
+				this.label_changed();
+			});
 
 			var shortcuts = new Gtk.ShortcutController() {
 				propagation_phase = Gtk.PropagationPhase.CAPTURE,
@@ -91,16 +139,46 @@ namespace RooTerm
 				})
 			));
 			this.terminal.add_controller(shortcuts);
+			var keys = new Gtk.EventControllerKey() {
+				propagation_phase = Gtk.PropagationPhase.CAPTURE
+			};
+			keys.key_pressed.connect((keyval, keycode, mods) => {
+				if (this.state != SessionState.DEAD) {
+					return false;
+				}
+				if (keyval != Gdk.Key.Return && keyval != Gdk.Key.KP_Enter) {
+					return false;
+				}
+				this.reconnect();
+				return true;
+			});
+			this.terminal.add_controller(keys);
 
 			this.terminal.child_exited.connect((status) => {
 				var exit_code = (status >> 8) & 0xff;
 				GLib.debug("ssh child exited status=%d exit=%d name=%s", status, exit_code, this.connection.name);
-				var done = "\r\n[ssh exited: " + exit_code.to_string() + " — closing in 10s]\r\n";
-				this.terminal.feed(done.data);
-				if (this.session_log != null) {
-					this.session_log.printf("\n# exited %d\n", exit_code);
-					this.session_log.flush();
-					this.session_log = null;
+				if (this.stream.session_log != null) {
+					this.stream.session_log.printf("\n# exited %d\n", exit_code);
+					this.stream.session_log.flush();
+					this.stream.session_log = null;
+				}
+				if (this.settle_timeout != 0) {
+					GLib.Source.remove(this.settle_timeout);
+					this.settle_timeout = 0;
+				}
+				if (this.state != SessionState.DEAD) {
+					this.state = SessionState.DEAD;
+					this.state_changed();
+				}
+				if (this.selected) {
+					var done = "\r\n[ssh exited: " + exit_code.to_string()
+						+ " - Enter to reconnect, or wait to close]\r\n";
+					this.terminal.feed(done.data);
+					this.start_close();
+				} else {
+					var done = "\r\n[ssh exited: " + exit_code.to_string()
+						+ " - open this tab to close, or Enter to reconnect]\r\n";
+					this.terminal.feed(done.data);
 				}
 				this.exited();
 			});
@@ -131,162 +209,115 @@ namespace RooTerm
 				this.window_title = title != null ? title : "";
 				this.label_changed();
 			});
-			this.terminal.commit.connect((text, size) => {
-				if (this.session_log == null) {
-					return;
-				}
-				if (this.hide_input) {
-					if (text.index_of_char('\n') < 0 && text.index_of_char('\r') < 0) {
-						return;
-					}
-					this.hide_input = false;
-					this.session_log.puts("[password omitted]\n");
-					this.session_log.flush();
-					long col;
-					long row;
-					this.terminal.get_cursor_position(out col, out row);
-					this.log_line = row + 1;
-					return;
-				}
-				this.session_log.puts(text);
-				this.session_log.flush();
-				if (text.index_of_char('\n') >= 0 || text.index_of_char('\r') >= 0) {
-					long col;
-					long row;
-					this.terminal.get_cursor_position(out col, out row);
-					this.log_line = row + 1;
-				}
-			});
 			this.terminal.contents_changed.connect(() => {
-				if (this.prompt_timeout != 0) {
+				if (this.selected || this.state == SessionState.DEAD) {
 					return;
 				}
-				this.prompt_timeout = GLib.Timeout.add(120, () => {
-					this.prompt_timeout = 0;
-					long col;
-					long row;
-					this.terminal.get_cursor_position(out col, out row);
-					size_t len;
-					var raw = this.terminal.get_text_range_format(Vte.Format.TEXT, row, 0, row, col, out len);
-					var last = raw != null ? raw.replace("\r", "").strip() : "";
-					if (last.length == 0 || last.length > 240) {
+				if (this.settle_timeout != 0) {
+					GLib.Source.remove(this.settle_timeout);
+					this.settle_timeout = 0;
+				}
+				if (this.state != SessionState.BUSY) {
+					this.state = SessionState.BUSY;
+					this.state_changed();
+				}
+				this.settle_timeout = GLib.Timeout.add(1500, () => {
+					this.settle_timeout = 0;
+					if (this.selected || this.state != SessionState.BUSY) {
 						return false;
 					}
-					if (GLib.Regex.match_simple("(password|passphrase).*:\\s*$", last, GLib.RegexCompileFlags.CASELESS, 0)) {
-						return false;
-					}
-					var is_prompt = GLib.Regex.match_simple("^[^\\s@]+@[^\\s:]+:.*[#$]\\s*$", last, 0, 0)
-						|| GLib.Regex.match_simple("^(MariaDB|mysql|sqlite3?|postgres|plsql)\\b.*>\\s*$", last, GLib.RegexCompileFlags.CASELESS, 0)
-						|| ((last.has_suffix("$") || last.has_suffix("#") || last.has_suffix("%")) && last.length < 160);
-					if (!is_prompt || last == this.prompt_hint) {
-						return false;
-					}
-					this.prompt_hint = last;
-					this.label_changed();
+					this.state = SessionState.READY;
+					this.state_changed();
 					return false;
 				});
 			});
-			this.terminal.contents_changed.connect(() => {
-				if (this.hide_input) {
-					return;
+		}
+
+		/**
+		 * Mark this tab selected on the visible host page (clears busy/ready).
+		 * Focusing a dead tab starts the close countdown.
+		 *
+		 * @param on true when this tab is the focused one
+		 */
+		public void select(bool on)
+		{
+			if (this.selected == on) {
+				return;
+			}
+			this.selected = on;
+			if (this.state == SessionState.DEAD) {
+				if (on && !this.close_paused && !this.close_armed) {
+					this.start_close();
 				}
-				long col;
-				long row;
-				this.terminal.get_cursor_position(out col, out row);
-				size_t len;
-				var raw = this.terminal.get_text_range_format(Vte.Format.TEXT, row, 0, row, col, out len);
-				var line = raw != null ? raw.replace("\r", "").strip() : "";
-				if (line.length == 0) {
-					return;
+				return;
+			}
+			if (this.settle_timeout != 0) {
+				GLib.Source.remove(this.settle_timeout);
+				this.settle_timeout = 0;
+			}
+			if (this.state == SessionState.IDLE) {
+				return;
+			}
+			this.state = SessionState.IDLE;
+			this.state_changed();
+		}
+
+		/**
+		 * Show the draining close bar and start a 30s countdown.
+		 */
+		private void start_close()
+		{
+			if (this.close_armed || this.close_paused) {
+				return;
+			}
+			this.close_armed = true;
+			this.close_left = 30;
+			this.close_bar.visible = true;
+			this.close_label.label = "Closing in 30 seconds…";
+			this.close_progress.fraction = 1.0;
+			this.terminal.grab_focus();
+			if (this.close_tick != 0) {
+				GLib.Source.remove(this.close_tick);
+			}
+			this.close_tick = GLib.Timeout.add_seconds(1, () => {
+				if (this.close_paused) {
+					this.close_tick = 0;
+					return false;
 				}
-				if (!GLib.Regex.match_simple(
-					"(password|passphrase|\\[sudo\\]\\s*password).*:\\s*$",
-					line,
-					GLib.RegexCompileFlags.CASELESS,
-					0
-				)) {
-					return;
+				this.close_left--;
+				if (this.close_left <= 0) {
+					this.close_tick = 0;
+					this.close_bar.visible = false;
+					this.close_tab();
+					return false;
 				}
-				this.hide_input = true;
-				if (this.sent_secret) {
-					return;
-				}
-				if (GLib.Regex.match_simple("passphrase.*:\\s*$", line, GLib.RegexCompileFlags.CASELESS, 0)
-					&& this.connection.passphrase.length > 0
-					&& this.connection.auth != "manual") {
-					this.sent_secret = true;
-					this.hide_input = false;
-					var passphrase = this.connection.passphrase + "\n";
-					this.terminal.feed_child(passphrase.data);
-					GLib.debug("fed passphrase name=%s", this.connection.name);
-					return;
-				}
-				if (GLib.Regex.match_simple("password:\\s*$", line, GLib.RegexCompileFlags.CASELESS, 0)
-					&& this.connection.auth != "manual"
-					&& this.connection.auth != "ssh_key"
-					&& this.connection.auth != "publickey") {
-					if (this.connection.pass.length == 0) {
-						try {
-							var pass = Secret.password_lookup_sync(
-								new Secret.Schema(
-									"org.roojs.rooterm.Connection",
-									Secret.SchemaFlags.NONE,
-									"uuid", Secret.SchemaAttributeType.STRING
-								),
-								null,
-								"uuid", this.connection.uuid
-							);
-							this.connection.pass = pass != null ? pass : "";
-						} catch (GLib.Error e) {
-							GLib.warning("secret load failed uuid=%s: %s", this.connection.uuid, e.message);
-						}
-					}
-					if (this.connection.pass.length == 0) {
-						return;
-					}
-					this.sent_secret = true;
-					this.hide_input = false;
-					var password = this.connection.pass + "\n";
-					this.terminal.feed_child(password.data);
-					GLib.debug("fed password name=%s", this.connection.name);
-				}
+				this.close_label.label = "Closing in " + this.close_left.to_string() + " seconds…";
+				this.close_progress.fraction = (double) this.close_left / 30.0;
+				return true;
 			});
-			this.terminal.contents_changed.connect(() => {
-				if (this.session_log == null || this.log_line < 0 || this.hide_input) {
-					return;
-				}
-				long col;
-				long row;
-				this.terminal.get_cursor_position(out col, out row);
-				if (row < this.log_line) {
-					return;
-				}
-				var end_col = row > this.log_line ? this.terminal.get_column_count() : col;
-				if (end_col <= 0) {
-					return;
-				}
-				size_t len;
-				var raw = this.terminal.get_text_range_format(
-					Vte.Format.TEXT, this.log_line, 0, this.log_line, end_col, out len
-				);
-				var line = raw != null ? raw.replace("\r", "").strip() : "";
-				if (line.length == 0) {
-					if (row > this.log_line) {
-						this.log_line = -1;
-					}
-					return;
-				}
-				this.log_line = -1;
-				if (line.length > 500 || line.index_of("\x1b") >= 0) {
-					return;
-				}
-				if (GLib.Regex.match_simple("^[^\\s@]+@[^\\s:]+:.*[#$]\\s*$", line, 0, 0)
-					|| line.has_suffix("$") || line.has_suffix("#") || line.has_suffix("%")) {
-					return;
-				}
-				this.session_log.puts("# " + line + "\n");
-				this.session_log.flush();
-			});
+		}
+
+		/**
+		 * Re-spawn SSH in this tab after a dead exit (Enter).
+		 */
+		public void reconnect()
+		{
+			if (this.state != SessionState.DEAD) {
+				return;
+			}
+			this.close_paused = false;
+			this.close_armed = false;
+			if (this.close_tick != 0) {
+				GLib.Source.remove(this.close_tick);
+				this.close_tick = 0;
+			}
+			this.close_bar.visible = false;
+			this.stream.sent_secret = false;
+			this.stream.hide_input = false;
+			this.stream.log_line = -1;
+			this.state = SessionState.IDLE;
+			this.state_changed();
+			this.spawn();
 		}
 
 		/**
@@ -304,14 +335,14 @@ namespace RooTerm
 		}
 
 		/**
-		 * Dynamic part of {@link label} (prompt preferred — OSC is often absent over SSH).
+		 * Dynamic part of {@link label} (prompt preferred; OSC is often absent over SSH).
 		 *
 		 * @return Detail string or empty
 		 */
 		private string detail()
 		{
-			if (this.prompt_hint.length > 0) {
-				return this.prompt_hint;
+			if (this.stream.prompt_hint.length > 0) {
+				return this.stream.prompt_hint;
 			}
 			if (this.window_title.length > 0) {
 				return this.window_title;
@@ -357,10 +388,12 @@ namespace RooTerm
 			var log_path = GLib.Path.build_filename(
 				log_dir, this.connection.uuid + "_" + this.connection.name + "_" + stamp + ".txt"
 			);
-			this.session_log = GLib.FileStream.open(log_path, "w");
-			if (this.session_log != null) {
-				this.session_log.printf("# RooTerm %s %s started %s\n", this.connection.name, target, stamp);
-				this.session_log.flush();
+			this.stream.session_log = GLib.FileStream.open(log_path, "w");
+			if (this.stream.session_log != null) {
+				this.stream.session_log.printf(
+					"# RooTerm %s %s started %s\n", this.connection.name, target, stamp
+				);
+				this.stream.session_log.flush();
 				GLib.debug("session log path=%s", log_path);
 			} else {
 				GLib.warning("session log open failed path=%s", log_path);

@@ -49,6 +49,14 @@ namespace RooTerm
 			set;
 			default = new Gee.ArrayList<string>();
 		}
+		/**
+		 * Per-tab {@link SessionState} parallel to open tabs (not serialized).
+		 */
+		public Gee.ArrayList<SessionState> tab_states {
+			get;
+			set;
+			default = new Gee.ArrayList<SessionState>();
+		}
 		public Gee.ArrayList<Connection> children {
 			get;
 			set;
@@ -80,6 +88,7 @@ namespace RooTerm
 				case "open-count":
 				case "active-tab":
 				case "tab-titles":
+				case "tab-states":
 				case "children":
 					return null;
 				case "forwards":

@@ -276,6 +276,7 @@ namespace RooTerm
 					conn.pass = "";
 				}
 				conn.passphrase = "";
+				this.take_forwards(conn);
 				config.by_uuid.set(conn.uuid, conn);
 				config.connections.add(conn);
 			}
@@ -283,6 +284,62 @@ namespace RooTerm
 				config.roots.add(root);
 			}
 			return config;
+		}
+
+		/**
+		 * Peel Ásbrú ``-L`` / ``-Lspec`` tokens out of ``conn.options`` into {@link Connection.forwards}.
+		 * Import-only; RooTerm JSON already stores forwards separately.
+		 *
+		 * @param conn Connection whose Ásbrú options may contain forwards
+		 */
+		private void take_forwards(Connection conn)
+		{
+			if (conn.options.index_of("-L") < 0) {
+				return;
+			}
+			string[] kept = {};
+			var tokens = conn.options.strip().split_set(" \t");
+			for (var i = 0; i < tokens.length; i++) {
+				var tok = tokens[i];
+				if (tok.length == 0) {
+					continue;
+				}
+				var spec = "";
+				if (tok == "-L" && i + 1 < tokens.length) {
+					spec = tokens[i + 1];
+					i++;
+				} else if (tok.has_prefix("-L") && tok.length > 2) {
+					spec = tok.substring(2);
+				} else {
+					kept += tok;
+					continue;
+				}
+				var parts = spec.split(":");
+				if (parts.length < 3) {
+					parts = spec.split("/");
+				}
+				if (parts.length == 3) {
+					conn.forwards.add(new Forward() {
+						local_host = "127.0.0.1",
+						local_port = int.parse(parts[0]),
+						remote_host = parts[1],
+						remote_port = int.parse(parts[2])
+					});
+					continue;
+				}
+				if (parts.length >= 4) {
+					conn.forwards.add(new Forward() {
+						local_host = parts[0],
+						local_port = int.parse(parts[1]),
+						remote_host = parts[2],
+						remote_port = int.parse(parts[3])
+					});
+					continue;
+				}
+				kept += "-L";
+				kept += spec;
+			}
+			conn.options = string.joinv(" ", kept).strip();
 		}
 	}
 }
