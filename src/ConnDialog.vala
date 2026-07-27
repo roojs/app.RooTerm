@@ -614,9 +614,11 @@ namespace RooTerm
 			this.fetch_hosts_btn.visible = this.lxc_host_check.active && !this.is_new;
 			this.pending_key_identity = "";
 			this.pass_box.visible = this.auth_password.active || this.sudo_check.active;
-			this.pass_label.label = this.auth_key.active && this.sudo_check.active
-				? "Password (required for sudo)"
-				: "Password";
+			this.pass_label.label =
+				(this.target.auth == "ssh_key" || this.target.auth == "publickey")
+				&& this.target.sudo_after_login
+					? "Password (required for sudo)"
+					: "Password";
 			this.setup_key_btn.visible = this.auth_password.active
 				&& !this.is_new
 				&& !this.target.lxc_container;
