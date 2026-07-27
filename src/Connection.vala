@@ -37,6 +37,22 @@ namespace RooTerm
 		public string public_key { get; set; default = ""; }
 		public string options { get; set; default = ""; }
 		public bool deleted { get; set; default = false; }
+		/**
+		 * After shell login, run ``sudo -i`` and feed the connection password.
+		 */
+		public bool sudo_after_login { get; set; default = false; }
+		/**
+		 * Host may have LXC containers (refresh / children).
+		 */
+		public bool lxc_host { get; set; default = false; }
+		/**
+		 * This row is an LXC container under an SSH host (not a separate SSH target).
+		 */
+		public bool lxc_container { get; set; default = false; }
+		/**
+		 * Container name for ``lxc-console -n`` (on the host or this child row).
+		 */
+		public string lxc_name { get; set; default = ""; }
 		public Gee.ArrayList<Forward> forwards {
 			get;
 			set;
@@ -123,6 +139,82 @@ namespace RooTerm
 			value = Value(typeof(Gee.ArrayList));
 			value.set_object(this.forwards);
 			return true;
+		}
+
+		/**
+		 * Discover LXC containers via a session (``lxc-ls``) and sync child rows.
+		 *
+		 * @param window Window providing sessions / config / host reload
+		 */
+		public void refresh_containers(MainWindow window)
+		{
+			var stream = new SshStream();
+			stream.list_containers = true;
+			var term = window.sessions.open(this, stream);
+			term.stream.containers_found.connect((names) => {
+				this.on_containers_found(names, window);
+			});
+		}
+
+		/**
+		 * Apply ``lxc-ls`` names: add missing children, soft-delete removed ones, save.
+		 *
+		 * @param names Container names from the remote host
+		 * @param window Window providing config / host reload
+		 */
+		private void on_containers_found(string[] names, MainWindow window)
+		{
+			var keep = new Gee.HashMap<string, Connection>();
+			foreach (var child in this.children) {
+				if (child.lxc_container && !child.deleted) {
+					keep.set(child.lxc_name, child);
+				}
+			}
+			var seen = new Gee.HashSet<string>();
+			foreach (var name in names) {
+				if (name.length == 0) {
+					continue;
+				}
+				if (!GLib.Regex.match_simple("^[A-Za-z0-9][A-Za-z0-9_.-]*$", name, 0, 0)) {
+					continue;
+				}
+				seen.add(name);
+				if (keep.has_key(name)) {
+					continue;
+				}
+				var child = new Connection() {
+					uuid = GLib.Uuid.string_random(),
+					name = name,
+					parent_uuid = this.uuid,
+					host = this.host,
+					port = this.port,
+					user = this.user,
+					auth = this.auth,
+					public_key = this.public_key,
+					options = this.options,
+					sudo_after_login = this.sudo_after_login,
+					lxc_container = true,
+					lxc_name = name
+				};
+				this.children.add(child);
+				window.config.by_uuid.set(child.uuid, child);
+			}
+			foreach (var child in this.children) {
+				if (!child.lxc_container || child.deleted) {
+					continue;
+				}
+				if (seen.contains(child.lxc_name)) {
+					continue;
+				}
+				child.deleted = true;
+			}
+			try {
+				window.config.save();
+			} catch (GLib.Error e) {
+				GLib.warning("config save failed: %s", e.message);
+			}
+			window.host_tree.fill(window.config);
+			window.host_search.fill(window.config);
 		}
 	}
 }

@@ -25,11 +25,11 @@ namespace RooTerm
 	public class MainWindow : Adw.ApplicationWindow
 	{
 		private Adw.HeaderBar header_bar;
-		private HostSearchPulldown host_search;
-		private HostTree host_tree;
+		public HostSearchPulldown host_search;
+		public HostTree host_tree;
 		private HostStack host_stack;
-		private SessionController sessions;
-		private Config config;
+		public SessionController sessions;
+		public Config config;
 		private Gtk.Paned paned;
 
 		/**
@@ -99,7 +99,7 @@ namespace RooTerm
 				this.host_search.placeholder_text = this.sessions.display;
 			});
 
-			this.host_tree = new HostTree();
+			this.host_tree = new HostTree(this);
 			this.host_tree.fill(this.config);
 			this.host_tree.connection_activated.connect((conn) => {
 				this.sessions.open(conn);
@@ -123,7 +123,7 @@ namespace RooTerm
 				this.sessions.focus();
 			});
 			this.host_tree.add_connection.connect((group) => {
-				var dlg = new ConnDialog();
+				var dlg = new ConnDialog(this);
 				dlg.fill(null, group);
 				dlg.saved.connect((conn) => {
 					this.config.by_uuid.set(conn.uuid, conn);
@@ -138,7 +138,7 @@ namespace RooTerm
 				dlg.present(this);
 			});
 			this.host_tree.edit_connection.connect((host) => {
-				var dlg = new ConnDialog();
+				var dlg = new ConnDialog(this);
 				dlg.fill(host, null);
 				dlg.saved.connect((conn) => {
 					try {

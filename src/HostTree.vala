@@ -33,6 +33,7 @@ namespace RooTerm
 		 * (for {@link GLib.ListStore.find} in {@link select}).
 		 */
 		private GLib.ListStore hosts;
+		private weak MainWindow window;
 
 		/**
 		 * Emitted on double-click / activate of a non-group connection.
@@ -67,7 +68,7 @@ namespace RooTerm
 		public signal void edit_connection(Connection host);
 
 		/**
-		 * Emitted for context menu **Delete** (after the user picks the item; confirm in window).
+		 * Emitted for host context menu **Delete** (after the user picks the item; confirm in window).
 		 *
 		 * @param connection Host or group to soft-delete
 		 */
@@ -122,8 +123,10 @@ namespace RooTerm
 
 		/**
 		 * Build empty tree UI; call {@link fill} with config.
+		 *
+		 * @param window Main window (sessions / config for LXC refresh)
 		 */
-		public HostTree()
+		public HostTree(MainWindow window)
 		{
 			Object(
 				orientation: Gtk.Orientation.VERTICAL,
@@ -131,6 +134,7 @@ namespace RooTerm
 				hexpand: false,
 				vexpand: true
 			);
+			this.window = window;
 
 			this.root_store = new GLib.ListStore(typeof(Connection));
 			this.hosts = new GLib.ListStore(typeof(Connection));
@@ -238,6 +242,17 @@ namespace RooTerm
 							this.edit_connection(menu_conn);
 						});
 						box.append(edit_item);
+						if (menu_conn.lxc_host && !menu_conn.lxc_container) {
+							var refresh_item = new Gtk.Button.with_label("Refresh containers") {
+								has_frame = false,
+								halign = Gtk.Align.FILL
+							};
+							refresh_item.clicked.connect(() => {
+								pop.popdown();
+								menu_conn.refresh_containers(this.window);
+							});
+							box.append(refresh_item);
+						}
 						var del_item = new Gtk.Button.with_label("Delete") {
 							has_frame = false,
 							halign = Gtk.Align.FILL
@@ -293,7 +308,10 @@ namespace RooTerm
 				if (conn.is_group) {
 					type_icon.icon_name = "folder";
 				}
-				if (!conn.is_group) {
+				if (!conn.is_group && conn.lxc_container) {
+					type_icon.icon_name = "drive-harddisk";
+				}
+				if (!conn.is_group && !conn.lxc_container) {
 					type_icon.icon_name = "video-display";
 				}
 				var old_nid = mark_box.get_data<ulong>("nid");

@@ -69,8 +69,10 @@ namespace RooTerm
 		 * Open a new SSH terminal tab for ``connection`` (creates host page if needed).
 		 *
 		 * @param connection Host to open
+		 * @param stream Optional preconfigured {@link SshStream} (``install_key`` / ``list_containers`` / signals)
+		 * @return The new terminal tab contents
 		 */
-		public void open(Connection connection)
+		public SshTerminal open(Connection connection, SshStream? stream = null)
 		{
 			HostPage page;
 			if (this.by_uuid.has_key(connection.uuid)) {
@@ -87,7 +89,7 @@ namespace RooTerm
 				this.stack.pages.add_named(page, connection.uuid);
 			}
 
-			var term = new SshTerminal(connection, this.terminal_font);
+			var term = new SshTerminal(connection, this.terminal_font, stream);
 			var tab = page.add(term);
 			tab.title = term.label();
 			term.close_tab.connect(() => {
@@ -98,6 +100,7 @@ namespace RooTerm
 			this.stack.pages.visible_child = page;
 			this.focus();
 			term.terminal.grab_focus();
+			return term;
 		}
 
 		/**

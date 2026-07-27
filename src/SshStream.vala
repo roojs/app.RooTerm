@@ -21,11 +21,16 @@ namespace RooTerm
 	/**
 	 * VTE ``commit`` / ``contents_changed`` handlers for one {@link SshTerminal}.
 	 *
+	 * Construct with both ``terminal`` and ``connection`` to wire handlers.
+	 * Construct with neither for a null stream (flags bag for {@link SessionController.open}).
+	 *
 	 * == Example ==
 	 *
 	 * {{{
 	 * var stream = new SshStream(term.terminal, conn);
 	 * stream.label_changed.connect(() => { ... });
+	 * var opts = new SshStream();
+	 * opts.install_key = true;
 	 * }}}
 	 */
 	public class SshStream : Object
@@ -44,6 +49,38 @@ namespace RooTerm
 		 * Absolute VTE row to read for the next ``#`` log line (``-1`` = not waiting).
 		 */
 		public long log_line = -1;
+		/**
+		 * ``sudo -i`` has been fed (wait for the next prompt before LXC steps).
+		 */
+		public bool sudo_sent = false;
+		/**
+		 * Ready for post-sudo steps (no sudo needed, or a prompt arrived after {@link sudo_sent}).
+		 */
+		public bool sudo_done = false;
+		/**
+		 * ``lxc-ls`` has been fed (refresh containers).
+		 */
+		public bool list_sent = false;
+		/**
+		 * ``lxc-ls`` output has been parsed.
+		 */
+		public bool list_parsed = false;
+		/**
+		 * ``lxc-console`` has been fed.
+		 */
+		public bool lxc_sent = false;
+		/**
+		 * When true, spawn is ``ssh-copy-id``; watch output for success.
+		 */
+		public bool install_key = false;
+		/**
+		 * When true, after login feed ``lxc-ls`` and emit {@link containers_found}.
+		 */
+		public bool list_containers = false;
+		/**
+		 * Private key path used for {@link install_key} (no ``.pub`` suffix).
+		 */
+		public string install_identity = "";
 
 		/**
 		 * Emitted when {@link prompt_hint} changes.
@@ -51,19 +88,66 @@ namespace RooTerm
 		public signal void label_changed();
 
 		/**
-		 * Attach to ``terminal`` and connect ``on_*`` stream handlers.
+		 * Emitted when ``ssh-copy-id`` appears to have installed a key.
 		 *
-		 * @param terminal VTE widget to watch
-		 * @param connection Host credentials / auth
+		 * @param identity Private key path to store on the connection
 		 */
-		public SshStream(Vte.Terminal terminal, Connection connection)
+		public signal void key_installed(string identity);
+
+		/**
+		 * Emitted after ``lxc-ls`` output is parsed (refresh containers).
+		 *
+		 * @param names Container names from ``lxc-ls``
+		 */
+		public signal void containers_found(string[] names);
+
+		/**
+		 * Wire ``on_*`` handlers when both arguments are set; otherwise a null stream.
+		 *
+		 * @param terminal VTE to watch, or null for a null stream
+		 * @param connection Host credentials / auth, or null for a null stream
+		 */
+		public SshStream(Vte.Terminal? terminal = null, Connection? connection = null)
 		{
+			if (terminal == null || connection == null) {
+				return;
+			}
 			this.terminal = terminal;
 			this.connection = connection;
 			this.terminal.commit.connect(this.on_commit);
 			this.terminal.contents_changed.connect(this.on_prompt);
 			this.terminal.contents_changed.connect(this.on_password);
 			this.terminal.contents_changed.connect(this.on_log);
+			this.terminal.contents_changed.connect(this.on_key);
+			this.label_changed.connect(() => {
+				if (this.install_key) {
+					return;
+				}
+				if (!this.connection.sudo_after_login) {
+					this.sudo_done = true;
+					return;
+				}
+				if (this.sudo_sent) {
+					this.sudo_done = true;
+					return;
+				}
+				this.sudo_sent = true;
+				this.sent_secret = false;
+				this.terminal.feed_child("sudo -i\n".data);
+			});
+			this.label_changed.connect(this.on_lxc_ls);
+			this.label_changed.connect(() => {
+				if (this.install_key || this.list_containers || this.lxc_sent) {
+					return;
+				}
+				if (!this.sudo_done || this.connection.lxc_name.length == 0) {
+					return;
+				}
+				this.lxc_sent = true;
+				this.terminal.feed_child(
+					("lxc-console -n " + this.connection.lxc_name + "\n").data
+				);
+			});
 		}
 
 		/**
@@ -133,6 +217,54 @@ namespace RooTerm
 		}
 
 		/**
+		 * Feed ``lxc-ls`` after sudo is done; on the following prompt parse names.
+		 */
+		private void on_lxc_ls()
+		{
+			if (this.install_key || !this.list_containers) {
+				return;
+			}
+			if (!this.sudo_done) {
+				return;
+			}
+			if (!this.list_sent) {
+				this.list_sent = true;
+				this.terminal.feed_child("lxc-ls\n".data);
+				return;
+			}
+			if (this.list_parsed) {
+				return;
+			}
+			this.list_parsed = true;
+			long end_col, end_row;
+			this.terminal.get_cursor_position(out end_col, out end_row);
+			size_t full_len;
+			var full = this.terminal.get_text_range_format(
+				Vte.Format.TEXT, 0, 0, end_row, end_col, out full_len
+			);
+			string[] names = {};
+			if (full == null) {
+				this.containers_found(names);
+				return;
+			}
+			foreach (var part in full.split("\n")) {
+				var name = part.replace("\r", "").strip();
+				if (name.length == 0) {
+					continue;
+				}
+				if (!GLib.Regex.match_simple("^[A-Za-z0-9][A-Za-z0-9_.-]*$", name, 0, 0)) {
+					continue;
+				}
+				if (name == "NAME" || name == "sudo" || name == "lxc-ls"
+						|| name == "lxc-console") {
+					continue;
+				}
+				names += name;
+			}
+			this.containers_found(names);
+		}
+
+		/**
 		 * Detect password/passphrase prompts and feed from connection / libsecret.
 		 */
 		private void on_password()
@@ -164,21 +296,39 @@ namespace RooTerm
 				GLib.debug("fed passphrase name=%s", this.connection.name);
 				return;
 			}
+			var is_sudo = GLib.Regex.match_simple(
+				"\\[sudo\\]\\s*password.*:\\s*$", line, GLib.RegexCompileFlags.CASELESS, 0
+			);
 			if (!GLib.Regex.match_simple("password:\\s*$", line, GLib.RegexCompileFlags.CASELESS, 0)
-				|| this.connection.auth == "manual"
-				|| this.connection.auth == "ssh_key"
-				|| this.connection.auth == "publickey") {
+					&& !is_sudo) {
+				return;
+			}
+			if (this.connection.auth == "manual") {
+				return;
+			}
+			if (!is_sudo
+					&& (this.connection.auth == "ssh_key" || this.connection.auth == "publickey")
+					&& !this.install_key) {
 				return;
 			}
 			if (this.connection.pass.length == 0) {
+				var secret_uuid = this.connection.uuid;
+				if (this.connection.lxc_container && this.connection.parent_uuid.length > 0) {
+					secret_uuid = this.connection.parent_uuid;
+				}
 				try {
 					var pass = Secret.password_lookup_sync(
-						new Secret.Schema("org.roojs.rooterm.Connection", Secret.SchemaFlags.NONE, "uuid", Secret.SchemaAttributeType.STRING),
-						null, "uuid", this.connection.uuid
+						new Secret.Schema(
+							"org.roojs.rooterm.Connection", Secret.SchemaFlags.NONE,
+							"uuid", Secret.SchemaAttributeType.STRING
+						),
+						null,
+						"uuid",
+						secret_uuid
 					);
 					this.connection.pass = pass != null ? pass : "";
 				} catch (GLib.Error e) {
-					GLib.warning("secret load failed uuid=%s: %s", this.connection.uuid, e.message);
+					GLib.warning("secret load failed uuid=%s: %s", secret_uuid, e.message);
 				}
 			}
 			if (this.connection.pass.length == 0) {
@@ -188,6 +338,33 @@ namespace RooTerm
 			this.hide_input = false;
 			this.terminal.feed_child((this.connection.pass + "\n").data);
 			GLib.debug("fed password name=%s", this.connection.name);
+		}
+
+		/**
+		 * Watch ``ssh-copy-id`` output for a successful key install.
+		 */
+		private void on_key()
+		{
+			if (!this.install_key || this.install_identity.length == 0) {
+				return;
+			}
+			long col, row;
+			this.terminal.get_cursor_position(out col, out row);
+			size_t len;
+			var raw = this.terminal.get_text_range_format(
+				Vte.Format.TEXT, 0, 0, row, col, out len
+			);
+			if (raw == null) {
+				return;
+			}
+			if (raw.index_of("Number of key(s) added") < 0
+					&& raw.index_of("already exist") < 0) {
+				return;
+			}
+			var identity = this.install_identity;
+			this.install_key = false;
+			this.install_identity = "";
+			this.key_installed(identity);
 		}
 
 		/**

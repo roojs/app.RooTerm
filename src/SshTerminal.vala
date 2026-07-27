@@ -67,8 +67,9 @@ namespace RooTerm
 		 *
 		 * @param connection Host to open
 		 * @param font Pango font string (Ásbrú ``terminal font``)
+		 * @param in_stream Optional flags bag (``install_key`` / ``list_containers``); wired stream is always new
 		 */
-		public SshTerminal(Connection connection, string font = "Monospace 9")
+		public SshTerminal(Connection connection, string font = "Monospace 9", SshStream? in_stream = null)
 		{
 			Object(orientation: Gtk.Orientation.VERTICAL, spacing: 0, hexpand: true, vexpand: true);
 			this.connection = connection;
@@ -116,6 +117,10 @@ namespace RooTerm
 			this.append(this.close_bar);
 
 			this.stream = new SshStream(this.terminal, this.connection);
+			if (in_stream != null) {
+				this.stream.install_key = in_stream.install_key;
+				this.stream.list_containers = in_stream.list_containers;
+			}
 			this.stream.label_changed.connect(() => {
 				this.label_changed();
 			});
@@ -315,6 +320,12 @@ namespace RooTerm
 			this.stream.sent_secret = false;
 			this.stream.hide_input = false;
 			this.stream.log_line = -1;
+			this.stream.sudo_sent = false;
+			this.stream.sudo_done = false;
+			this.stream.list_sent = false;
+			this.stream.list_parsed = false;
+			this.stream.lxc_sent = false;
+			this.stream.prompt_hint = "";
 			this.state = SessionState.IDLE;
 			this.state_changed();
 			this.spawn();
@@ -352,33 +363,69 @@ namespace RooTerm
 
 		/**
 		 * Spawn ``ssh`` for this connection; password / passphrase fed on prompt.
+		 * When {@link SshStream.install_key} is set, runs ``ssh-copy-id`` instead.
 		 */
 		public void spawn()
 		{
-			string[] argv = {};
-			argv += "ssh";
-			argv += "-p";
-			argv += this.connection.port.to_string();
-			foreach (var fwd in this.connection.forwards) {
-				argv += "-L";
-				argv += fwd.local_host + ":" + fwd.local_port.to_string()
-					+ ":" + fwd.remote_host + ":" + fwd.remote_port.to_string();
-			}
-			if ((this.connection.auth == "publickey" || this.connection.auth == "ssh_key")
-					&& this.connection.public_key.length > 0) {
-				argv += "-i";
-				argv += this.connection.public_key;
-			}
-			foreach (var opt in this.connection.options.strip().split_set(" \t")) {
-				if (opt.length == 0) {
-					continue;
+			this.stream.sudo_sent = false;
+			this.stream.sudo_done = false;
+			this.stream.list_sent = false;
+			this.stream.list_parsed = false;
+			this.stream.lxc_sent = false;
+			var target = this.connection.user + "@" + this.connection.host
+				+ ":" + this.connection.port.to_string();
+			string[] argv;
+			if (this.stream.install_key) {
+				var home = GLib.Environment.get_home_dir();
+				var ed = GLib.Path.build_filename(home, ".ssh", "id_ed25519.pub");
+				var rsa = GLib.Path.build_filename(home, ".ssh", "id_rsa.pub");
+				var pub = "";
+				if (GLib.FileUtils.test(ed, GLib.FileTest.IS_REGULAR)) {
+					pub = ed;
 				}
-				argv += opt;
+				if (pub.length == 0 && GLib.FileUtils.test(rsa, GLib.FileTest.IS_REGULAR)) {
+					pub = rsa;
+				}
+				if (pub.length == 0) {
+					this.terminal.feed("No ~/.ssh/id_ed25519.pub or id_rsa.pub found.\r\n".data);
+					return;
+				}
+				var identity = pub;
+				if (pub.has_suffix(".pub")) {
+					identity = pub.substring(0, pub.length - 4);
+				}
+				this.stream.install_identity = identity;
+				argv = {
+					"ssh-copy-id",
+					"-p", this.connection.port.to_string(),
+					"-i", pub,
+					this.connection.user + "@" + this.connection.host
+				};
+				this.terminal.feed(("Installing key via ssh-copy-id → " + target + " …\r\n").data);
+			} else {
+				argv = {
+					"ssh",
+					"-p", this.connection.port.to_string()
+				};
+				foreach (var fwd in this.connection.forwards) {
+					argv += "-L";
+					argv += fwd.local_host + ":" + fwd.local_port.to_string()
+						+ ":" + fwd.remote_host + ":" + fwd.remote_port.to_string();
+				}
+				if ((this.connection.auth == "publickey" || this.connection.auth == "ssh_key")
+						&& this.connection.public_key.length > 0) {
+					argv += "-i";
+					argv += this.connection.public_key;
+				}
+				foreach (var opt in this.connection.options.strip().split_set(" \t")) {
+					if (opt.length == 0) {
+						continue;
+					}
+					argv += opt;
+				}
+				argv += this.connection.user + "@" + this.connection.host;
+				this.terminal.feed(("Connecting to " + target + " …\r\n").data);
 			}
-			argv += this.connection.user + "@" + this.connection.host;
-			var target = this.connection.user + "@" + this.connection.host + ":" + this.connection.port.to_string();
-			var banner = "Connecting to " + target + " …\r\n";
-			this.terminal.feed(banner.data);
 
 			var log_dir = GLib.Path.build_filename(
 				GLib.Environment.get_home_dir(), ".config", "asbru", "session_logs"
@@ -399,7 +446,8 @@ namespace RooTerm
 				GLib.warning("session log open failed path=%s", log_path);
 			}
 
-			GLib.debug("ssh spawn name=%s target=%s", this.connection.name, target);
+			GLib.debug("ssh spawn name=%s target=%s install_key=%s",
+				this.connection.name, target, this.stream.install_key.to_string());
 			this.terminal.spawn_async(
 				Vte.PtyFlags.DEFAULT,
 				null,

@@ -260,8 +260,7 @@ namespace RooTerm
 					try {
 						Secret.password_store_sync(
 							new Secret.Schema(
-								"org.roojs.rooterm.Connection",
-								Secret.SchemaFlags.NONE,
+								"org.roojs.rooterm.Connection", Secret.SchemaFlags.NONE,
 								"uuid", Secret.SchemaAttributeType.STRING
 							),
 							Secret.COLLECTION_DEFAULT,
