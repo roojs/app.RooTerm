@@ -64,6 +64,10 @@ namespace RooTerm
 			);
 
 			this.config = config;
+			GLib.Idle.add(() => {
+				this.config.store_pending_secrets();
+				return false;
+			});
 
 			this.header_bar = new Adw.HeaderBar();
 			var logo = new Gtk.Image.from_icon_name("utilities-terminal-symbolic") {

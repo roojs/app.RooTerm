@@ -78,6 +78,15 @@ namespace RooTerm
 			default = new Gee.ArrayList<Connection>();
 		}
 		public string path { get; set; default = ""; }
+		/**
+		 * uuid → password from Ásbrú import; drained by {@link store_pending_secrets}.
+		 * Not serialized to JSON.
+		 */
+		public Gee.HashMap<string, string> pending_secrets {
+			get;
+			set;
+			default = new Gee.HashMap<string, string>();
+		}
 		public string terminal_font {
 			get { return this.defaults.terminal_font; }
 			set { this.defaults.terminal_font = value; }
@@ -114,6 +123,7 @@ namespace RooTerm
 				case "by-uuid":
 				case "roots":
 				case "path":
+				case "pending-secrets":
 				case "terminal-font":
 				case "window-width":
 				case "window-height":
@@ -219,6 +229,59 @@ namespace RooTerm
 			GLib.debug("loaded connections=%d roots=%d from %s",
 				config.by_uuid.size, config.roots.size, config.path);
 			return config;
+		}
+
+		/**
+		 * Store {@link pending_secrets} one-at-a-time via async libsecret on the
+		 * default main context (parallel begins abandon SecretService init).
+		 */
+		public void store_pending_secrets()
+		{
+			this.store_next_pending_secret();
+		}
+
+		/**
+		 * Drain one pending secret, then schedule the next on completion.
+		 */
+		private void store_next_pending_secret()
+		{
+			string? uuid = null;
+			string? pass = null;
+			foreach (var key in this.pending_secrets.keys) {
+				uuid = key;
+				pass = this.pending_secrets.get(key);
+				break;
+			}
+			if (uuid == null || pass == null || pass.length == 0) {
+				if (uuid != null) {
+					this.pending_secrets.unset(uuid);
+					this.store_next_pending_secret();
+				}
+				return;
+			}
+			this.pending_secrets.unset(uuid);
+			var schema = new Secret.Schema(
+				"org.roojs.rooterm.Connection", Secret.SchemaFlags.NONE,
+				"uuid", Secret.SchemaAttributeType.STRING
+			);
+			var store_uuid = uuid;
+			Secret.password_store.begin(
+				schema,
+				Secret.COLLECTION_DEFAULT,
+				"RooTerm " + store_uuid,
+				pass,
+				null,
+				(obj, res) => {
+					try {
+						Secret.password_store.end(res);
+						GLib.debug("secret imported uuid=%s", store_uuid);
+					} catch (GLib.Error e) {
+						GLib.warning("secret import failed uuid=%s: %s", store_uuid, e.message);
+					}
+					this.store_next_pending_secret();
+				},
+				"uuid", store_uuid
+			);
 		}
 
 		/**

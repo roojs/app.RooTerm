@@ -242,7 +242,11 @@ namespace RooTerm
 		}
 
 		/**
-		 * Build a RooTerm {@link Config} from this loaded tree (passwords go to libsecret).
+		 * Build a RooTerm {@link Config} from this loaded tree.
+		 *
+		 * Passwords are queued on {@link Config.pending_secrets} for async
+		 * libsecret store after the UI main loop is running (sync store deadlocks
+		 * on the keyring ACL prompt).
 		 *
 		 * @return New RooTerm config ready to save
 		 */
@@ -257,21 +261,7 @@ namespace RooTerm
 					conn.auth = "ssh_key";
 				}
 				if (conn.pass.length > 0) {
-					try {
-						Secret.password_store_sync(
-							new Secret.Schema(
-								"org.roojs.rooterm.Connection", Secret.SchemaFlags.NONE,
-								"uuid", Secret.SchemaAttributeType.STRING
-							),
-							Secret.COLLECTION_DEFAULT,
-							"RooTerm " + conn.uuid,
-							conn.pass,
-							null,
-							"uuid", conn.uuid
-						);
-					} catch (GLib.Error e) {
-						GLib.warning("secret import failed uuid=%s: %s", conn.uuid, e.message);
-					}
+					config.pending_secrets.set(conn.uuid, conn.pass);
 					conn.pass = "";
 				}
 				conn.passphrase = "";
