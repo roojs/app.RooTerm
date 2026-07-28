@@ -115,6 +115,11 @@ namespace RooTerm
 			});
 
 			this.activate.connect(() => {
+				var open = this.active_window;
+				if (open != null) {
+					open.present();
+					return;
+				}
 				var window = new MainWindow(this);
 				this.add_window(window);
 				window.present();

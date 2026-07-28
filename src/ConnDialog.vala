@@ -24,6 +24,8 @@ namespace RooTerm
 	 */
 	public class ConnDialog : Adw.Dialog
 	{
+		private delegate void KeyNext();
+
 		private Connection target;
 		private Connection? parent_group;
 		private bool is_new;
@@ -41,6 +43,8 @@ namespace RooTerm
 		private Gtk.CheckButton lxc_host_check;
 		private Gtk.Button fetch_hosts_btn;
 		private Gtk.Button setup_key_btn;
+		private Gtk.Button upgrade_key_btn;
+		private Gtk.Button retire_key_btn;
 		private GLib.ListStore forward_store;
 		private Gtk.SingleSelection forward_selection;
 		private Gtk.ColumnView forward_view;
@@ -50,6 +54,11 @@ namespace RooTerm
 		 * Identity path from a successful ``ssh-copy-id``; applied on Save.
 		 */
 		private string pending_key_identity = "";
+		/**
+		 * Staged ``lxc-ls`` names from Fetch hosts; applied on Save only.
+		 */
+		private string[] pending_lxc_names = {};
+		private bool pending_lxc_sync = false;
 
 		/**
 		 * Emitted after Save writes fields onto ``target``.
@@ -87,10 +96,15 @@ namespace RooTerm
 				active = true
 			};
 			this.auth_key = new Gtk.CheckButton.with_label("SSH key") {
-				group = this.auth_password
+				group = this.auth_password,
+				visible = false
 			};
 			this.auth_manual = new Gtk.CheckButton.with_label("Manual") {
 				group = this.auth_password
+			};
+			this.setup_key_btn = new Gtk.Button.with_label("Set up SSH key") {
+				halign = Gtk.Align.START,
+				valign = Gtk.Align.CENTER
 			};
 
 			this.pass_box = new Gtk.Box(Gtk.Orientation.VERTICAL, 6);
@@ -100,6 +114,7 @@ namespace RooTerm
 
 			var auth_box = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 12);
 			auth_box.append(this.auth_password);
+			auth_box.append(this.setup_key_btn);
 			auth_box.append(this.auth_key);
 			auth_box.append(this.auth_manual);
 
@@ -135,29 +150,58 @@ namespace RooTerm
 				if (this.pass_entry.text.length > 0) {
 					this.target.pass = this.pass_entry.text;
 				}
-				this.target.refresh_containers(this.window);
+				this.close();
+				var term = this.target.refresh_containers(this.window, (names) => {
+					this.pending_lxc_names = names;
+					this.pending_lxc_sync = true;
+					GLib.debug("fetch hosts staged count=%d", names.length);
+					this.present(this.window);
+				});
+				term.close_tab.connect(() => {
+					this.present(this.window);
+				});
 			});
-			this.setup_key_btn = new Gtk.Button.with_label("Set up SSH key login") {
-				halign = Gtk.Align.START
-			};
 			this.setup_key_btn.clicked.connect(() => {
-				if (this.pass_entry.text.length > 0) {
-					this.target.pass = this.pass_entry.text;
-				}
-				var stream = new SshStream();
-				stream.install_key = true;
-				var term = this.window.sessions.open(this.target, stream);
-				term.stream.key_installed.connect((identity) => {
-					this.pending_key_identity = identity;
-					this.auth_key.active = true;
-					this.pass_box.visible = this.auth_password.active || this.sudo_check.active;
-					this.pass_label.label = this.auth_key.active && this.sudo_check.active
-						? "Password (required for sudo)"
-						: "Password";
-					this.setup_key_btn.visible = this.auth_password.active
-						&& !this.is_new
-						&& this.target != null
-						&& !this.target.lxc_container;
+				this.ensure_key(() => {
+					this.target.host = this.host_entry.text.strip();
+					this.target.user = this.user_entry.text.strip();
+					var port = int.parse(this.port_entry.text.strip());
+					if (port > 0 && port <= 65535) {
+						this.target.port = port;
+					}
+					if (this.pass_entry.text.length > 0) {
+						this.target.pass = this.pass_entry.text;
+					}
+					this.close();
+					var stream = new SshStream();
+					stream.install_key = true;
+					var term = this.window.sessions.open(this.target, stream);
+					term.stream.key_installed.connect((identity) => {
+						this.pending_key_identity = identity;
+						this.target.auth = "ssh_key";
+						this.target.public_key = identity;
+						this.setup_key_btn.visible = false;
+						this.auth_key.visible = true;
+						this.auth_key.active = true;
+						try {
+							this.window.config.save();
+						} catch (GLib.Error e) {
+							GLib.warning("config save failed: %s", e.message);
+						}
+						this.pass_box.visible = this.auth_password.active || this.sudo_check.active;
+						this.pass_label.label = this.auth_key.active && this.sudo_check.active
+							? "Password (required for sudo)"
+							: "Password";
+						GLib.debug("ssh key installed identity=%s name=%s", identity, this.target.name);
+						GLib.Timeout.add_seconds(2, () => {
+							term.close_tab();
+							return false;
+						});
+						this.present(this.window);
+					});
+					term.close_tab.connect(() => {
+						this.present(this.window);
+					});
 				});
 			});
 			var sudo_row = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 12);
@@ -165,37 +209,56 @@ namespace RooTerm
 			sudo_row.append(this.lxc_host_check);
 			basic.append(sudo_row);
 			basic.append(this.fetch_hosts_btn);
-			basic.append(this.setup_key_btn);
+			this.upgrade_key_btn = new Gtk.Button.with_label("Replace with passphrased key") {
+				halign = Gtk.Align.START,
+				visible = false
+			};
+			this.retire_key_btn = new Gtk.Button.with_label("Remove old key from server") {
+				halign = Gtk.Align.START,
+				visible = false
+			};
+			this.upgrade_key_btn.clicked.connect(() => {
+				this.begin_key_upgrade();
+			});
+			this.retire_key_btn.clicked.connect(() => {
+				this.begin_key_retire();
+			});
+			basic.append(this.upgrade_key_btn);
+			basic.append(this.retire_key_btn);
 
 			this.auth_password.toggled.connect(() => {
 				this.pass_box.visible = this.auth_password.active || this.sudo_check.active;
 				this.pass_label.label = this.auth_key.active && this.sudo_check.active
 					? "Password (required for sudo)"
 					: "Password";
-				this.setup_key_btn.visible = this.auth_password.active
-					&& !this.is_new
-					&& this.target != null
-					&& !this.target.lxc_container;
+				if (this.auth_password.active) {
+					this.auth_key.visible = false;
+					this.setup_key_btn.visible = !this.is_new
+						&& this.target != null
+						&& !this.target.lxc_container;
+				}
 			});
 			this.auth_key.toggled.connect(() => {
 				this.pass_box.visible = this.auth_password.active || this.sudo_check.active;
 				this.pass_label.label = this.auth_key.active && this.sudo_check.active
 					? "Password (required for sudo)"
 					: "Password";
-				this.setup_key_btn.visible = this.auth_password.active
-					&& !this.is_new
-					&& this.target != null
-					&& !this.target.lxc_container;
+				if (this.auth_key.active) {
+					this.auth_key.visible = true;
+					this.setup_key_btn.visible = false;
+				}
 			});
 			this.auth_manual.toggled.connect(() => {
 				this.pass_box.visible = this.auth_password.active || this.sudo_check.active;
 				this.pass_label.label = this.auth_key.active && this.sudo_check.active
 					? "Password (required for sudo)"
 					: "Password";
-				this.setup_key_btn.visible = this.auth_password.active
-					&& !this.is_new
-					&& this.target != null
-					&& !this.target.lxc_container;
+				if (this.auth_manual.active) {
+					this.auth_key.visible = false;
+					this.setup_key_btn.visible = !this.is_new
+						&& this.target != null
+						&& !this.target.lxc_container;
+				}
 			});
 			this.sudo_check.toggled.connect(() => {
 				this.lxc_host_check.sensitive = this.sudo_check.active;
@@ -206,16 +269,11 @@ namespace RooTerm
 				this.pass_label.label = this.auth_key.active && this.sudo_check.active
 					? "Password (required for sudo)"
 					: "Password";
-				this.setup_key_btn.visible = this.auth_password.active
-					&& !this.is_new
-					&& this.target != null
-					&& !this.target.lxc_container;
 			});
 			this.lxc_host_check.toggled.connect(() => {
 				this.fetch_hosts_btn.visible = this.lxc_host_check.active;
 			});
 			this.pass_box.visible = true;
-			this.setup_key_btn.visible = true;
 
 			this.forward_store = new GLib.ListStore(typeof(Forward));
 
@@ -442,7 +500,9 @@ namespace RooTerm
 			});
 
 			var header = new Adw.HeaderBar() {
-				title_widget = switcher
+				title_widget = switcher,
+				show_start_title_buttons = false,
+				show_end_title_buttons = false
 			};
 			header.pack_start(cancel);
 			header.pack_end(save);
@@ -450,6 +510,196 @@ namespace RooTerm
 			toolbar.add_top_bar(header);
 			toolbar.content = stack;
 			this.child = toolbar;
+		}
+
+		/**
+		 * If neither ``id_ed25519`` nor ``id_rsa`` exists, open {@link KeyDialog}
+		 * to create a passphrased key, then call ``next``.
+		 *
+		 * @param next Continues SSH key setup when a public key is ready
+		 */
+		private void ensure_key(owned KeyNext next)
+		{
+			var home = GLib.Environment.get_home_dir();
+			var ed = GLib.Path.build_filename(home, ".ssh", "id_ed25519.pub");
+			var rsa = GLib.Path.build_filename(home, ".ssh", "id_rsa.pub");
+			if (GLib.FileUtils.test(ed, GLib.FileTest.IS_REGULAR)
+					|| GLib.FileUtils.test(rsa, GLib.FileTest.IS_REGULAR)) {
+				next();
+				return;
+			}
+			var dlg = new KeyDialog();
+			dlg.created.connect((identity, passphrase) => {
+				this.target.passphrase = passphrase;
+				try {
+					Secret.password_store_sync(
+						new Secret.Schema(
+							"org.roojs.rooterm.SshKey", Secret.SchemaFlags.NONE,
+							"path", Secret.SchemaAttributeType.STRING
+						),
+						Secret.COLLECTION_DEFAULT,
+						"RooTerm SSH key " + identity,
+						passphrase,
+						null,
+						"path", identity
+					);
+				} catch (GLib.Error e) {
+					GLib.warning("key secret store failed path=%s: %s", identity, e.message);
+				}
+				next();
+			});
+			dlg.present(this);
+		}
+
+		/**
+		 * Step 1: create a new passphrased key, install it, keep {@link Connection.retire_key}
+		 * for the old identity until step 2.
+		 */
+		private void begin_key_upgrade()
+		{
+			var home = GLib.Environment.get_home_dir();
+			var old_identity = this.target.public_key;
+			if (old_identity.length == 0) {
+				var ed = GLib.Path.build_filename(home, ".ssh", "id_ed25519");
+				var rsa = GLib.Path.build_filename(home, ".ssh", "id_rsa");
+				if (GLib.FileUtils.test(ed + ".pub", GLib.FileTest.IS_REGULAR)) {
+					old_identity = ed;
+				} else if (GLib.FileUtils.test(rsa + ".pub", GLib.FileTest.IS_REGULAR)) {
+					old_identity = rsa;
+				}
+			}
+			if (old_identity.length == 0) {
+				GLib.warning("no identity to replace name=%s", this.target.name);
+				return;
+			}
+			var new_identity = GLib.Path.build_filename(
+				home, ".ssh", "id_ed25519_" + this.target.uuid.substring(0, 8)
+			);
+			var dlg = new KeyDialog(new_identity, true);
+			dlg.created.connect((identity, passphrase) => {
+				this.target.passphrase = passphrase;
+				try {
+					Secret.password_store_sync(
+						new Secret.Schema(
+							"org.roojs.rooterm.SshKey", Secret.SchemaFlags.NONE,
+							"path", Secret.SchemaAttributeType.STRING
+						),
+						Secret.COLLECTION_DEFAULT,
+						"RooTerm SSH key " + identity,
+						passphrase,
+						null,
+						"path", identity
+					);
+				} catch (GLib.Error e) {
+					GLib.warning("key secret store failed path=%s: %s", identity, e.message);
+				}
+				this.target.host = this.host_entry.text.strip();
+				this.target.user = this.user_entry.text.strip();
+				var port = int.parse(this.port_entry.text.strip());
+				if (port > 0 && port <= 65535) {
+					this.target.port = port;
+				}
+				if (this.pass_entry.text.length > 0) {
+					this.target.pass = this.pass_entry.text;
+				}
+				this.close();
+				var stream = new SshStream();
+				stream.install_key = true;
+				stream.install_identity = identity;
+				var term = this.window.sessions.open(this.target, stream);
+				term.stream.key_installed.connect((installed) => {
+					this.target.auth = "ssh_key";
+					this.target.retire_key = old_identity;
+					this.target.public_key = installed;
+					this.pending_key_identity = installed;
+					this.setup_key_btn.visible = false;
+					this.auth_key.visible = true;
+					this.auth_key.active = true;
+					this.upgrade_key_btn.visible = false;
+					this.retire_key_btn.visible = true;
+					try {
+						this.window.config.save();
+					} catch (GLib.Error e) {
+						GLib.warning("config save failed: %s", e.message);
+					}
+					GLib.debug("key replaced new=%s old=%s name=%s",
+						installed, old_identity, this.target.name);
+					GLib.Timeout.add_seconds(2, () => {
+						term.close_tab();
+						return false;
+					});
+					var done = new Adw.AlertDialog(
+						"New key installed",
+						"""Verify login with the new key works, then use
+“Remove old key from server” on this connection."""
+					);
+					done.add_response("ok", "OK");
+					done.default_response = "ok";
+					done.close_response = "ok";
+					done.response.connect(() => {
+						this.present(this.window);
+					});
+					done.present(this.window);
+				});
+				term.close_tab.connect(() => {
+					this.present(this.window);
+				});
+			});
+			dlg.present(this);
+		}
+
+		/**
+		 * Step 2: after the new key works, remove the old pubkey from the server.
+		 */
+		private void begin_key_retire()
+		{
+			if (this.target.retire_key.length == 0) {
+				return;
+			}
+			var pub_path = this.target.retire_key;
+			if (!pub_path.has_suffix(".pub")) {
+				pub_path = pub_path + ".pub";
+			}
+			string pub_line;
+			try {
+				GLib.FileUtils.get_contents(pub_path, out pub_line);
+			} catch (GLib.Error e) {
+				GLib.warning("read retire pub failed path=%s: %s", pub_path, e.message);
+				return;
+			}
+			pub_line = pub_line.strip();
+			if (pub_line.length == 0) {
+				return;
+			}
+			this.target.host = this.host_entry.text.strip();
+			this.target.user = this.user_entry.text.strip();
+			var port = int.parse(this.port_entry.text.strip());
+			if (port > 0 && port <= 65535) {
+				this.target.port = port;
+			}
+			this.close();
+			var stream = new SshStream();
+			stream.remove_old_key = true;
+			stream.remove_pub_line = pub_line;
+			var term = this.window.sessions.open(this.target, stream);
+			term.stream.old_key_removed.connect(() => {
+				this.target.retire_key = "";
+				this.retire_key_btn.visible = false;
+				try {
+					this.window.config.save();
+				} catch (GLib.Error e) {
+					GLib.warning("config save failed: %s", e.message);
+				}
+				GLib.debug("retire_key cleared name=%s", this.target.name);
+				GLib.Timeout.add_seconds(2, () => {
+					term.close_tab();
+					return false;
+				});
+				this.present(this.window);
+			});
+			term.close_tab.connect(() => {
+				this.present(this.window);
+			});
 		}
 
 		/**
@@ -542,11 +792,74 @@ namespace RooTerm
 			}
 			this.target.sudo_after_login = this.sudo_check.active;
 			this.target.lxc_host = this.lxc_host_check.active;
-			if (this.is_new && this.parent_group != null) {
-				this.parent_group.children.add(this.target);
+			if (this.pending_lxc_sync) {
+				this.target.apply_containers(this.pending_lxc_names, this.window);
+				this.pending_lxc_sync = false;
+				this.pending_lxc_names = {};
 			}
 			this.saved(this.target);
+
+			if (this.target.auth == "ssh_key" && this.target.retire_key.length == 0
+					&& this.key_open()) {
+				var alert = new Adw.AlertDialog(
+					"Unprotected SSH key",
+					"""This private key has no passphrase. Replace it with a new
+passphrased key (stored in the secret store). Installing the new
+key and removing the old one from the server are two separate
+steps so you can verify the new key works first."""
+				);
+				alert.add_response("later", "Later");
+				alert.add_response("replace", "Replace key…");
+				alert.default_response = "replace";
+				alert.close_response = "later";
+				alert.set_response_appearance("replace", Adw.ResponseAppearance.SUGGESTED);
+				alert.response.connect((response) => {
+					if (response == "replace") {
+						this.begin_key_upgrade();
+						return;
+					}
+					this.close();
+				});
+				alert.present(this);
+				return;
+			}
 			this.close();
+		}
+
+		/**
+		 * True when the connection identity exists and accepts an empty passphrase.
+		 */
+		private bool key_open()
+		{
+			var identity = this.target.public_key;
+			if (identity.length == 0) {
+				var home = GLib.Environment.get_home_dir();
+				var ed = GLib.Path.build_filename(home, ".ssh", "id_ed25519");
+				var rsa = GLib.Path.build_filename(home, ".ssh", "id_rsa");
+				if (GLib.FileUtils.test(ed, GLib.FileTest.IS_REGULAR)) {
+					identity = ed;
+				} else if (GLib.FileUtils.test(rsa, GLib.FileTest.IS_REGULAR)) {
+					identity = rsa;
+				}
+			}
+			if (identity.length == 0 || !GLib.FileUtils.test(identity, GLib.FileTest.IS_REGULAR)) {
+				return false;
+			}
+			int status = -1;
+			try {
+				GLib.Process.spawn_sync(
+					null,
+					{ "ssh-keygen", "-y", "-f", identity, "-P", "" },
+					null,
+					GLib.SpawnFlags.SEARCH_PATH | GLib.SpawnFlags.STDOUT_TO_DEV_NULL
+						| GLib.SpawnFlags.STDERR_TO_DEV_NULL,
+					null, null, null, out status
+				);
+			} catch (GLib.Error e) {
+				GLib.warning("ssh-keygen -y failed: %s", e.message);
+				return false;
+			}
+			return status == 0;
 		}
 
 		/**
@@ -559,6 +872,9 @@ namespace RooTerm
 		{
 			this.parent_group = parent_group;
 			this.is_new = edit == null;
+			this.pending_lxc_names = {};
+			this.pending_lxc_sync = false;
+			this.pending_key_identity = "";
 			if (edit != null) {
 				this.target = edit;
 				this.title = "Edit connection";
@@ -599,7 +915,11 @@ namespace RooTerm
 			}
 			this.pass_entry.text = pass_text;
 
-			if (this.target.auth == "publickey" || this.target.auth == "ssh_key") {
+			var using_key = this.target.auth == "ssh_key"
+				|| this.target.auth == "publickey";
+			this.setup_key_btn.visible = !this.is_new && !this.target.lxc_container && !using_key;
+			this.auth_key.visible = using_key;
+			if (using_key) {
 				this.auth_key.active = true;
 			} else if (this.target.auth == "manual") {
 				this.auth_manual.active = true;
@@ -612,6 +932,9 @@ namespace RooTerm
 			this.lxc_host_check.sensitive = this.sudo_check.active;
 			this.lxc_host_check.visible = !this.target.lxc_container;
 			this.fetch_hosts_btn.visible = this.lxc_host_check.active && !this.is_new;
+			this.retire_key_btn.visible = using_key && this.target.retire_key.length > 0;
+			this.upgrade_key_btn.visible = using_key && this.target.retire_key.length == 0
+				&& this.key_open() && !this.is_new && !this.target.lxc_container;
 			this.pending_key_identity = "";
 			this.pass_box.visible = this.auth_password.active || this.sudo_check.active;
 			this.pass_label.label =
@@ -619,9 +942,6 @@ namespace RooTerm
 				&& this.target.sudo_after_login
 					? "Password (required for sudo)"
 					: "Password";
-			this.setup_key_btn.visible = this.auth_password.active
-				&& !this.is_new
-				&& !this.target.lxc_container;
 
 			this.forward_store.remove_all();
 			foreach (var fwd in this.target.forwards) {

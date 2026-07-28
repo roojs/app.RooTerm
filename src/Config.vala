@@ -72,10 +72,13 @@ namespace RooTerm
 			set;
 			default = new Gee.HashMap<string, Connection>();
 		}
-		public Gee.ArrayList<Connection> roots {
+		/**
+		 * Nested host tree + flat search list (not JSON).
+		 */
+		public HostTreeNodes tree {
 			get;
 			set;
-			default = new Gee.ArrayList<Connection>();
+			default = new HostTreeNodes();
 		}
 		public string path { get; set; default = ""; }
 		/**
@@ -121,7 +124,7 @@ namespace RooTerm
 		{
 			switch (property_name) {
 				case "by-uuid":
-				case "roots":
+				case "tree":
 				case "path":
 				case "pending-secrets":
 				case "terminal-font":
@@ -192,7 +195,7 @@ namespace RooTerm
 				config.path = path;
 				config.save();
 				GLib.debug("imported asbru connections=%d roots=%d to %s",
-					config.by_uuid.size, config.roots.size, config.path);
+					config.by_uuid.size, config.tree.size, config.path);
 				return config;
 			}
 
@@ -204,21 +207,24 @@ namespace RooTerm
 				if (conn.uuid.length == 0) {
 					continue;
 				}
-				conn.children = new Gee.ArrayList<Connection>();
+				conn.children = new HostTreeNodes();
 				config.by_uuid.set(conn.uuid, conn);
 			}
 			foreach (var conn in config.by_uuid.values) {
-				if (conn.parent_uuid.length == 0 || conn.parent_uuid == "__PAC__ROOT__") {
-					config.roots.add(conn);
+				if (conn.deleted) {
 					continue;
 				}
-				if (!config.by_uuid.has_key(conn.parent_uuid)) {
-					config.roots.add(conn);
-					continue;
+				Connection? parent = null;
+				if (conn.parent_uuid.length > 0 && conn.parent_uuid != "__PAC__ROOT__"
+					&& config.by_uuid.has_key(conn.parent_uuid)) {
+					parent = config.by_uuid.get(conn.parent_uuid);
+					if (parent.deleted) {
+						parent = null;
+					}
 				}
-				config.by_uuid.get(conn.parent_uuid).children.add(conn);
+				config.tree.append(parent, conn);
 			}
-			config.roots.sort((a, b) => {
+			config.tree.sort((a, b) => {
 				return a.name.collate(b.name);
 			});
 			foreach (var conn in config.by_uuid.values) {
@@ -227,7 +233,7 @@ namespace RooTerm
 				});
 			}
 			GLib.debug("loaded connections=%d roots=%d from %s",
-				config.by_uuid.size, config.roots.size, config.path);
+				config.by_uuid.size, config.tree.size, config.path);
 			return config;
 		}
 

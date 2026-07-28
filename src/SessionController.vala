@@ -45,6 +45,13 @@ namespace RooTerm
 		public signal void display_changed();
 
 		/**
+		 * Fired when ``sudo -i`` rejects the connection password.
+		 *
+		 * @param connection Host whose sudo password failed
+		 */
+		public signal void sudo_password_failed(Connection connection);
+
+		/**
 		 * @param stack Outer host stack to manage
 		 */
 		public SessionController(HostStack stack)
@@ -94,6 +101,9 @@ namespace RooTerm
 			tab.title = term.label();
 			term.close_tab.connect(() => {
 				page.tab_view.close_page(tab);
+			});
+			term.stream.sudo_password_failed.connect(() => {
+				this.sudo_password_failed(connection);
 			});
 			term.spawn();
 			page.tab_view.selected_page = tab;

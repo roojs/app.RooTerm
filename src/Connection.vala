@@ -19,14 +19,36 @@
 namespace RooTerm
 {
 	/**
+	 * Callback for staged ``lxc-ls`` results (dialog Save applies later).
+	 *
+	 * @param names Container names from the remote host
+	 */
+	public delegate void ContainerNamesCb(string[] names);
+
+	/**
 	 * Connection or group (``is_group``); JSON via {@link Json.Serializable}.
 	 */
 	public class Connection : Object, Json.Serializable
 	{
 		public string uuid { get; set; default = ""; }
 		public string name { get; set; default = ""; }
+		/**
+		 * Search / filter label (parent prefix for LXC children); not stored / not JSON.
+		 */
+		public string search_name {
+			owned get {
+				if (this.parent != null && this.lxc_container) {
+					return this.parent.name + " / " + this.name;
+				}
+				return this.name;
+			}
+		}
 		public bool is_group { get; set; default = false; }
 		public string parent_uuid { get; set; default = ""; }
+		/**
+		 * Live parent in the host tree; not JSON ({@link parent_uuid} is).
+		 */
+		public weak Connection? parent { get; set; default = null; }
 		public string method { get; set; default = ""; }
 		public string host { get; set; default = ""; }
 		public int port { get; set; default = 22; }
@@ -35,6 +57,10 @@ namespace RooTerm
 		public string passphrase { get; set; default = ""; }
 		public string auth { get; set; default = ""; }
 		public string public_key { get; set; default = ""; }
+		/**
+		 * Old private-key path still on the server; clear after {@link ConnDialog} remove step.
+		 */
+		public string retire_key { get; set; default = ""; }
 		public string options { get; set; default = ""; }
 		public bool deleted { get; set; default = false; }
 		/**
@@ -73,10 +99,50 @@ namespace RooTerm
 			set;
 			default = new Gee.ArrayList<SessionState>();
 		}
-		public Gee.ArrayList<Connection> children {
-			get;
-			set;
-			default = new Gee.ArrayList<Connection>();
+		private HostTreeNodes _children = new HostTreeNodes();
+		private ulong children_sid = 0;
+		/**
+		 * Nested host / container rows.
+		 */
+		public HostTreeNodes children {
+			get {
+				return this._children;
+			}
+			set {
+				if (this.children_sid != 0) {
+					this._children.disconnect(this.children_sid);
+				}
+				this._children = value;
+				this.children_sid = this._children.items_changed.connect((m, p, r, a) => {
+					this.notify_property("has-children");
+					this.notify_property("hide-expander");
+				});
+				this.notify_property("has-children");
+				this.notify_property("hide-expander");
+			}
+		}
+		/**
+		 * Whether {@link children} has any rows.
+		 */
+		public bool has_children {
+			get {
+				return this._children.size > 0;
+			}
+		}
+		/**
+		 * Inverse of {@link has_children} for {@link Gtk.TreeExpander.hide_expander}.
+		 */
+		public bool hide_expander {
+			get {
+				return this._children.size == 0;
+			}
+		}
+
+		construct {
+			this.children_sid = this._children.items_changed.connect((m, p, r, a) => {
+				this.notify_property("has-children");
+				this.notify_property("hide-expander");
+			});
 		}
 
 		public unowned ParamSpec? find_property(string name)
@@ -106,6 +172,10 @@ namespace RooTerm
 				case "tab-titles":
 				case "tab-states":
 				case "children":
+				case "parent":
+				case "search-name":
+				case "has-children":
+				case "hide-expander":
 					return null;
 				case "forwards":
 					var arr = new Json.Array();
@@ -142,33 +212,54 @@ namespace RooTerm
 		}
 
 		/**
-		 * Discover LXC containers via a session (``lxc-ls``) and sync child rows.
+		 * Discover LXC containers via a session (``lxc-ls``).
 		 *
-		 * @param window Window providing sessions / config / host reload
+		 * With ``on_listed`` null, applies names to the tree and saves. Otherwise
+		 * only invokes the callback (dialog can stage until Save). Closes the
+		 * list tab after five seconds.
+		 *
+		 * @param window Window providing sessions / config
+		 * @param on_listed Optional handler instead of applying to the tree
+		 * @return The list terminal tab
 		 */
-		public void refresh_containers(MainWindow window)
+		public SshTerminal refresh_containers(MainWindow window, owned ContainerNamesCb? on_listed = null)
 		{
 			var stream = new SshStream();
 			stream.list_containers = true;
 			var term = window.sessions.open(this, stream);
 			term.stream.containers_found.connect((names) => {
-				this.on_containers_found(names, window);
+				if (on_listed != null) {
+					on_listed(names);
+				} else {
+					this.apply_containers(names, window);
+				}
+				GLib.Timeout.add_seconds(5, () => {
+					term.close_tab();
+					return false;
+				});
 			});
+			return term;
 		}
 
 		/**
 		 * Apply ``lxc-ls`` names: add missing children, soft-delete removed ones, save.
 		 *
 		 * @param names Container names from the remote host
-		 * @param window Window providing config / host reload
+		 * @param window Window providing config
 		 */
-		private void on_containers_found(string[] names, MainWindow window)
+		public void apply_containers(string[] names, MainWindow window)
 		{
+			GLib.debug("containers_found host=%s count=%d", this.name, names.length);
+			if (names.length == 0) {
+				GLib.warning("containers_found empty host=%s — skip sync", this.name);
+				return;
+			}
 			var keep = new Gee.HashMap<string, Connection>();
 			foreach (var child in this.children) {
-				if (child.lxc_container && !child.deleted) {
-					keep.set(child.lxc_name, child);
+				if (!child.lxc_container || child.deleted) {
+					continue;
 				}
+				keep.set(child.lxc_name, child);
 			}
 			var seen = new Gee.HashSet<string>();
 			foreach (var name in names) {
@@ -196,9 +287,11 @@ namespace RooTerm
 					lxc_container = true,
 					lxc_name = name
 				};
-				this.children.add(child);
 				window.config.by_uuid.set(child.uuid, child);
+				window.config.tree.append(this, child);
+				GLib.debug("containers_found add name=%s uuid=%s", name, child.uuid);
 			}
+			var gone = new Gee.ArrayList<Connection>();
 			foreach (var child in this.children) {
 				if (!child.lxc_container || child.deleted) {
 					continue;
@@ -207,14 +300,16 @@ namespace RooTerm
 					continue;
 				}
 				child.deleted = true;
+				gone.add(child);
+			}
+			foreach (var child in gone) {
+				window.config.tree.remove(child);
 			}
 			try {
 				window.config.save();
 			} catch (GLib.Error e) {
 				GLib.warning("config save failed: %s", e.message);
 			}
-			window.host_tree.fill(window.config);
-			window.host_search.fill(window.config);
 		}
 	}
 }

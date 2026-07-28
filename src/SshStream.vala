@@ -58,6 +58,14 @@ namespace RooTerm
 		 */
 		public bool sudo_done = false;
 		/**
+		 * Sudo password was fed; another sudo prompt means failure.
+		 */
+		public bool sudo_password_fed = false;
+		/**
+		 * After a short arm delay, a repeated sudo password prompt emits {@link sudo_password_failed}.
+		 */
+		public bool sudo_fail_armed = false;
+		/**
 		 * ``lxc-ls`` has been fed (refresh containers).
 		 */
 		public bool list_sent = false;
@@ -73,6 +81,18 @@ namespace RooTerm
 		 * When true, spawn is ``ssh-copy-id``; watch output for success.
 		 */
 		public bool install_key = false;
+		/**
+		 * When true, after login remove {@link remove_pub_line} from ``authorized_keys``.
+		 */
+		public bool remove_old_key = false;
+		/**
+		 * Full line from the old ``.pub`` file to delete on the server.
+		 */
+		public string remove_pub_line = "";
+		/**
+		 * Remote remove command has been fed.
+		 */
+		public bool remove_sent = false;
 		/**
 		 * When true, after login feed ``lxc-ls`` and emit {@link containers_found}.
 		 */
@@ -93,6 +113,16 @@ namespace RooTerm
 		 * @param identity Private key path to store on the connection
 		 */
 		public signal void key_installed(string identity);
+
+		/**
+		 * Emitted when ``sudo -i`` rejects the password (prompt returns).
+		 */
+		public signal void sudo_password_failed();
+
+		/**
+		 * Emitted after the old pubkey line was removed from ``authorized_keys``.
+		 */
+		public signal void old_key_removed();
 
 		/**
 		 * Emitted after ``lxc-ls`` output is parsed (refresh containers).
@@ -117,6 +147,7 @@ namespace RooTerm
 			this.terminal.commit.connect(this.on_commit);
 			this.terminal.contents_changed.connect(this.on_prompt);
 			this.terminal.contents_changed.connect(this.on_password);
+			this.terminal.contents_changed.connect(this.on_sudo_fail);
 			this.terminal.contents_changed.connect(this.on_log);
 			this.terminal.contents_changed.connect(this.on_key);
 			this.label_changed.connect(() => {
@@ -129,9 +160,12 @@ namespace RooTerm
 				}
 				if (this.sudo_sent) {
 					this.sudo_done = true;
+					this.sudo_fail_armed = false;
 					return;
 				}
 				this.sudo_sent = true;
+				this.sudo_password_fed = false;
+				this.sudo_fail_armed = false;
 				this.sent_secret = false;
 				GLib.debug("sudo -i name=%s auth=%s pass_len=%d",
 					this.connection.name, this.connection.auth, this.connection.pass.length);
@@ -150,6 +184,28 @@ namespace RooTerm
 					("lxc-console -n " + this.connection.lxc_name + "\n").data
 				);
 			});
+			this.label_changed.connect(() => {
+				if (!this.remove_old_key || this.remove_sent || this.install_key) {
+					return;
+				}
+				if (!this.sudo_done) {
+					return;
+				}
+				if (this.remove_pub_line.strip().length == 0) {
+					return;
+				}
+				this.remove_sent = true;
+				var line = this.remove_pub_line.strip().replace("'", "'\\''");
+				var cmd = """f="$HOME/.ssh/authorized_keys"
+grep -vxF '""" + line + """' "$f" > "$f.rooterm"
+mv "$f.rooterm" "$f"
+chmod 600 "$f"
+echo RooTerm: old key removed
+""";
+				GLib.debug("remove old key name=%s", this.connection.name);
+				this.terminal.feed_child(cmd.data);
+			});
+			this.terminal.contents_changed.connect(this.on_remove_old);
 		}
 
 		/**
@@ -209,7 +265,11 @@ namespace RooTerm
 				var is_prompt = GLib.Regex.match_simple("^[^\\s@]+@[^\\s:]+:.*[#$]\\s*$", last, 0, 0)
 					|| GLib.Regex.match_simple("^(MariaDB|mysql|sqlite3?|postgres|plsql)\\b.*>\\s*$", last, GLib.RegexCompileFlags.CASELESS, 0)
 					|| ((last.has_suffix("$") || last.has_suffix("#") || last.has_suffix("%")) && last.length < 160);
-				if (!is_prompt || last == this.prompt_hint) {
+				if (!is_prompt) {
+					return false;
+				}
+				var waiting_lxc = this.list_containers && this.list_sent && !this.list_parsed;
+				if (last == this.prompt_hint && !waiting_lxc) {
 					return false;
 				}
 				this.prompt_hint = last;
@@ -219,7 +279,7 @@ namespace RooTerm
 		}
 
 		/**
-		 * Feed ``lxc-ls`` after sudo is done; on the following prompt parse names.
+		 * Feed ``lxc-ls -f -F name,state`` after sudo; on the next prompt parse rows.
 		 */
 		private void on_lxc_ls()
 		{
@@ -231,7 +291,8 @@ namespace RooTerm
 			}
 			if (!this.list_sent) {
 				this.list_sent = true;
-				this.terminal.feed_child("lxc-ls\n".data);
+				GLib.debug("lxc-ls feed name=%s", this.connection.name);
+				this.terminal.feed_child("lxc-ls -f -F name,state\n".data);
 				return;
 			}
 			if (this.list_parsed) {
@@ -246,24 +307,81 @@ namespace RooTerm
 			);
 			string[] names = {};
 			if (full == null) {
+				GLib.debug("lxc-ls empty buffer name=%s", this.connection.name);
 				this.containers_found(names);
 				return;
 			}
-			foreach (var part in full.split("\n")) {
-				var name = part.replace("\r", "").strip();
-				if (name.length == 0) {
-					continue;
-				}
-				if (!GLib.Regex.match_simple("^[A-Za-z0-9][A-Za-z0-9_.-]*$", name, 0, 0)) {
-					continue;
-				}
-				if (name == "NAME" || name == "sudo" || name == "lxc-ls"
-						|| name == "lxc-console") {
-					continue;
-				}
-				names += name;
+			var after = full;
+			var cmd_at = full.last_index_of("lxc-ls");
+			if (cmd_at >= 0) {
+				after = full.substring(cmd_at);
 			}
+			var saw_header = false;
+			foreach (var part in after.split("\n")) {
+				var line = part.replace("\r", "").strip();
+				if (line.length == 0) {
+					continue;
+				}
+				var cols = line.split_set(" \t", 0);
+				string[] fields = {};
+				foreach (var col in cols) {
+					if (col.length == 0) {
+						continue;
+					}
+					fields += col;
+				}
+				if (fields.length < 2) {
+					continue;
+				}
+				if (fields[0] == "NAME") {
+					saw_header = true;
+					continue;
+				}
+				if (!saw_header) {
+					continue;
+				}
+				if (!GLib.Regex.match_simple(
+						"^(RUNNING|STOPPED|FROZEN|STARTING|ABORTING|STOPPING)$",
+						fields[1], 0, 0)) {
+					continue;
+				}
+				if (!GLib.Regex.match_simple(
+						"^[A-Za-z0-9][A-Za-z0-9_.-]*$", fields[0], 0, 0)) {
+					continue;
+				}
+				names += fields[0];
+			}
+			GLib.debug("lxc-ls parsed name=%s header=%d count=%d",
+				this.connection.name, (int) saw_header, names.length);
 			this.containers_found(names);
+		}
+
+		/**
+		 * After a sudo password was fed, ``Sorry, try again`` means it failed.
+		 */
+		private void on_sudo_fail()
+		{
+			if (!this.sudo_password_fed || this.sudo_done) {
+				return;
+			}
+			long col, row;
+			this.terminal.get_cursor_position(out col, out row);
+			size_t len;
+			var start = row > 6 ? row - 6 : 0;
+			var raw = this.terminal.get_text_range_format(
+				Vte.Format.TEXT, start, 0, row, col, out len
+			);
+			if (raw == null) {
+				return;
+			}
+			if (raw.index_of("Sorry, try again") < 0
+					&& raw.index_of("incorrect password attempt") < 0) {
+				return;
+			}
+			this.sudo_fail_armed = false;
+			this.sudo_password_fed = false;
+			GLib.debug("sudo password failed (sorry) name=%s", this.connection.name);
+			this.sudo_password_failed();
 		}
 
 		/**
@@ -293,6 +411,15 @@ namespace RooTerm
 			GLib.debug("password line=%s sudo=%d sent=%d auth=%s pass_len=%d name=%s",
 				line, (int) is_sudo, (int) this.sent_secret, this.connection.auth,
 				this.connection.pass.length, this.connection.name);
+			if (is_sudo && this.sudo_password_fed && !this.sudo_done) {
+				if (this.sudo_fail_armed) {
+					this.sudo_fail_armed = false;
+					this.sudo_password_fed = false;
+					GLib.debug("sudo password failed name=%s", this.connection.name);
+					this.sudo_password_failed();
+				}
+				return;
+			}
 			if (this.sent_secret) {
 				return;
 			}
@@ -347,6 +474,7 @@ namespace RooTerm
 					this.terminal.feed(
 						"\r\n# RooTerm: no sudo password in keyring — edit connection and save it\r\n".data
 					);
+					this.sudo_password_failed();
 				}
 				return;
 			}
@@ -354,6 +482,16 @@ namespace RooTerm
 			this.hide_input = true;
 			this.terminal.feed_child((this.connection.pass + "\n").data);
 			this.hide_input = false;
+			if (is_sudo) {
+				this.sudo_password_fed = true;
+				this.sudo_fail_armed = false;
+				GLib.Timeout.add(500, () => {
+					if (this.sudo_password_fed && !this.sudo_done) {
+						this.sudo_fail_armed = true;
+					}
+					return false;
+				});
+			}
 			GLib.debug("fed password name=%s sudo=%d", this.connection.name, (int) is_sudo);
 		}
 
@@ -381,6 +519,28 @@ namespace RooTerm
 			var identity = this.install_identity;
 			this.install_key = false;
 			this.key_installed(identity);
+		}
+
+		/**
+		 * Watch for ``RooTerm: old key removed`` after {@link remove_old_key}.
+		 */
+		private void on_remove_old()
+		{
+			if (!this.remove_old_key || !this.remove_sent) {
+				return;
+			}
+			long col, row;
+			this.terminal.get_cursor_position(out col, out row);
+			size_t len;
+			var raw = this.terminal.get_text_range_format(
+				Vte.Format.TEXT, 0, 0, row, col, out len
+			);
+			if (raw == null || raw.index_of("RooTerm: old key removed") < 0) {
+				return;
+			}
+			this.remove_old_key = false;
+			GLib.debug("old key removed name=%s", this.connection.name);
+			this.old_key_removed();
 		}
 
 		/**

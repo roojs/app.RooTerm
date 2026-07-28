@@ -27,12 +27,6 @@ namespace RooTerm
 		private Gtk.ListView list_view;
 		public Gtk.SingleSelection selection;
 		private Gtk.TreeListModel tree_model;
-		private GLib.ListStore root_store;
-		/**
-		 * Flat DFS list of the same {@link Connection} instances as the expanded tree
-		 * (for {@link GLib.ListStore.find} in {@link select}).
-		 */
-		private GLib.ListStore hosts;
 		private weak MainWindow window;
 
 		/**
@@ -81,48 +75,19 @@ namespace RooTerm
 		 */
 		public void select(Connection connection)
 		{
-			uint pos;
-			if (!this.hosts.find(connection, out pos)) {
+			for (var i = 0; i < this.tree_model.get_n_items(); i++) {
+				var row = this.tree_model.get_item(i) as Gtk.TreeListRow;
+				if (row == null || row.item != connection) {
+					continue;
+				}
+				this.selection.selected = i;
+				this.list_view.scroll_to(i, Gtk.ListScrollFlags.NONE, null);
 				return;
 			}
-			this.selection.selected = pos;
-			this.list_view.scroll_to(pos, Gtk.ListScrollFlags.NONE, null);
 		}
 
 		/**
-		 * Replace tree contents from a loaded {@link Config}.
-		 *
-		 * @param config Loaded RooTerm config
-		 */
-		public void fill(Config config)
-		{
-			this.root_store.remove_all();
-			this.hosts.remove_all();
-
-			var walk = new Gee.ArrayList<Connection>();
-			foreach (var root in config.roots) {
-				if (root.deleted) {
-					continue;
-				}
-				this.root_store.append(root);
-			}
-			for (var i = config.roots.size - 1; i >= 0; i--) {
-				walk.add(config.roots.get(i));
-			}
-			while (walk.size > 0) {
-				var conn = walk.remove_at(walk.size - 1);
-				if (conn.deleted) {
-					continue;
-				}
-				this.hosts.append(conn);
-				for (var i = conn.children.size - 1; i >= 0; i--) {
-					walk.add(conn.children.get(i));
-				}
-			}
-		}
-
-		/**
-		 * Build empty tree UI; call {@link fill} with config.
+		 * Build tree UI bound to ``config.tree`` (live root {@link HostTreeNodes}).
 		 *
 		 * @param window Main window (sessions / config for LXC refresh)
 		 */
@@ -136,29 +101,16 @@ namespace RooTerm
 			);
 			this.window = window;
 
-			this.root_store = new GLib.ListStore(typeof(Connection));
-			this.hosts = new GLib.ListStore(typeof(Connection));
-
 			this.tree_model = new Gtk.TreeListModel(
-				this.root_store,
+				window.config.tree,
 				false,
 				true,
 				(item) => {
 					var conn = item as Connection;
-					if (conn == null || conn.children.size == 0) {
+					if (conn == null) {
 						return null;
 					}
-					var child_store = new GLib.ListStore(typeof(Connection));
-					foreach (var child in conn.children) {
-						if (child.deleted) {
-							continue;
-						}
-						child_store.append(child);
-					}
-					if (child_store.get_n_items() == 0) {
-						return null;
-					}
-					return child_store;
+					return conn.children;
 				}
 			);
 
@@ -283,6 +235,15 @@ namespace RooTerm
 					),
 					"name"
 				).bind(name_label, "label", list_item);
+				new Gtk.PropertyExpression(
+					typeof(Connection),
+					new Gtk.PropertyExpression(
+						typeof(Gtk.TreeListRow),
+						new Gtk.PropertyExpression(typeof(Gtk.ListItem), null, "item"),
+						"item"
+					),
+					"hide-expander"
+				).bind(expander, "hide-expander", list_item);
 			});
 			factory.bind.connect((obj) => {
 				var list_item = (Gtk.ListItem) obj;

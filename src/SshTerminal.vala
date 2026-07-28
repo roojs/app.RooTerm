@@ -120,6 +120,9 @@ namespace RooTerm
 			if (in_stream != null) {
 				this.stream.install_key = in_stream.install_key;
 				this.stream.list_containers = in_stream.list_containers;
+				this.stream.install_identity = in_stream.install_identity;
+				this.stream.remove_old_key = in_stream.remove_old_key;
+				this.stream.remove_pub_line = in_stream.remove_pub_line;
 			}
 			this.stream.label_changed.connect(() => {
 				this.label_changed();
@@ -327,9 +330,12 @@ namespace RooTerm
 			this.stream.log_line = -1;
 			this.stream.sudo_sent = false;
 			this.stream.sudo_done = false;
+			this.stream.sudo_password_fed = false;
+			this.stream.sudo_fail_armed = false;
 			this.stream.list_sent = false;
 			this.stream.list_parsed = false;
 			this.stream.lxc_sent = false;
+			this.stream.remove_sent = false;
 			this.stream.prompt_hint = "";
 			this.state = SessionState.IDLE;
 			this.state_changed();
@@ -374,9 +380,12 @@ namespace RooTerm
 		{
 			this.stream.sudo_sent = false;
 			this.stream.sudo_done = false;
+			this.stream.sudo_password_fed = false;
+			this.stream.sudo_fail_armed = false;
 			this.stream.list_sent = false;
 			this.stream.list_parsed = false;
 			this.stream.lxc_sent = false;
+			this.stream.remove_sent = false;
 			this.stream.sent_secret = false;
 			if (this.connection.pass.length == 0
 					&& this.connection.auth != "manual"
@@ -403,6 +412,32 @@ namespace RooTerm
 					GLib.warning("secret load failed uuid=%s: %s", secret_uuid, e.message);
 				}
 			}
+			if (this.connection.passphrase.length == 0
+					&& (this.connection.auth == "ssh_key"
+						|| this.connection.auth == "publickey"
+						|| this.stream.install_key)) {
+				var identity = this.connection.public_key;
+				if (identity.length == 0) {
+					identity = GLib.Path.build_filename(
+						GLib.Environment.get_home_dir(), ".ssh", "id_ed25519"
+					);
+				}
+				try {
+					var phrase = Secret.password_lookup_sync(
+						new Secret.Schema(
+							"org.roojs.rooterm.SshKey", Secret.SchemaFlags.NONE,
+							"path", Secret.SchemaAttributeType.STRING
+						),
+						null,
+						"path", identity
+					);
+					this.connection.passphrase = phrase != null ? phrase : "";
+					GLib.debug("spawn key secret path=%s phrase_len=%d name=%s",
+						identity, this.connection.passphrase.length, this.connection.name);
+				} catch (GLib.Error e) {
+					GLib.warning("key secret load failed path=%s: %s", identity, e.message);
+				}
+			}
 			var target = this.connection.user + "@" + this.connection.host
 				+ ":" + this.connection.port.to_string();
 			string[] argv;
@@ -411,7 +446,19 @@ namespace RooTerm
 				var ed = GLib.Path.build_filename(home, ".ssh", "id_ed25519.pub");
 				var rsa = GLib.Path.build_filename(home, ".ssh", "id_rsa.pub");
 				var pub = "";
-				if (GLib.FileUtils.test(ed, GLib.FileTest.IS_REGULAR)) {
+				if (this.stream.install_identity.length > 0) {
+					pub = this.stream.install_identity;
+					if (!pub.has_suffix(".pub")) {
+						pub = pub + ".pub";
+					}
+				}
+				if (pub.length == 0 && this.connection.public_key.length > 0) {
+					pub = this.connection.public_key;
+					if (!pub.has_suffix(".pub")) {
+						pub = pub + ".pub";
+					}
+				}
+				if (pub.length == 0 && GLib.FileUtils.test(ed, GLib.FileTest.IS_REGULAR)) {
 					pub = ed;
 				}
 				if (pub.length == 0 && GLib.FileUtils.test(rsa, GLib.FileTest.IS_REGULAR)) {

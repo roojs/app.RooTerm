@@ -225,17 +225,11 @@ namespace RooTerm
 					this.roots.add(conn);
 					continue;
 				}
-				this.by_uuid.get(conn.parent_uuid).children.add(conn);
 			}
 
 			this.roots.sort((a, b) => {
 				return a.name.collate(b.name);
 			});
-			foreach (var conn in this.by_uuid.values) {
-				conn.children.sort((a, b) => {
-					return a.name.collate(b.name);
-				});
-			}
 
 			GLib.debug("loaded connections=%d roots=%d font=%s size=%dx%d from %s",
 				this.by_uuid.size, this.roots.size, this.terminal_font, this.window_width, this.window_height, this.path);
@@ -266,11 +260,17 @@ namespace RooTerm
 				}
 				conn.passphrase = "";
 				this.take_forwards(conn);
+				conn.children = new HostTreeNodes();
 				config.by_uuid.set(conn.uuid, conn);
 				config.connections.add(conn);
 			}
-			foreach (var root in this.roots) {
-				config.roots.add(root);
+			foreach (var conn in this.by_uuid.values) {
+				Connection? parent = null;
+				if (conn.parent_uuid.length > 0 && conn.parent_uuid != "__PAC__ROOT__"
+					&& config.by_uuid.has_key(conn.parent_uuid)) {
+					parent = config.by_uuid.get(conn.parent_uuid);
+				}
+				config.tree.append(parent, conn);
 			}
 			return config;
 		}

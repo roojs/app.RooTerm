@@ -29,7 +29,7 @@ namespace RooTerm
 		protected Gtk.Image? arrow;
 		public Gtk.Popover popup { get; private set; }
 		protected Gtk.ListView list;
-		protected GLib.ListStore item_store;
+		protected HostTreeNodesFlat item_store;
 		protected Gtk.FilterListModel filtered_items;
 		protected Gtk.StringFilter string_filter;
 		protected Gtk.SingleSelection selection;
@@ -96,11 +96,10 @@ namespace RooTerm
 			});
 			this.entry.add_controller(focus_controller);
 
-			this.item_store = new GLib.ListStore(typeof(Connection));
-			this.fill(config);
+			this.item_store = config.tree.flat;
 
 			this.string_filter = new Gtk.StringFilter(
-				new Gtk.PropertyExpression(typeof(Connection), null, "name")
+				new Gtk.PropertyExpression(typeof(Connection), null, "search-name")
 			) {
 				match_mode = Gtk.StringFilterMatchMode.SUBSTRING,
 				ignore_case = true
@@ -137,8 +136,8 @@ namespace RooTerm
 				if (label == null) {
 					return;
 				}
-				list_item.item.bind_property("name", label, "label", GLib.BindingFlags.SYNC_CREATE);
-				list_item.item.bind_property("name", label, "tooltip-text", GLib.BindingFlags.SYNC_CREATE);
+				list_item.item.bind_property("search-name", label, "label", GLib.BindingFlags.SYNC_CREATE);
+				list_item.item.bind_property("search-name", label, "tooltip-text", GLib.BindingFlags.SYNC_CREATE);
 			});
 
 			this.popup = new Gtk.Popover() {
@@ -220,29 +219,6 @@ namespace RooTerm
 			});
 			widget_scroll_controller.propagation_phase = Gtk.PropagationPhase.BUBBLE;
 			this.add_controller(widget_scroll_controller);
-		}
-
-		/**
-		 * Rebuild the host list from ``config`` (skips groups and soft-deleted hosts).
-		 *
-		 * @param config Connection tree source
-		 */
-		public void fill(Config config)
-		{
-			this.item_store.remove_all();
-			var hosts = new Gee.ArrayList<Connection>();
-			foreach (var conn in config.by_uuid.values) {
-				if (conn.is_group || conn.deleted) {
-					continue;
-				}
-				hosts.add(conn);
-			}
-			hosts.sort((a, b) => {
-				return a.name.collate(b.name);
-			});
-			foreach (var conn in hosts) {
-				this.item_store.append(conn);
-			}
 		}
 
 		public override bool grab_focus()

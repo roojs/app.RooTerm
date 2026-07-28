@@ -102,9 +102,34 @@ namespace RooTerm
 				}
 				this.host_search.placeholder_text = this.sessions.display;
 			});
+			this.sessions.sudo_password_failed.connect((conn) => {
+				var alert = new Adw.AlertDialog(
+					"Password failed",
+					"The sudo password for " + conn.name + " was rejected. Edit the connection to fix it."
+				);
+				alert.add_response("ok", "OK");
+				alert.add_response("edit", "Edit");
+				alert.default_response = "edit";
+				alert.close_response = "ok";
+				alert.response.connect((response) => {
+					if (response != "edit") {
+						return;
+					}
+					var dlg = new ConnDialog(this);
+					dlg.fill(conn, null);
+					dlg.saved.connect((c) => {
+						try {
+							this.config.save();
+						} catch (GLib.Error e) {
+							GLib.warning("config save failed: %s", e.message);
+						}
+					});
+					dlg.present(this);
+				});
+				alert.present(this);
+			});
 
 			this.host_tree = new HostTree(this);
-			this.host_tree.fill(this.config);
 			this.host_tree.connection_activated.connect((conn) => {
 				this.sessions.open(conn);
 			});
@@ -131,13 +156,12 @@ namespace RooTerm
 				dlg.fill(null, group);
 				dlg.saved.connect((conn) => {
 					this.config.by_uuid.set(conn.uuid, conn);
+					this.config.tree.append(group, conn);
 					try {
 						this.config.save();
 					} catch (GLib.Error e) {
 						GLib.warning("config save failed: %s", e.message);
 					}
-					this.host_tree.fill(this.config);
-					this.host_search.fill(this.config);
 				});
 				dlg.present(this);
 			});
@@ -150,8 +174,6 @@ namespace RooTerm
 					} catch (GLib.Error e) {
 						GLib.warning("config save failed: %s", e.message);
 					}
-					this.host_tree.fill(this.config);
-					this.host_search.fill(this.config);
 				});
 				dlg.present(this);
 			});
@@ -167,13 +189,12 @@ namespace RooTerm
 						return;
 					}
 					conn.deleted = true;
+					this.config.tree.remove(conn);
 					try {
 						this.config.save();
 					} catch (GLib.Error e) {
 						GLib.warning("config save failed: %s", e.message);
 					}
-					this.host_tree.fill(this.config);
-					this.host_search.fill(this.config);
 				});
 				alert.present(this);
 			});
