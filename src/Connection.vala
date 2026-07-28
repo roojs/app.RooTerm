@@ -79,6 +79,18 @@ namespace RooTerm
 		 * Container name for ``lxc-console -n`` (on the host or this child row).
 		 */
 		public string lxc_name { get; set; default = ""; }
+		/**
+		 * Synthetic Localhost root row (not stored in ``connections.json``).
+		 */
+		public bool is_local { get; set; default = false; }
+		/**
+		 * Ephemeral path child under Localhost for one open local PTY.
+		 */
+		public bool local_path { get; set; default = false; }
+		/**
+		 * Tab index on the Localhost {@link HostPage} for a {@link local_path} row.
+		 */
+		public int local_tab { get; set; default = -1; }
 		public Gee.ArrayList<Forward> forwards {
 			get;
 			set;
@@ -176,6 +188,9 @@ namespace RooTerm
 				case "search-name":
 				case "has-children":
 				case "hide-expander":
+				case "is-local":
+				case "local-path":
+				case "local-tab":
 					return null;
 				case "forwards":
 					var arr = new Json.Array();

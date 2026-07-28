@@ -21,19 +21,10 @@ namespace RooTerm
 	/**
 	 * VTE terminal for one SSH session on a {@link Connection}.
 	 */
-	public class SshTerminal : Gtk.Box
+	public class SshTerminal : Terminal
 	{
-		public Connection connection;
-		public Vte.Terminal terminal;
 		public SshStream stream;
-		public string cwd = "";
 		private string window_title = "";
-		/**
-		 * Mark for the host-tree session icon (active look is focus, not this).
-		 */
-		public SessionState state = SessionState.IDLE;
-		private bool selected = true;
-		private uint settle_timeout = 0;
 		private Gtk.Box close_bar;
 		private Gtk.Label close_label;
 		private Gtk.ProgressBar close_progress;
@@ -48,21 +39,6 @@ namespace RooTerm
 		public signal void exited();
 
 		/**
-		 * Emitted when the close countdown finishes (tab should be closed).
-		 */
-		public signal void close_tab();
-
-		/**
-		 * Emitted when {@link cwd} (and thus {@link label}) changes.
-		 */
-		public signal void label_changed();
-
-		/**
-		 * Emitted when {@link state} changes (busy / ready / idle / dead).
-		 */
-		public signal void state_changed();
-
-		/**
 		 * Build a scrolled VTE for ``connection`` (call {@link spawn} to start SSH).
 		 *
 		 * @param connection Host to open
@@ -71,19 +47,7 @@ namespace RooTerm
 		 */
 		public SshTerminal(Connection connection, string font = "Monospace 9", SshStream? in_stream = null)
 		{
-			Object(orientation: Gtk.Orientation.VERTICAL, spacing: 0, hexpand: true, vexpand: true);
-			this.connection = connection;
-			this.terminal = new Vte.Terminal() {
-				hexpand = true,
-				vexpand = true,
-				font_desc = Pango.FontDescription.from_string(font)
-			};
-			this.terminal.set_size(80, 24);
-			this.append(new Gtk.ScrolledWindow() {
-				child = this.terminal,
-				hexpand = true,
-				vexpand = true
-			});
+			base(connection, font);
 			this.close_progress = new Gtk.ProgressBar() {
 				fraction = 1.0,
 				hexpand = true
@@ -128,25 +92,6 @@ namespace RooTerm
 				this.label_changed();
 			});
 
-			var shortcuts = new Gtk.ShortcutController() {
-				propagation_phase = Gtk.PropagationPhase.CAPTURE,
-				scope = Gtk.ShortcutScope.LOCAL
-			};
-			shortcuts.add_shortcut(new Gtk.Shortcut(
-				Gtk.ShortcutTrigger.parse_string("<Control><Shift>c"),
-				new Gtk.CallbackAction(() => {
-					this.terminal.copy_clipboard_format(Vte.Format.TEXT);
-					return true;
-				})
-			));
-			shortcuts.add_shortcut(new Gtk.Shortcut(
-				Gtk.ShortcutTrigger.parse_string("<Control><Shift>v"),
-				new Gtk.CallbackAction(() => {
-					this.terminal.paste_clipboard();
-					return true;
-				})
-			));
-			this.terminal.add_controller(shortcuts);
 			var keys = new Gtk.EventControllerKey() {
 				propagation_phase = Gtk.PropagationPhase.CAPTURE
 			};
@@ -196,25 +141,12 @@ namespace RooTerm
 				this.exited();
 			});
 			this.terminal.termprop_changed.connect((prop) => {
-				if (prop == Vte.TERMPROP_XTERM_TITLE) {
-					size_t size;
-					var title = this.terminal.dup_termprop_string(prop, out size);
-					this.window_title = title != null ? title : "";
-					this.label_changed();
+				if (prop != Vte.TERMPROP_XTERM_TITLE) {
 					return;
 				}
-				if (prop != Vte.TERMPROP_CURRENT_DIRECTORY_URI) {
-					return;
-				}
-				var uri = this.terminal.ref_termprop_uri(prop);
-				if (uri == null) {
-					return;
-				}
-				var path = GLib.File.new_for_uri(uri.to_string()).get_path();
-				if (path == null) {
-					return;
-				}
-				this.cwd = path;
+				size_t size;
+				var title = this.terminal.dup_termprop_string(prop, out size);
+				this.window_title = title != null ? title : "";
 				this.label_changed();
 			});
 			this.terminal.window_title_changed.connect(() => {
@@ -222,57 +154,26 @@ namespace RooTerm
 				this.window_title = title != null ? title : "";
 				this.label_changed();
 			});
-			this.terminal.contents_changed.connect(() => {
-				if (this.selected || this.state == SessionState.DEAD) {
-					return;
-				}
-				if (this.settle_timeout != 0) {
-					GLib.Source.remove(this.settle_timeout);
-					this.settle_timeout = 0;
-				}
-				if (this.state != SessionState.BUSY) {
-					this.state = SessionState.BUSY;
-					this.state_changed();
-				}
-				this.settle_timeout = GLib.Timeout.add(1500, () => {
-					this.settle_timeout = 0;
-					if (this.selected || this.state != SessionState.BUSY) {
-						return false;
-					}
-					this.state = SessionState.READY;
-					this.state_changed();
-					return false;
-				});
-			});
 		}
 
 		/**
-		 * Mark this tab selected on the visible host page (clears busy/ready).
-		 * Focusing a dead tab starts the close countdown.
+		 * Mark this tab selected; focusing a dead tab starts the close countdown.
 		 *
 		 * @param on true when this tab is the focused one
 		 */
-		public void select(bool on)
+		public override void select(bool on)
 		{
-			if (this.selected == on) {
-				return;
-			}
-			this.selected = on;
 			if (this.state == SessionState.DEAD) {
+				if (this.selected == on) {
+					return;
+				}
+				this.selected = on;
 				if (on && !this.close_paused && !this.close_armed) {
 					this.start_close();
 				}
 				return;
 			}
-			if (this.settle_timeout != 0) {
-				GLib.Source.remove(this.settle_timeout);
-				this.settle_timeout = 0;
-			}
-			if (this.state == SessionState.IDLE) {
-				return;
-			}
-			this.state = SessionState.IDLE;
-			this.state_changed();
+			base.select(on);
 		}
 
 		/**
@@ -343,11 +244,9 @@ namespace RooTerm
 		}
 
 		/**
-		 * Tab / title label: host name, plus prompt, OSC title, or cwd when known.
-		 *
-		 * @return Display string
+		 * {@inheritDoc}
 		 */
-		public string label()
+		public override string label()
 		{
 			var detail = this.detail();
 			if (detail.length == 0) {
@@ -376,7 +275,7 @@ namespace RooTerm
 		 * Spawn ``ssh`` for this connection; password / passphrase fed on prompt.
 		 * When {@link SshStream.install_key} is set, runs ``ssh-copy-id`` instead.
 		 */
-		public void spawn()
+		public override void spawn()
 		{
 			this.stream.sudo_sent = false;
 			this.stream.sudo_done = false;

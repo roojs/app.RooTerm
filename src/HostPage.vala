@@ -19,31 +19,37 @@
 namespace RooTerm
 {
 	/**
-	 * One host: tab bar + {@link Adw.TabView} of {@link SshTerminal}s.
-	 * Owns tab selection → session marks; keyed in the stack by {@link Connection.uuid}.
+	 * One host: {@link Adw.TabView} of {@link Terminal}s.
+	 * SSH hosts show an {@link Adw.TabBar}; Localhost has no tab bar — path tree selects the shell.
+	 * Owns selection → session marks; keyed in the stack by {@link Connection.uuid}.
 	 */
 	public class HostPage : Gtk.Box
 	{
 		public Connection connection;
+		public HostTreeNodes tree;
 		public Adw.TabView tab_view;
 		public Adw.TabBar tab_bar;
 		/**
 		 * Selected terminal on this page (null when no tabs).
 		 */
-		public SshTerminal current;
+		public Terminal current;
 		/**
-		 * Terminals on this page, parallel to tab order.
+		 * Terminals on this page, parallel to tab / path order.
 		 */
-		public Gee.ArrayList<SshTerminal> terminals = new Gee.ArrayList<SshTerminal>();
+		public Gee.ArrayList<Terminal> terminals = new Gee.ArrayList<Terminal>();
+		/**
+		 * Localhost path rows, parallel to {@link terminals} (looked up by index).
+		 */
+		private Gee.ArrayList<Connection> paths = new Gee.ArrayList<Connection>();
 		private bool on_screen = false;
 
 		/**
-		 * Emitted when the last terminal tab is closed.
+		 * Emitted when the last terminal is closed.
 		 */
 		public signal void empty();
 
 		/**
-		 * Emitted when the selected tab or its label should refresh the window title.
+		 * Emitted when the selected terminal or its label should refresh the window title.
 		 */
 		public signal void changed();
 
@@ -51,8 +57,9 @@ namespace RooTerm
 		 * Build an empty host page for ``connection``.
 		 *
 		 * @param connection Host this page belongs to
+		 * @param tree Root host tree (gateway for Localhost path children)
 		 */
-		public HostPage(Connection connection)
+		public HostPage(Connection connection, HostTreeNodes tree)
 		{
 			Object(
 				orientation: Gtk.Orientation.VERTICAL,
@@ -61,6 +68,7 @@ namespace RooTerm
 				vexpand: true
 			);
 			this.connection = connection;
+			this.tree = tree;
 			this.tab_view = new Adw.TabView() {
 				hexpand = true,
 				vexpand = true
@@ -68,28 +76,30 @@ namespace RooTerm
 			this.tab_bar = new Adw.TabBar() {
 				view = this.tab_view
 			};
-			this.append(this.tab_bar);
+			if (!connection.is_local) {
+				this.append(this.tab_bar);
+			}
 			this.append(this.tab_view);
 			this.tab_view.notify["selected-page"].connect(() => {
 				this.wire();
 				this.changed();
 			});
 			this.tab_view.close_page.connect((page) => {
-				var term = page.child as SshTerminal;
-				if (term != null) {
-					this.terminals.remove(term);
+				var term = (Terminal) page.child;
+				var at = this.terminals.index_of(term);
+				this.terminals.remove_at(at);
+				if (at < this.paths.size) {
+					this.tree.remove(this.paths.remove_at(at));
 				}
 				this.tab_view.close_page_finish(page, true);
-				this.connection.open_count = this.tab_view.n_pages;
-				if (this.tab_view.n_pages == 0) {
-					this.current = null;
-					this.connection.active_tab = -1;
-					this.connection.tab_titles = new Gee.ArrayList<string>();
-					this.connection.tab_states = new Gee.ArrayList<SessionState>();
-					this.empty();
+				if (this.tab_view.n_pages > 0) {
+					this.wire();
 					return true;
 				}
-				this.wire();
+				this.current = null;
+				this.connection.active_tab = -1;
+				this.sync();
+				this.empty();
 				return true;
 			});
 		}
@@ -100,7 +110,7 @@ namespace RooTerm
 		 * @param term Terminal to show
 		 * @return Tab page for title / close wiring
 		 */
-		public Adw.TabPage add(SshTerminal term)
+		public Adw.TabPage add(Terminal term)
 		{
 			this.terminals.add(term);
 			term.state_changed.connect(() => {
@@ -134,18 +144,56 @@ namespace RooTerm
 
 		/**
 		 * Push tab titles / states onto {@link connection} for the host tree.
+		 * For Localhost, also sync ephemeral path children under the root row.
 		 */
 		public void sync()
 		{
-			var titles = new Gee.ArrayList<string>();
-			var states = new Gee.ArrayList<SessionState>();
-			foreach (var term in this.terminals) {
-				titles.add(term.label());
-				states.add(term.state);
+			if (!this.connection.is_local) {
+				var titles = new Gee.ArrayList<string>();
+				var states = new Gee.ArrayList<SessionState>();
+				foreach (var term in this.terminals) {
+					titles.add(term.label());
+					states.add(term.state);
+				}
+				this.connection.open_count = this.terminals.size;
+				this.connection.tab_titles = titles;
+				this.connection.tab_states = states;
+				return;
 			}
-			this.connection.open_count = this.terminals.size;
-			this.connection.tab_titles = titles;
-			this.connection.tab_states = states;
+			var active = -1;
+			if (this.tab_view.selected_page != null) {
+				active = this.tab_view.get_page_position(this.tab_view.selected_page);
+			}
+			for (var i = 0; i < this.terminals.size; i++) {
+				var term = this.terminals.get(i);
+				Connection child;
+				if (i < this.paths.size) {
+					child = this.paths.get(i);
+					child.name = term.label();
+					child.local_tab = i;
+				} else {
+					child = new Connection() {
+						uuid = GLib.Uuid.string_random(),
+						name = term.label(),
+						local_path = true,
+						local_tab = i
+					};
+					this.tree.append(this.connection, child);
+					this.paths.add(child);
+				}
+				var titles = new Gee.ArrayList<string>();
+				titles.add(term.label());
+				var states = new Gee.ArrayList<SessionState>();
+				states.add(term.state);
+				child.tab_titles = titles;
+				child.tab_states = states;
+				child.open_count = 1;
+				child.active_tab = i == active ? 0 : -1;
+			}
+			this.connection.open_count = 0;
+			this.connection.active_tab = active;
+			this.connection.tab_titles = new Gee.ArrayList<string>();
+			this.connection.tab_states = new Gee.ArrayList<SessionState>();
 		}
 
 		/**
@@ -159,17 +207,15 @@ namespace RooTerm
 					this.current = null;
 				}
 				this.connection.active_tab = -1;
-				this.connection.open_count = this.tab_view.n_pages;
 				this.sync();
 				return;
 			}
-			var next = this.tab_view.selected_page.child as SshTerminal;
+			var next = (Terminal) this.tab_view.selected_page.child;
 			if (this.current != null && this.current != next) {
 				this.current.select(false);
 			}
 			this.current = next;
 			this.connection.active_tab = this.tab_view.get_page_position(this.tab_view.selected_page);
-			this.connection.open_count = this.tab_view.n_pages;
 			if (this.current != null) {
 				this.current.select(this.on_screen);
 			}

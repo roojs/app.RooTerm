@@ -64,6 +64,21 @@ namespace RooTerm
 			);
 
 			this.config = config;
+			var localhost = new Connection() {
+				uuid = "localhost",
+				name = "Localhost",
+				is_local = true
+			};
+			this.config.tree.append(null, localhost);
+			this.config.tree.sort((a, b) => {
+				if (a.is_local) {
+					return -1;
+				}
+				if (b.is_local) {
+					return 1;
+				}
+				return a.name.collate(b.name);
+			});
 			GLib.Idle.add(() => {
 				this.config.store_pending_secrets();
 				return false;
@@ -92,7 +107,7 @@ namespace RooTerm
 			this.header_bar.set_title_widget(this.host_search);
 
 			this.host_stack = new HostStack();
-			this.sessions = new SessionController(this.host_stack);
+			this.sessions = new SessionController(this.host_stack, this.config.tree);
 			this.sessions.terminal_font = this.config.terminal_font;
 			this.sessions.display_changed.connect(() => {
 				this.title = this.sessions.display;
@@ -131,9 +146,28 @@ namespace RooTerm
 
 			this.host_tree = new HostTree(this);
 			this.host_tree.connection_activated.connect((conn) => {
+				if (conn.is_local) {
+					this.sessions.open_local(conn);
+					return;
+				}
+				if (conn.local_path) {
+					this.sessions.open_local(conn.parent, conn.name);
+					return;
+				}
 				this.sessions.open(conn);
 			});
 			this.host_tree.connection_highlighted.connect((conn) => {
+				if (conn.local_path) {
+					var local_page = this.host_stack.pages.get_child_by_name(conn.parent.uuid) as HostPage;
+					if (local_page == null || conn.local_tab < 0
+							|| conn.local_tab >= local_page.tab_view.n_pages) {
+						return;
+					}
+					this.host_stack.pages.visible_child = local_page;
+					local_page.tab_view.selected_page = local_page.tab_view.get_nth_page(conn.local_tab);
+					this.sessions.focus();
+					return;
+				}
 				var page = this.host_stack.pages.get_child_by_name(conn.uuid) as HostPage;
 				if (page == null) {
 					return;
@@ -142,6 +176,18 @@ namespace RooTerm
 				this.sessions.focus();
 			});
 			this.host_tree.terminal_selected.connect((conn, index) => {
+				if (conn.local_path) {
+					var local_page = this.host_stack.pages.get_child_by_name(conn.parent.uuid) as HostPage;
+					if (local_page == null || conn.local_tab < 0
+							|| conn.local_tab >= local_page.tab_view.n_pages) {
+						return;
+					}
+					this.host_tree.select(conn);
+					this.host_stack.pages.visible_child = local_page;
+					local_page.tab_view.selected_page = local_page.tab_view.get_nth_page(conn.local_tab);
+					this.sessions.focus();
+					return;
+				}
 				var page = this.host_stack.pages.get_child_by_name(conn.uuid) as HostPage;
 				if (page == null || index < 0 || index >= page.tab_view.n_pages) {
 					return;
@@ -202,17 +248,17 @@ namespace RooTerm
 				this.host_tree.select(conn);
 				var page = this.host_stack.pages.get_child_by_name(conn.uuid) as HostPage;
 				if (page == null || page.tab_view.n_pages == 0) {
+					if (conn.is_local) {
+						this.sessions.open_local(conn);
+						return;
+					}
 					this.sessions.open(conn);
 					return;
 				}
 				this.host_stack.pages.visible_child = page;
 				page.tab_view.selected_page = page.tab_view.get_nth_page(0);
 				this.sessions.focus();
-				var term = page.tab_view.selected_page.child as SshTerminal;
-				if (term == null) {
-					return;
-				}
-				term.terminal.grab_focus();
+				((Terminal) page.tab_view.selected_page.child).terminal.grab_focus();
 			});
 
 			var search_action = new GLib.SimpleAction("search", null);
@@ -222,6 +268,13 @@ namespace RooTerm
 			});
 			this.add_action(search_action);
 			app.set_accels_for_action("win.search", { "<Control><Shift>o" });
+
+			var local_action = new GLib.SimpleAction("new-local", null);
+			local_action.activate.connect(() => {
+				this.sessions.open_local(localhost);
+			});
+			this.add_action(local_action);
+			app.set_accels_for_action("win.new-local", { "<Control><Shift>n" });
 
 			var tree_pos = (int) (config.window_width * 0.30);
 			this.paned = new Gtk.Paned(Gtk.Orientation.HORIZONTAL) {

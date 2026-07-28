@@ -142,7 +142,7 @@ namespace RooTerm
 			add_to.items_changed(position, 0, 1);
 			conn.parent = parent;
 			conn.parent_uuid = parent == null ? "" : parent.uuid;
-			if (conn.deleted || conn.is_group) {
+			if (conn.deleted || conn.is_group || conn.local_path) {
 				return;
 			}
 			this.flat.append(conn);

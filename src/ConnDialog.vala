@@ -630,7 +630,7 @@ namespace RooTerm
 					});
 					var done = new Adw.AlertDialog(
 						"New key installed",
-						"""Verify login with the new key works, then use
+"""Verify login with the new key works, then use
 “Remove old key from server” on this connection."""
 					);
 					done.add_response("ok", "OK");
@@ -803,7 +803,7 @@ namespace RooTerm
 					&& this.key_open()) {
 				var alert = new Adw.AlertDialog(
 					"Unprotected SSH key",
-					"""This private key has no passphrase. Replace it with a new
+"""This private key has no passphrase. Replace it with a new
 passphrased key (stored in the secret store). Installing the new
 key and removing the old one from the server are two separate
 steps so you can verify the new key works first."""

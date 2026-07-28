@@ -25,6 +25,7 @@ namespace RooTerm
 	public class SessionController : GLib.Object
 	{
 		public HostStack stack;
+		public HostTreeNodes tree;
 		public string display = "Roo Term";
 		/**
 		 * VTE font from Ásbrú defaults (``Monospace 9`` etc.).
@@ -53,10 +54,12 @@ namespace RooTerm
 
 		/**
 		 * @param stack Outer host stack to manage
+		 * @param tree Root host tree (gateway; Localhost path children)
 		 */
-		public SessionController(HostStack stack)
+		public SessionController(HostStack stack, HostTreeNodes tree)
 		{
 			this.stack = stack;
+			this.tree = tree;
 			this.stack.pages.notify["visible-child"].connect(() => {
 				var next = this.stack.pages.visible_child as HostPage;
 				var next_uuid = next != null ? next.connection.uuid : "";
@@ -85,7 +88,7 @@ namespace RooTerm
 			if (this.by_uuid.has_key(connection.uuid)) {
 				page = this.by_uuid.get(connection.uuid);
 			} else {
-				page = new HostPage(connection);
+				page = new HostPage(connection, this.tree);
 				page.empty.connect(() => {
 					this.close(page);
 				});
@@ -104,6 +107,44 @@ namespace RooTerm
 			});
 			term.stream.sudo_password_failed.connect(() => {
 				this.sudo_password_failed(connection);
+			});
+			term.spawn();
+			page.tab_view.selected_page = tab;
+			this.stack.pages.visible_child = page;
+			this.focus();
+			term.terminal.grab_focus();
+			return term;
+		}
+
+		/**
+		 * Open a local shell tab under Localhost (creates host page if needed).
+		 *
+		 * @param connection Localhost connection
+		 * @param cwd Working directory (home when empty)
+		 * @return The new local terminal
+		 */
+		public LocalTerminal open_local(Connection connection, string cwd = "")
+		{
+			HostPage page;
+			if (this.by_uuid.has_key(connection.uuid)) {
+				page = this.by_uuid.get(connection.uuid);
+			} else {
+				page = new HostPage(connection, this.tree);
+				page.empty.connect(() => {
+					this.close(page);
+				});
+				page.changed.connect(() => {
+					this.focus();
+				});
+				this.by_uuid.set(connection.uuid, page);
+				this.stack.pages.add_named(page, connection.uuid);
+			}
+
+			var term = new LocalTerminal(connection, this.terminal_font, cwd);
+			var tab = page.add(term);
+			tab.title = term.label();
+			term.close_tab.connect(() => {
+				page.tab_view.close_page(tab);
 			});
 			term.spawn();
 			page.tab_view.selected_page = tab;
@@ -171,13 +212,13 @@ namespace RooTerm
 				this.display_changed();
 				return;
 			}
-			var term = this.by_uuid.get(this.shown_uuid).current;
-			if (term == null) {
+			var page = this.by_uuid.get(this.shown_uuid);
+			if (page.current == null) {
 				this.display = "Roo Term";
 				this.display_changed();
 				return;
 			}
-			this.display = term.label();
+			this.display = page.current.label();
 			this.display_changed();
 		}
 	}

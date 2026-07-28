@@ -67,7 +67,7 @@ namespace RooTerm
 			};
 			if (replace) {
 				box.append(new Gtk.Label(
-					"""Create a new passphrased key (stored in the secret store) to replace
+"""Create a new passphrased key (stored in the secret store) to replace
 the unprotected one. Next we install it on the server. Removing the
 old key is a separate step after you verify the new key works."""
 				) {
@@ -76,7 +76,7 @@ old key is a separate step after you verify the new key works."""
 				});
 			} else {
 				box.append(new Gtk.Label(
-					"""No ~/.ssh/id_ed25519 or id_rsa found. Create an ed25519 key
+"""No ~/.ssh/id_ed25519 or id_rsa found. Create an ed25519 key
 protected by a passphrase."""
 				) {
 					xalign = 0,

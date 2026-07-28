@@ -152,7 +152,7 @@ namespace RooTerm
 				};
 				menu_click.pressed.connect((n_press, x, y) => {
 					var menu_conn = row_box.get_data<Connection>("menu-conn");
-					if (menu_conn == null) {
+					if (menu_conn == null || menu_conn.is_local || menu_conn.local_path) {
 						return;
 					}
 					var pop = new Gtk.Popover();
@@ -269,13 +269,21 @@ namespace RooTerm
 				if (conn.is_group) {
 					type_icon.icon_name = "folder";
 				}
-				if (!conn.is_group && conn.lxc_container) {
+				if (conn.is_local) {
+					type_icon.icon_name = "computer";
+				}
+				if (conn.local_path) {
+					type_icon.icon_name = "folder";
+				}
+				if (!conn.is_group && !conn.is_local && !conn.local_path && conn.lxc_container) {
 					type_icon.icon_name = "drive-harddisk";
 				}
-				if (!conn.is_group && !conn.lxc_container && conn.sudo_after_login) {
+				if (!conn.is_group && !conn.is_local && !conn.local_path && !conn.lxc_container
+						&& conn.sudo_after_login) {
 					type_icon.icon_name = "security-high";
 				}
-				if (!conn.is_group && !conn.lxc_container && !conn.sudo_after_login) {
+				if (!conn.is_group && !conn.is_local && !conn.local_path && !conn.lxc_container
+						&& !conn.sudo_after_login) {
 					type_icon.icon_name = "video-display";
 				}
 				var old_nid = mark_box.get_data<ulong>("nid");
