@@ -162,12 +162,12 @@ namespace RooTerm
 							auth = fields.has_key("auth type") ? fields.get("auth type").strip() : "",
 							public_key = fields.has_key("public key") ? fields.get("public key").strip() : "",
 							options = fields.has_key("options") ? fields.get("options").strip() : "",
-							is_group = (group == "1" || group.down() == "true"),
+							kind = (group == "1" || group.down() == "true") ? ConnectionKind.GROUP : ConnectionKind.HOST,
 							port = port,
 							pass = AsbruCipher.decrypt_hex(fields.has_key("pass") ? fields.get("pass") : ""),
 							passphrase = AsbruCipher.decrypt_hex(fields.has_key("passphrase") ? fields.get("passphrase") : "")
 						};
-						if (!conn.is_group && conn.method != "SSH" && conn.method.length > 0) {
+						if (conn.kind != ConnectionKind.GROUP && conn.method != "SSH" && conn.method.length > 0) {
 							GLib.debug("skip non-ssh method=%s name=%s", conn.method, conn.name);
 							in_connection = false;
 							want_key = true;

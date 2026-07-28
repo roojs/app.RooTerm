@@ -126,7 +126,6 @@ namespace RooTerm
 				}
 				if (this.state != SessionState.DEAD) {
 					this.state = SessionState.DEAD;
-					this.state_changed();
 				}
 				if (this.selected) {
 					var done = "\r\n[ssh exited: " + exit_code.to_string()
@@ -239,7 +238,6 @@ namespace RooTerm
 			this.stream.remove_sent = false;
 			this.stream.prompt_hint = "";
 			this.state = SessionState.IDLE;
-			this.state_changed();
 			this.spawn();
 		}
 
@@ -292,7 +290,7 @@ namespace RooTerm
 						|| this.connection.sudo_after_login
 						|| this.stream.install_key)) {
 				var secret_uuid = this.connection.uuid;
-				if (this.connection.lxc_container && this.connection.parent_uuid.length > 0) {
+				if (this.connection.kind == ConnectionKind.LXC && this.connection.parent_uuid.length > 0) {
 					secret_uuid = this.connection.parent_uuid;
 				}
 				try {

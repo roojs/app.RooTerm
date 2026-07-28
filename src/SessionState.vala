@@ -20,7 +20,7 @@ namespace RooTerm
 {
 	/**
 	 * Background mark for an open terminal tab in the host tree.
-	 * Active emphasis is focus (``active_tab``), not a stored state.
+	 * Active emphasis is {@link Terminal.tree_active}, not a stored state.
 	 *
 	 * == Example ==
 	 *

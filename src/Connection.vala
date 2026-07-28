@@ -19,6 +19,18 @@
 namespace RooTerm
 {
 	/**
+	 * Tree / config row role for a {@link Connection}.
+	 */
+	public enum ConnectionKind
+	{
+		HOST,
+		GROUP,
+		LOCAL,
+		LOCAL_PATH,
+		LXC
+	}
+
+	/**
 	 * Callback for staged ``lxc-ls`` results (dialog Save applies later).
 	 *
 	 * @param names Container names from the remote host
@@ -26,7 +38,7 @@ namespace RooTerm
 	public delegate void ContainerNamesCb(string[] names);
 
 	/**
-	 * Connection or group (``is_group``); JSON via {@link Json.Serializable}.
+	 * Connection or group ({@link ConnectionKind}); JSON via {@link Json.Serializable}.
 	 */
 	public class Connection : Object, Json.Serializable
 	{
@@ -37,13 +49,16 @@ namespace RooTerm
 		 */
 		public string search_name {
 			owned get {
-				if (this.parent != null && this.lxc_container) {
+				if (this.parent != null && this.kind == ConnectionKind.LXC) {
 					return this.parent.name + " / " + this.name;
 				}
 				return this.name;
 			}
 		}
-		public bool is_group { get; set; default = false; }
+		/**
+		 * Row role (host, group, localhost, path, LXC container).
+		 */
+		public ConnectionKind kind { get; set; default = ConnectionKind.HOST; }
 		public string parent_uuid { get; set; default = ""; }
 		/**
 		 * Live parent in the host tree; not JSON ({@link parent_uuid} is).
@@ -72,23 +87,11 @@ namespace RooTerm
 		 */
 		public bool lxc_host { get; set; default = false; }
 		/**
-		 * This row is an LXC container under an SSH host (not a separate SSH target).
-		 */
-		public bool lxc_container { get; set; default = false; }
-		/**
 		 * Container name for ``lxc-console -n`` (on the host or this child row).
 		 */
 		public string lxc_name { get; set; default = ""; }
 		/**
-		 * Synthetic Localhost root row (not stored in ``connections.json``).
-		 */
-		public bool is_local { get; set; default = false; }
-		/**
-		 * Ephemeral path child under Localhost for one open local PTY.
-		 */
-		public bool local_path { get; set; default = false; }
-		/**
-		 * Tab index on the Localhost {@link HostPage} for a {@link local_path} row.
+		 * Tab index on the Localhost {@link HostPage} for a {@link ConnectionKind.LOCAL_PATH} row.
 		 */
 		public int local_tab { get; set; default = -1; }
 		public Gee.ArrayList<Forward> forwards {
@@ -96,20 +99,13 @@ namespace RooTerm
 			set;
 			default = new Gee.ArrayList<Forward>();
 		}
-		public int open_count { get; set; default = 0; }
-		public int active_tab { get; set; default = -1; }
-		public Gee.ArrayList<string> tab_titles {
-			get;
-			set;
-			default = new Gee.ArrayList<string>();
-		}
 		/**
-		 * Per-tab {@link SessionState} parallel to open tabs (not serialized).
+		 * Open {@link Terminal} tabs for this host (tree session marks bind here).
 		 */
-		public Gee.ArrayList<SessionState> tab_states {
+		public GLib.ListStore sessions {
 			get;
 			set;
-			default = new Gee.ArrayList<SessionState>();
+			default = new GLib.ListStore(typeof(Terminal));
 		}
 		private HostTreeNodes _children = new HostTreeNodes();
 		private ulong children_sid = 0;
@@ -149,16 +145,57 @@ namespace RooTerm
 				return this._children.size == 0;
 			}
 		}
+		/**
+		 * Host-tree row icon name (not JSON).
+		 */
+		public string tree_icon {
+			owned get {
+				switch (this.kind) {
+					case ConnectionKind.GROUP:
+					case ConnectionKind.LOCAL_PATH:
+						return "folder";
+
+					case ConnectionKind.LOCAL:
+						return "computer";
+
+					case ConnectionKind.LXC:
+						return "drive-harddisk";
+
+					case ConnectionKind.HOST:
+						if (this.sudo_after_login) {
+							return "security-high";
+						}
+						return "video-display";
+				}
+				return "video-display";
+			}
+		}
 
 		construct {
 			this.children_sid = this._children.items_changed.connect((m, p, r, a) => {
 				this.notify_property("has-children");
 				this.notify_property("hide-expander");
 			});
+			this.notify.connect((o, pspec) => {
+				switch (pspec.name) {
+					case "name":
+						this.notify_property("search-name");
+						break;
+
+					case "kind":
+					case "sudo-after-login":
+						this.notify_property("tree-icon");
+						break;
+				}
+			});
 		}
 
 		public unowned ParamSpec? find_property(string name)
 		{
+			// Legacy JSON keys map onto {@link kind}.
+			if (name == "is-group" || name == "lxc-container") {
+				return ((ObjectClass) typeof(Connection).class_ref()).find_property("kind");
+			}
 			return ((ObjectClass) typeof(Connection).class_ref()).find_property(name);
 		}
 
@@ -179,19 +216,21 @@ namespace RooTerm
 			switch (property_name) {
 				case "pass":
 				case "passphrase":
-				case "open-count":
-				case "active-tab":
-				case "tab-titles":
-				case "tab-states":
+				case "sessions":
 				case "children":
 				case "parent":
 				case "search-name":
 				case "has-children":
 				case "hide-expander":
-				case "is-local":
-				case "local-path":
+				case "tree-icon":
 				case "local-tab":
 					return null;
+
+				case "kind":
+					var kind_node = new Json.Node(Json.NodeType.VALUE);
+					kind_node.set_int((int64) this.kind);
+					return kind_node;
+
 				case "forwards":
 					var arr = new Json.Array();
 					foreach (var fwd in this.forwards) {
@@ -200,6 +239,7 @@ namespace RooTerm
 					var node = new Json.Node(Json.NodeType.ARRAY);
 					node.take_array(arr);
 					return node;
+
 				default:
 					return default_serialize_property(property_name, value, pspec);
 			}
@@ -207,23 +247,48 @@ namespace RooTerm
 
 		public bool deserialize_property(string property_name, out Value value, ParamSpec pspec, Json.Node property_node)
 		{
-			if (property_name != "forwards") {
-				return default_deserialize_property(property_name, out value, pspec, property_node);
-			}
-			this.forwards.clear();
-			if (property_node.get_node_type() == Json.NodeType.ARRAY) {
-				var json_array = property_node.get_array();
-				for (var i = 0; i < json_array.get_length(); i++) {
-					var fwd = Json.gobject_deserialize(typeof(Forward), json_array.get_element(i)) as Forward;
-					if (fwd == null) {
-						continue;
+			switch (property_name) {
+				case "is-group":
+					if (property_node.get_boolean()) {
+						this.kind = ConnectionKind.GROUP;
 					}
-					this.forwards.add(fwd);
-				}
+					value = Value(typeof(ConnectionKind));
+					value.set_enum(this.kind);
+					return true;
+
+				case "lxc-container":
+					if (property_node.get_boolean()) {
+						this.kind = ConnectionKind.LXC;
+					}
+					value = Value(typeof(ConnectionKind));
+					value.set_enum(this.kind);
+					return true;
+
+				case "kind":
+					this.kind = (ConnectionKind) property_node.get_int();
+					value = Value(typeof(ConnectionKind));
+					value.set_enum(this.kind);
+					return true;
+
+				case "forwards":
+					this.forwards.clear();
+					if (property_node.get_node_type() == Json.NodeType.ARRAY) {
+						var json_array = property_node.get_array();
+						for (var i = 0; i < json_array.get_length(); i++) {
+							var fwd = Json.gobject_deserialize(typeof(Forward), json_array.get_element(i)) as Forward;
+							if (fwd == null) {
+								continue;
+							}
+							this.forwards.add(fwd);
+						}
+					}
+					value = Value(typeof(Gee.ArrayList));
+					value.set_object(this.forwards);
+					return true;
+
+				default:
+					return default_deserialize_property(property_name, out value, pspec, property_node);
 			}
-			value = Value(typeof(Gee.ArrayList));
-			value.set_object(this.forwards);
-			return true;
 		}
 
 		/**
@@ -271,7 +336,7 @@ namespace RooTerm
 			}
 			var keep = new Gee.HashMap<string, Connection>();
 			foreach (var child in this.children) {
-				if (!child.lxc_container || child.deleted) {
+				if (child.kind != ConnectionKind.LXC || child.deleted) {
 					continue;
 				}
 				keep.set(child.lxc_name, child);
@@ -299,7 +364,7 @@ namespace RooTerm
 					public_key = this.public_key,
 					options = this.options,
 					sudo_after_login = this.sudo_after_login,
-					lxc_container = true,
+					kind = ConnectionKind.LXC,
 					lxc_name = name
 				};
 				window.config.by_uuid.set(child.uuid, child);
@@ -308,7 +373,7 @@ namespace RooTerm
 			}
 			var gone = new Gee.ArrayList<Connection>();
 			foreach (var child in this.children) {
-				if (!child.lxc_container || child.deleted) {
+				if (child.kind != ConnectionKind.LXC || child.deleted) {
 					continue;
 				}
 				if (seen.contains(child.lxc_name)) {

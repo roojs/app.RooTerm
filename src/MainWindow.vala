@@ -67,14 +67,14 @@ namespace RooTerm
 			var localhost = new Connection() {
 				uuid = "localhost",
 				name = "Localhost",
-				is_local = true
+				kind = ConnectionKind.LOCAL
 			};
 			this.config.tree.append(null, localhost);
 			this.config.tree.sort((a, b) => {
-				if (a.is_local) {
+				if (a.kind == ConnectionKind.LOCAL) {
 					return -1;
 				}
-				if (b.is_local) {
+				if (b.kind == ConnectionKind.LOCAL) {
 					return 1;
 				}
 				return a.name.collate(b.name);
@@ -146,18 +146,18 @@ namespace RooTerm
 
 			this.host_tree = new HostTree(this);
 			this.host_tree.connection_activated.connect((conn) => {
-				if (conn.is_local) {
+				if (conn.kind == ConnectionKind.LOCAL) {
 					this.sessions.open_local(conn);
 					return;
 				}
-				if (conn.local_path) {
+				if (conn.kind == ConnectionKind.LOCAL_PATH) {
 					this.sessions.open_local(conn.parent, conn.name);
 					return;
 				}
 				this.sessions.open(conn);
 			});
 			this.host_tree.connection_highlighted.connect((conn) => {
-				if (conn.local_path) {
+				if (conn.kind == ConnectionKind.LOCAL_PATH) {
 					var local_page = this.host_stack.pages.get_child_by_name(conn.parent.uuid) as HostPage;
 					if (local_page == null || conn.local_tab < 0
 							|| conn.local_tab >= local_page.tab_view.n_pages) {
@@ -176,7 +176,7 @@ namespace RooTerm
 				this.sessions.focus();
 			});
 			this.host_tree.terminal_selected.connect((conn, index) => {
-				if (conn.local_path) {
+				if (conn.kind == ConnectionKind.LOCAL_PATH) {
 					var local_page = this.host_stack.pages.get_child_by_name(conn.parent.uuid) as HostPage;
 					if (local_page == null || conn.local_tab < 0
 							|| conn.local_tab >= local_page.tab_view.n_pages) {
@@ -244,11 +244,44 @@ namespace RooTerm
 				});
 				alert.present(this);
 			});
+			this.host_tree.new_local.connect((conn) => {
+				if (conn.kind == ConnectionKind.LOCAL_PATH) {
+					this.sessions.open_local(conn.parent, conn.name);
+					return;
+				}
+				this.sessions.open_local(conn);
+			});
+			this.host_tree.close_local.connect((conn) => {
+				if (conn.parent == null || conn.local_tab < 0) {
+					return;
+				}
+				var page = this.host_stack.pages.get_child_by_name(conn.parent.uuid) as HostPage;
+				if (page == null || conn.local_tab >= page.tab_view.n_pages) {
+					return;
+				}
+				page.tab_view.close_page(page.tab_view.get_nth_page(conn.local_tab));
+				this.sessions.focus();
+			});
 			this.host_search.connection_selected.connect((conn) => {
 				this.host_tree.select(conn);
+				if (conn.kind == ConnectionKind.LOCAL_PATH) {
+					if (conn.parent == null) {
+						return;
+					}
+					var local_page = this.host_stack.pages.get_child_by_name(conn.parent.uuid) as HostPage;
+					if (local_page == null || conn.local_tab < 0
+							|| conn.local_tab >= local_page.tab_view.n_pages) {
+						return;
+					}
+					this.host_stack.pages.visible_child = local_page;
+					local_page.tab_view.selected_page = local_page.tab_view.get_nth_page(conn.local_tab);
+					this.sessions.focus();
+					((Terminal) local_page.tab_view.selected_page.child).terminal.grab_focus();
+					return;
+				}
 				var page = this.host_stack.pages.get_child_by_name(conn.uuid) as HostPage;
 				if (page == null || page.tab_view.n_pages == 0) {
-					if (conn.is_local) {
+					if (conn.kind == ConnectionKind.LOCAL) {
 						this.sessions.open_local(conn);
 						return;
 					}
@@ -269,12 +302,12 @@ namespace RooTerm
 			this.add_action(search_action);
 			app.set_accels_for_action("win.search", { "<Control><Shift>o" });
 
-			var local_action = new GLib.SimpleAction("new-local", null);
-			local_action.activate.connect(() => {
-				this.sessions.open_local(localhost);
+			var new_term_action = new GLib.SimpleAction("new-terminal", null);
+			new_term_action.activate.connect(() => {
+				this.sessions.open_new(localhost);
 			});
-			this.add_action(local_action);
-			app.set_accels_for_action("win.new-local", { "<Control><Shift>n" });
+			this.add_action(new_term_action);
+			app.set_accels_for_action("win.new-terminal", { "<Control><Shift>t" });
 
 			var tree_pos = (int) (config.window_width * 0.30);
 			this.paned = new Gtk.Paned(Gtk.Orientation.HORIZONTAL) {

@@ -19,9 +19,9 @@
 namespace RooTerm
 {
 	/**
-	 * One host: {@link Adw.TabView} of {@link Terminal}s.
-	 * SSH hosts show an {@link Adw.TabBar}; Localhost has no tab bar — path tree selects the shell.
-	 * Owns selection → session marks; keyed in the stack by {@link Connection.uuid}.
+	 * One host: {@link Adw.TabView} of {@link Terminal}s with an {@link Adw.TabBar}.
+	 * Localhost also keeps path children in the tree as a second switcher.
+	 * Open terminals live on {@link Connection.sessions} for the host tree.
 	 */
 	public class HostPage : Gtk.Box
 	{
@@ -76,9 +76,7 @@ namespace RooTerm
 			this.tab_bar = new Adw.TabBar() {
 				view = this.tab_view
 			};
-			if (!connection.is_local) {
-				this.append(this.tab_bar);
-			}
+			this.append(this.tab_bar);
 			this.append(this.tab_view);
 			this.tab_view.notify["selected-page"].connect(() => {
 				this.wire();
@@ -88,8 +86,11 @@ namespace RooTerm
 				var term = (Terminal) page.child;
 				var at = this.terminals.index_of(term);
 				this.terminals.remove_at(at);
+				this.connection.sessions.remove(at);
 				if (at < this.paths.size) {
-					this.tree.remove(this.paths.remove_at(at));
+					var path = this.paths.remove_at(at);
+					path.sessions.remove_all();
+					this.tree.remove(path);
 				}
 				this.tab_view.close_page_finish(page, true);
 				if (this.tab_view.n_pages > 0) {
@@ -97,8 +98,7 @@ namespace RooTerm
 					return true;
 				}
 				this.current = null;
-				this.connection.active_tab = -1;
-				this.sync();
+				this.sync_paths();
 				this.empty();
 				return true;
 			});
@@ -113,13 +113,11 @@ namespace RooTerm
 		public Adw.TabPage add(Terminal term)
 		{
 			this.terminals.add(term);
-			term.state_changed.connect(() => {
-				this.sync();
-			});
+			this.connection.sessions.append(term);
 			term.label_changed.connect(() => {
 				var tab = this.tab_view.get_page(term);
 				tab.title = term.label();
-				this.sync();
+				this.sync_paths();
 				this.changed();
 			});
 			return this.tab_view.append(term);
@@ -139,25 +137,14 @@ namespace RooTerm
 			if (this.current != null) {
 				this.current.select(on);
 			}
-			this.sync();
 		}
 
 		/**
-		 * Push tab titles / states onto {@link connection} for the host tree.
-		 * For Localhost, also sync ephemeral path children under the root row.
+		 * Keep Localhost path children in sync with open local shells.
 		 */
-		public void sync()
+		public void sync_paths()
 		{
-			if (!this.connection.is_local) {
-				var titles = new Gee.ArrayList<string>();
-				var states = new Gee.ArrayList<SessionState>();
-				foreach (var term in this.terminals) {
-					titles.add(term.label());
-					states.add(term.state);
-				}
-				this.connection.open_count = this.terminals.size;
-				this.connection.tab_titles = titles;
-				this.connection.tab_states = states;
+			if (this.connection.kind != ConnectionKind.LOCAL) {
 				return;
 			}
 			var active = -1;
@@ -169,31 +156,26 @@ namespace RooTerm
 				Connection child;
 				if (i < this.paths.size) {
 					child = this.paths.get(i);
-					child.name = term.label();
 					child.local_tab = i;
+					child.name = term.label();
 				} else {
 					child = new Connection() {
 						uuid = GLib.Uuid.string_random(),
 						name = term.label(),
-						local_path = true,
+						kind = ConnectionKind.LOCAL_PATH,
 						local_tab = i
 					};
 					this.tree.append(this.connection, child);
 					this.paths.add(child);
 				}
-				var titles = new Gee.ArrayList<string>();
-				titles.add(term.label());
-				var states = new Gee.ArrayList<SessionState>();
-				states.add(term.state);
-				child.tab_titles = titles;
-				child.tab_states = states;
-				child.open_count = 1;
-				child.active_tab = i == active ? 0 : -1;
+				if (child.sessions.get_n_items() == 0) {
+					child.sessions.append(term);
+				} else if (child.sessions.get_item(0) != term) {
+					child.sessions.remove_all();
+					child.sessions.append(term);
+				}
+				term.tree_active = i == active;
 			}
-			this.connection.open_count = 0;
-			this.connection.active_tab = active;
-			this.connection.tab_titles = new Gee.ArrayList<string>();
-			this.connection.tab_states = new Gee.ArrayList<SessionState>();
 		}
 
 		/**
@@ -203,23 +185,22 @@ namespace RooTerm
 		{
 			if (this.tab_view.selected_page == null) {
 				if (this.current != null) {
+					this.current.tree_active = false;
 					this.current.select(false);
 					this.current = null;
 				}
-				this.connection.active_tab = -1;
-				this.sync();
+				this.sync_paths();
 				return;
 			}
 			var next = (Terminal) this.tab_view.selected_page.child;
 			if (this.current != null && this.current != next) {
+				this.current.tree_active = false;
 				this.current.select(false);
 			}
 			this.current = next;
-			this.connection.active_tab = this.tab_view.get_page_position(this.tab_view.selected_page);
-			if (this.current != null) {
-				this.current.select(this.on_screen);
-			}
-			this.sync();
+			this.current.tree_active = true;
+			this.current.select(this.on_screen);
+			this.sync_paths();
 		}
 	}
 }

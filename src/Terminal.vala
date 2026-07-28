@@ -31,9 +31,59 @@ namespace RooTerm
 		 */
 		public string cwd = "";
 		/**
-		 * Mark for the host-tree session icon (active look is focus, not this).
+		 * Mark for the host-tree session icon (active look is {@link tree_active}).
 		 */
-		public SessionState state = SessionState.IDLE;
+		public SessionState state {
+			get { return this._state; }
+			set {
+				if (this._state == value) {
+					return;
+				}
+				this._state = value;
+				this.notify_property("state");
+				this.notify_property("session-css");
+				this.state_changed();
+			}
+		}
+		private SessionState _state = SessionState.IDLE;
+		/**
+		 * True when this tab is the selected one on its host (tree mark emphasis).
+		 */
+		public bool tree_active {
+			get { return this._tree_active; }
+			set {
+				if (this._tree_active == value) {
+					return;
+				}
+				this._tree_active = value;
+				this.notify_property("tree-active");
+				this.notify_property("session-css");
+			}
+		}
+		private bool _tree_active = false;
+		/**
+		 * CSS modifier for the tree session icon (``session-active`` / idle / busy / …).
+		 */
+		public string session_css {
+			owned get {
+				if (this.tree_active) {
+					return "session-active";
+				}
+				switch (this.state) {
+					case SessionState.BUSY:
+						return "session-busy";
+
+					case SessionState.READY:
+						return "session-ready";
+
+					case SessionState.DEAD:
+						return "session-dead";
+
+					default:
+						return "session-idle";
+				}
+			}
+		}
 		protected bool selected = true;
 		protected uint settle_timeout = 0;
 
@@ -102,11 +152,16 @@ namespace RooTerm
 				if (uri == null) {
 					return;
 				}
-				var path = GLib.File.new_for_uri(uri.to_string()).get_path();
-				if (path == null) {
+				// Prefer Uri path: File.get_path() is null for file://hostname/...
+				var path = uri.get_path();
+				if (path == null || path.length == 0) {
+					path = GLib.File.new_for_uri(uri.to_string()).get_path();
+				}
+				if (path == null || path.length == 0) {
 					return;
 				}
-				this.cwd = path;
+				var unesc = GLib.Uri.unescape_string(path);
+				this.cwd = unesc != null ? unesc : path;
 				this.label_changed();
 			});
 			this.terminal.contents_changed.connect(() => {
@@ -119,7 +174,6 @@ namespace RooTerm
 				}
 				if (this.state != SessionState.BUSY) {
 					this.state = SessionState.BUSY;
-					this.state_changed();
 				}
 				this.settle_timeout = GLib.Timeout.add(1500, () => {
 					this.settle_timeout = 0;
@@ -127,7 +181,6 @@ namespace RooTerm
 						return false;
 					}
 					this.state = SessionState.READY;
-					this.state_changed();
 					return false;
 				});
 			});
@@ -152,7 +205,6 @@ namespace RooTerm
 				return;
 			}
 			this.state = SessionState.IDLE;
-			this.state_changed();
 		}
 
 		/**

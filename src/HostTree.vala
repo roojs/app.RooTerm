@@ -69,6 +69,20 @@ namespace RooTerm
 		public signal void delete_connection(Connection connection);
 
 		/**
+		 * Emitted for Localhost / path context menu **New terminal**.
+		 *
+		 * @param connection Localhost root or a {@link ConnectionKind.LOCAL_PATH} row
+		 */
+		public signal void new_local(Connection connection);
+
+		/**
+		 * Emitted for path context menu **Close**.
+		 *
+		 * @param connection {@link ConnectionKind.LOCAL_PATH} row to close
+		 */
+		public signal void close_local(Connection connection);
+
+		/**
 		 * Highlight ``connection`` in the tree (no spawn).
 		 *
 		 * @param connection Host to select (same instance as in the config tree)
@@ -121,7 +135,7 @@ namespace RooTerm
 			this.selection.notify["selected"].connect(() => {
 				var row = this.selection.selected_item as Gtk.TreeListRow;
 				var conn = row != null ? row.item as Connection : null;
-				if (conn == null || conn.is_group) {
+				if (conn == null || conn.kind == ConnectionKind.GROUP) {
 					return;
 				}
 				this.connection_highlighted(conn);
@@ -147,80 +161,6 @@ namespace RooTerm
 				row_box.append(type_icon);
 				row_box.append(name_label);
 				row_box.append(mark_box);
-				var menu_click = new Gtk.GestureClick() {
-					button = Gdk.BUTTON_SECONDARY
-				};
-				menu_click.pressed.connect((n_press, x, y) => {
-					var menu_conn = row_box.get_data<Connection>("menu-conn");
-					if (menu_conn == null || menu_conn.is_local || menu_conn.local_path) {
-						return;
-					}
-					var pop = new Gtk.Popover();
-					var box = new Gtk.Box(Gtk.Orientation.VERTICAL, 0);
-					if (menu_conn.is_group) {
-						var add_item = new Gtk.Button.with_label("Add connection") {
-							has_frame = false,
-							halign = Gtk.Align.FILL
-						};
-						add_item.clicked.connect(() => {
-							pop.popdown();
-							this.add_connection(menu_conn);
-						});
-						box.append(add_item);
-						var can_delete = true;
-						foreach (var child in menu_conn.children) {
-							if (!child.deleted) {
-								can_delete = false;
-								break;
-							}
-						}
-						var del_item = new Gtk.Button.with_label("Delete") {
-							has_frame = false,
-							halign = Gtk.Align.FILL,
-							sensitive = can_delete
-						};
-						del_item.clicked.connect(() => {
-							pop.popdown();
-							this.delete_connection(menu_conn);
-						});
-						box.append(del_item);
-					} else {
-						var edit_item = new Gtk.Button.with_label("Edit connection") {
-							has_frame = false,
-							halign = Gtk.Align.FILL
-						};
-						edit_item.clicked.connect(() => {
-							pop.popdown();
-							this.edit_connection(menu_conn);
-						});
-						box.append(edit_item);
-						if (menu_conn.lxc_host && !menu_conn.lxc_container) {
-							var refresh_item = new Gtk.Button.with_label("Refresh containers") {
-								has_frame = false,
-								halign = Gtk.Align.FILL
-							};
-							refresh_item.clicked.connect(() => {
-								pop.popdown();
-								menu_conn.refresh_containers(this.window);
-							});
-							box.append(refresh_item);
-						}
-						var del_item = new Gtk.Button.with_label("Delete") {
-							has_frame = false,
-							halign = Gtk.Align.FILL
-						};
-						del_item.clicked.connect(() => {
-							pop.popdown();
-							this.delete_connection(menu_conn);
-						});
-						box.append(del_item);
-					}
-					pop.child = box;
-					pop.set_parent(row_box);
-					pop.pointing_to = Gdk.Rectangle() { x = (int) x, y = (int) y, width = 1, height = 1 };
-					pop.popup();
-				});
-				row_box.add_controller(menu_click);
 				var expander = new Gtk.TreeExpander() {
 					child = row_box
 				};
@@ -242,95 +182,53 @@ namespace RooTerm
 						new Gtk.PropertyExpression(typeof(Gtk.ListItem), null, "item"),
 						"item"
 					),
+					"tree-icon"
+				).bind(type_icon, "icon-name", list_item);
+				new Gtk.PropertyExpression(
+					typeof(Connection),
+					new Gtk.PropertyExpression(
+						typeof(Gtk.TreeListRow),
+						new Gtk.PropertyExpression(typeof(Gtk.ListItem), null, "item"),
+						"item"
+					),
 					"hide-expander"
 				).bind(expander, "hide-expander", list_item);
 			});
 			factory.bind.connect((obj) => {
 				var list_item = (Gtk.ListItem) obj;
-				var expander = list_item.child as Gtk.TreeExpander;
-				if (expander == null) {
-					return;
+				var expander = (Gtk.TreeExpander) list_item.child;
+				var row_box = (Gtk.Box) expander.child;
+				var mark_box = (Gtk.Box) row_box.get_last_child();
+				var conn = (Connection) ((Gtk.TreeListRow) list_item.item).item;
+				var old_sid = mark_box.get_data<ulong>("sessions-sid");
+				if (old_sid != 0) {
+					mark_box.get_data<GLib.ListStore>("sessions").disconnect(old_sid);
 				}
-				var row_box = expander.child as Gtk.Box;
-				if (row_box == null) {
-					return;
-				}
-				var type_icon = row_box.get_first_child() as Gtk.Image;
-				var mark_box = row_box.get_last_child() as Gtk.Box;
-				if (type_icon == null || mark_box == null) {
-					return;
-				}
-				var row = list_item.item as Gtk.TreeListRow;
-				var conn = row != null ? row.item as Connection : null;
-				if (conn == null) {
-					return;
-				}
-				row_box.set_data("menu-conn", conn);
-				if (conn.is_group) {
-					type_icon.icon_name = "folder";
-				}
-				if (conn.is_local) {
-					type_icon.icon_name = "computer";
-				}
-				if (conn.local_path) {
-					type_icon.icon_name = "folder";
-				}
-				if (!conn.is_group && !conn.is_local && !conn.local_path && conn.lxc_container) {
-					type_icon.icon_name = "drive-harddisk";
-				}
-				if (!conn.is_group && !conn.is_local && !conn.local_path && !conn.lxc_container
-						&& conn.sudo_after_login) {
-					type_icon.icon_name = "security-high";
-				}
-				if (!conn.is_group && !conn.is_local && !conn.local_path && !conn.lxc_container
-						&& !conn.sudo_after_login) {
-					type_icon.icon_name = "video-display";
-				}
-				var old_nid = mark_box.get_data<ulong>("nid");
-				var old_conn = mark_box.get_data<Connection>("conn");
-				if (old_conn != null && old_nid != 0) {
-					old_conn.disconnect(old_nid);
-				}
-				mark_box.set_data<ulong>("nid", 0);
-
 				while (mark_box.get_first_child() != null) {
 					mark_box.remove(mark_box.get_first_child());
 				}
-				this.fill_session_marks(mark_box, conn);
-				var nid = conn.notify.connect((o, pspec) => {
-					if (pspec.name != "open-count" && pspec.name != "active-tab"
-							&& pspec.name != "tab-titles" && pspec.name != "tab-states") {
-						return;
-					}
+				for (var i = 0; i < conn.sessions.get_n_items(); i++) {
+					this.append_session_mark(mark_box, conn, (Terminal) conn.sessions.get_item(i), i);
+				}
+				mark_box.set_data<GLib.ListStore>("sessions", conn.sessions);
+				mark_box.set_data<ulong>("sessions-sid", conn.sessions.items_changed.connect((p, r, a) => {
 					while (mark_box.get_first_child() != null) {
 						mark_box.remove(mark_box.get_first_child());
 					}
-					this.fill_session_marks(mark_box, conn);
-				});
-				mark_box.set_data<ulong>("nid", nid);
-				mark_box.set_data<Connection>("conn", conn);
+					for (var i = 0; i < conn.sessions.get_n_items(); i++) {
+						this.append_session_mark(mark_box, conn, (Terminal) conn.sessions.get_item(i), i);
+					}
+				}));
 			});
 			factory.unbind.connect((obj) => {
 				var list_item = (Gtk.ListItem) obj;
-				var expander = list_item.child as Gtk.TreeExpander;
-				if (expander == null) {
-					return;
+				var expander = (Gtk.TreeExpander) list_item.child;
+				var mark_box = (Gtk.Box) ((Gtk.Box) expander.child).get_last_child();
+				var sid = mark_box.get_data<ulong>("sessions-sid");
+				if (sid != 0) {
+					mark_box.get_data<GLib.ListStore>("sessions").disconnect(sid);
+					mark_box.set_data<ulong>("sessions-sid", 0);
 				}
-				var row_box = expander.child as Gtk.Box;
-				if (row_box == null) {
-					return;
-				}
-				var mark_box = row_box.get_last_child() as Gtk.Box;
-				if (mark_box == null) {
-					return;
-				}
-				var nid = mark_box.get_data<ulong>("nid");
-				var conn = mark_box.get_data<Connection>("conn");
-				if (conn == null || nid == 0) {
-					return;
-				}
-				conn.disconnect(nid);
-				mark_box.set_data<ulong>("nid", 0);
 			});
 
 			this.list_view = new Gtk.ListView(this.selection, factory) {
@@ -338,11 +236,29 @@ namespace RooTerm
 				hexpand = true,
 				vexpand = true
 			};
+			var menu_click = new Gtk.GestureClick() {
+				button = Gdk.BUTTON_SECONDARY
+			};
+			menu_click.pressed.connect((n_press, x, y) => {
+				var picked = this.list_view.pick((float) x, (float) y, Gtk.PickFlags.DEFAULT);
+				while (picked != null && !(picked is Gtk.ListView)) {
+					var expander = picked as Gtk.TreeExpander;
+					if (expander != null && expander.list_row != null) {
+						var menu_conn = expander.list_row.item as Connection;
+						if (menu_conn != null) {
+							this.popup_menu(this.list_view, menu_conn, x, y);
+						}
+						return;
+					}
+					picked = picked.get_parent();
+				}
+			});
+			this.list_view.add_controller(menu_click);
 			this.list_view.activate.connect((pos) => {
 				this.selection.selected = pos;
 				var row = this.selection.selected_item as Gtk.TreeListRow;
 				var conn = row != null ? row.item as Connection : null;
-				if (conn == null || conn.is_group) {
+				if (conn == null || conn.kind == ConnectionKind.GROUP) {
 					return;
 				}
 				this.connection_activated(conn);
@@ -359,30 +275,147 @@ namespace RooTerm
 		}
 
 		/**
-		 * Build right-side session icons for ``conn`` into ``mark_box``.
-		 *
-		 * @param mark_box Container for icons
-		 * @param conn Host row
+		 * Context menu for ``menu_conn`` at the click point on ``row_box``.
 		 */
-		private void fill_session_marks(Gtk.Box mark_box, Connection conn)
+		private void popup_menu(Gtk.Widget row_box, Connection menu_conn, double x, double y)
 		{
-			for (var i = 0; i < conn.open_count; i++) {
-				var idx = i;
-				var tip = conn.name;
-				if (idx < conn.tab_titles.size && conn.tab_titles.get(idx).length > 0) {
-					tip = conn.tab_titles.get(idx);
-				}
-				var mark = SessionState.IDLE;
-				if (idx < conn.tab_states.size) {
-					mark = conn.tab_states.get(idx);
-				}
-				var is_active = idx == conn.active_tab;
-				var btn = new Gtk.Button() {
-					has_frame = false,
-					focus_on_click = false,
-					tooltip_text = tip
+			var pop = new Gtk.Popover();
+			var box = new Gtk.Box(Gtk.Orientation.VERTICAL, 0);
+			switch (menu_conn.kind) {
+				case ConnectionKind.LOCAL:
+					var new_item = new Gtk.Button.with_label("New terminal") {
+						has_frame = false,
+						halign = Gtk.Align.FILL
+					};
+					new_item.clicked.connect(() => {
+						pop.popdown();
+						this.new_local(menu_conn);
+					});
+					box.append(new_item);
+					break;
+
+				case ConnectionKind.LOCAL_PATH:
+					var path_new = new Gtk.Button.with_label("New terminal here") {
+						has_frame = false,
+						halign = Gtk.Align.FILL
+					};
+					path_new.clicked.connect(() => {
+						pop.popdown();
+						this.new_local(menu_conn);
+					});
+					box.append(path_new);
+					var close_item = new Gtk.Button.with_label("Close") {
+						has_frame = false,
+						halign = Gtk.Align.FILL
+					};
+					close_item.clicked.connect(() => {
+						pop.popdown();
+						this.close_local(menu_conn);
+					});
+					box.append(close_item);
+					break;
+
+				case ConnectionKind.GROUP:
+					var add_item = new Gtk.Button.with_label("Add connection") {
+						has_frame = false,
+						halign = Gtk.Align.FILL
+					};
+					add_item.clicked.connect(() => {
+						pop.popdown();
+						this.add_connection(menu_conn);
+					});
+					box.append(add_item);
+					var can_delete = true;
+					foreach (var child in menu_conn.children) {
+						if (!child.deleted) {
+							can_delete = false;
+							break;
+						}
+					}
+					var group_del = new Gtk.Button.with_label("Delete") {
+						has_frame = false,
+						halign = Gtk.Align.FILL,
+						sensitive = can_delete
+					};
+					group_del.clicked.connect(() => {
+						pop.popdown();
+						this.delete_connection(menu_conn);
+					});
+					box.append(group_del);
+					break;
+
+				case ConnectionKind.HOST:
+				case ConnectionKind.LXC:
+					var edit_item = new Gtk.Button.with_label("Edit connection") {
+						has_frame = false,
+						halign = Gtk.Align.FILL
+					};
+					edit_item.clicked.connect(() => {
+						pop.popdown();
+						this.edit_connection(menu_conn);
+					});
+					box.append(edit_item);
+					if (menu_conn.kind == ConnectionKind.HOST && menu_conn.lxc_host) {
+						var refresh_item = new Gtk.Button.with_label("Refresh containers") {
+							has_frame = false,
+							halign = Gtk.Align.FILL
+						};
+						refresh_item.clicked.connect(() => {
+							pop.popdown();
+							menu_conn.refresh_containers(this.window);
+						});
+						box.append(refresh_item);
+					}
+					var host_del = new Gtk.Button.with_label("Delete") {
+						has_frame = false,
+						halign = Gtk.Align.FILL
+					};
+					host_del.clicked.connect(() => {
+						pop.popdown();
+						this.delete_connection(menu_conn);
+					});
+					box.append(host_del);
+					break;
+			}
+			pop.child = box;
+			pop.set_parent(row_box);
+			pop.pointing_to = Gdk.Rectangle() { x = (int) x, y = (int) y, width = 1, height = 1 };
+			pop.popup();
+		}
+
+		/**
+		 * One tree session-mark button for ``term`` (state / label live on the terminal).
+		 */
+		private void append_session_mark(Gtk.Box mark_box, Connection conn, Terminal term, int index)
+		{
+			var btn = new Gtk.Button() {
+				has_frame = false,
+				focus_on_click = false,
+				tooltip_text = term.label()
+			};
+			btn.add_css_class("flat");
+			btn.add_css_class("session-icon");
+			btn.add_css_class(term.session_css);
+			if (!term.tree_active && term.state == SessionState.BUSY) {
+				btn.child = new Gtk.Spinner() {
+					spinning = true,
+					width_request = 16,
+					height_request = 16
 				};
-				if (!is_active && mark == SessionState.BUSY) {
+			} else {
+				btn.icon_name = "video-display";
+			}
+			var state_sid = term.notify.connect((o, pspec) => {
+				if (pspec.name != "session-css" && pspec.name != "state" && pspec.name != "tree-active") {
+					return;
+				}
+				btn.remove_css_class("session-active");
+				btn.remove_css_class("session-idle");
+				btn.remove_css_class("session-busy");
+				btn.remove_css_class("session-ready");
+				btn.remove_css_class("session-dead");
+				btn.add_css_class(term.session_css);
+				if (!term.tree_active && term.state == SessionState.BUSY) {
 					btn.child = new Gtk.Spinner() {
 						spinning = true,
 						width_request = 16,
@@ -391,34 +424,18 @@ namespace RooTerm
 				} else {
 					btn.icon_name = "video-display";
 				}
-				btn.add_css_class("flat");
-				btn.add_css_class("session-icon");
-				if (is_active) {
-					btn.add_css_class("session-active");
-				} else {
-					switch (mark) {
-						case SessionState.BUSY:
-							btn.add_css_class("session-busy");
-							break;
-
-						case SessionState.READY:
-							btn.add_css_class("session-ready");
-							break;
-
-						case SessionState.DEAD:
-							btn.add_css_class("session-dead");
-							break;
-
-						default:
-							btn.add_css_class("session-idle");
-							break;
-					}
-				}
-				btn.clicked.connect(() => {
-					this.terminal_selected(conn, idx);
-				});
-				mark_box.append(btn);
-			}
+			});
+			var label_sid = term.label_changed.connect(() => {
+				btn.tooltip_text = term.label();
+			});
+			btn.destroy.connect(() => {
+				term.disconnect(state_sid);
+				term.disconnect(label_sid);
+			});
+			btn.clicked.connect(() => {
+				this.terminal_selected(conn, index);
+			});
+			mark_box.append(btn);
 		}
 	}
 }

@@ -235,7 +235,7 @@ namespace RooTerm
 					this.auth_key.visible = false;
 					this.setup_key_btn.visible = !this.is_new
 						&& this.target != null
-						&& !this.target.lxc_container;
+						&& this.target.kind != ConnectionKind.LXC;
 				}
 			});
 			this.auth_key.toggled.connect(() => {
@@ -257,7 +257,7 @@ namespace RooTerm
 					this.auth_key.visible = false;
 					this.setup_key_btn.visible = !this.is_new
 						&& this.target != null
-						&& !this.target.lxc_container;
+						&& this.target.kind != ConnectionKind.LXC;
 				}
 			});
 			this.sudo_check.toggled.connect(() => {
@@ -881,7 +881,7 @@ steps so you can verify the new key works first."""
 			} else {
 				this.target = new Connection() {
 					uuid = GLib.Uuid.string_random(),
-					is_group = false,
+					kind = ConnectionKind.HOST,
 					parent_uuid = parent_group != null ? parent_group.uuid : "",
 					port = 22,
 					auth = "password",
@@ -917,7 +917,7 @@ steps so you can verify the new key works first."""
 
 			var using_key = this.target.auth == "ssh_key"
 				|| this.target.auth == "publickey";
-			this.setup_key_btn.visible = !this.is_new && !this.target.lxc_container && !using_key;
+			this.setup_key_btn.visible = !this.is_new && this.target.kind != ConnectionKind.LXC && !using_key;
 			this.auth_key.visible = using_key;
 			if (using_key) {
 				this.auth_key.active = true;
@@ -927,14 +927,14 @@ steps so you can verify the new key works first."""
 				this.auth_password.active = true;
 			}
 			this.sudo_check.active = this.target.sudo_after_login;
-			this.sudo_check.visible = !this.target.lxc_container;
+			this.sudo_check.visible = this.target.kind != ConnectionKind.LXC;
 			this.lxc_host_check.active = this.target.lxc_host && this.target.sudo_after_login;
 			this.lxc_host_check.sensitive = this.sudo_check.active;
-			this.lxc_host_check.visible = !this.target.lxc_container;
+			this.lxc_host_check.visible = this.target.kind != ConnectionKind.LXC;
 			this.fetch_hosts_btn.visible = this.lxc_host_check.active && !this.is_new;
 			this.retire_key_btn.visible = using_key && this.target.retire_key.length > 0;
 			this.upgrade_key_btn.visible = using_key && this.target.retire_key.length == 0
-				&& this.key_open() && !this.is_new && !this.target.lxc_container;
+				&& this.key_open() && !this.is_new && this.target.kind != ConnectionKind.LXC;
 			this.pending_key_identity = "";
 			this.pass_box.visible = this.auth_password.active || this.sudo_check.active;
 			this.pass_label.label =

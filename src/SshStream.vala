@@ -448,7 +448,7 @@ echo RooTerm: old key removed
 			}
 			if (this.connection.pass.length == 0) {
 				var secret_uuid = this.connection.uuid;
-				if (this.connection.lxc_container && this.connection.parent_uuid.length > 0) {
+				if (this.connection.kind == ConnectionKind.LXC && this.connection.parent_uuid.length > 0) {
 					secret_uuid = this.connection.parent_uuid;
 				}
 				try {

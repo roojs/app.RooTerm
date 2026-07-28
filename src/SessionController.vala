@@ -117,6 +117,38 @@ namespace RooTerm
 		}
 
 		/**
+		 * Open another tab like the focused one: SSH clone, or local shell in
+		 * the same cwd. Falls back to a new local shell in home when nothing
+		 * is focused.
+		 *
+		 * @param localhost Localhost connection for local / empty fallback
+		 */
+		public void open_new(Connection localhost)
+		{
+			if (this.shown_uuid.length == 0 || !this.by_uuid.has_key(this.shown_uuid)) {
+				this.open_local(localhost);
+				return;
+			}
+			var page = this.by_uuid.get(this.shown_uuid);
+			var term = page.current;
+			if (term == null) {
+				this.open_local(localhost);
+				return;
+			}
+			if (term is SshTerminal) {
+				this.open(term.connection);
+				return;
+			}
+			var local = term as LocalTerminal;
+			if (local != null) {
+				var dir = local.cwd.length > 0 ? local.cwd : local.start_cwd;
+				this.open_local(localhost, dir);
+				return;
+			}
+			this.open_local(localhost);
+		}
+
+		/**
 		 * Open a local shell tab under Localhost (creates host page if needed).
 		 *
 		 * @param connection Localhost connection
@@ -161,10 +193,7 @@ namespace RooTerm
 		 */
 		public void close(HostPage page)
 		{
-			page.connection.open_count = 0;
-			page.connection.active_tab = -1;
-			page.connection.tab_titles = new Gee.ArrayList<string>();
-			page.connection.tab_states = new Gee.ArrayList<SessionState>();
+			page.connection.sessions.remove_all();
 			this.by_uuid.unset(page.connection.uuid);
 			if (this.shown_uuid == page.connection.uuid) {
 				this.shown_uuid = "";
