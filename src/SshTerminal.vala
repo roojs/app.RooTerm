@@ -43,7 +43,7 @@ namespace RooTerm
 		 *
 		 * @param connection Host to open
 		 * @param font Pango font string (Ásbrú ``terminal font``)
-		 * @param in_stream Optional flags bag (``install_key`` / ``list_containers``); wired stream is always new
+		 * @param in_stream Optional stream to adopt (flags bag or pre-wired); otherwise a new stream
 		 */
 		public SshTerminal(Connection connection, string font = "Monospace 9", SshStream? in_stream = null)
 		{
@@ -80,13 +80,11 @@ namespace RooTerm
 			this.close_bar.append(close_row);
 			this.append(this.close_bar);
 
-			this.stream = new SshStream(this.terminal, this.connection);
 			if (in_stream != null) {
-				this.stream.install_key = in_stream.install_key;
-				this.stream.list_containers = in_stream.list_containers;
-				this.stream.install_identity = in_stream.install_identity;
-				this.stream.remove_old_key = in_stream.remove_old_key;
-				this.stream.remove_pub_line = in_stream.remove_pub_line;
+				this.stream = in_stream;
+				this.stream.attach(this.terminal, this.connection);
+			} else {
+				this.stream = new SshStream(this.terminal, this.connection);
 			}
 			this.stream.label_changed.connect(() => {
 				this.label_changed();
@@ -225,17 +223,8 @@ namespace RooTerm
 				this.close_tick = 0;
 			}
 			this.close_bar.visible = false;
-			this.stream.sent_secret = false;
 			this.stream.hide_input = false;
 			this.stream.log_line = -1;
-			this.stream.sudo_sent = false;
-			this.stream.sudo_done = false;
-			this.stream.sudo_password_fed = false;
-			this.stream.sudo_fail_armed = false;
-			this.stream.list_sent = false;
-			this.stream.list_parsed = false;
-			this.stream.lxc_sent = false;
-			this.stream.remove_sent = false;
 			this.stream.prompt_hint = "";
 			this.state = SessionState.IDLE;
 			this.spawn();
@@ -275,15 +264,6 @@ namespace RooTerm
 		 */
 		public override void spawn()
 		{
-			this.stream.sudo_sent = false;
-			this.stream.sudo_done = false;
-			this.stream.sudo_password_fed = false;
-			this.stream.sudo_fail_armed = false;
-			this.stream.list_sent = false;
-			this.stream.list_parsed = false;
-			this.stream.lxc_sent = false;
-			this.stream.remove_sent = false;
-			this.stream.sent_secret = false;
 			if (this.connection.pass.length == 0
 					&& this.connection.auth != "manual"
 					&& (this.connection.auth == "password"

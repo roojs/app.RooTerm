@@ -76,13 +76,16 @@ namespace RooTerm
 		}
 
 		/**
-		 * Open a new SSH terminal tab for ``connection`` (creates host page if needed).
+		 * Create an SSH terminal tab for ``connection`` without spawning (host page if needed).
+		 *
+		 * Caller sets stream flags if needed, then {@link SshTerminal.spawn} and
+		 * ``terminal.grab_focus()`` when ready.
 		 *
 		 * @param connection Host to open
-		 * @param stream Optional preconfigured {@link SshStream} (``install_key`` / ``list_containers`` / signals)
-		 * @return The new terminal tab contents
+		 * @param stream Optional stream to adopt (``install_key`` / signals)
+		 * @return The new terminal tab contents (not yet spawned)
 		 */
-		public SshTerminal open(Connection connection, SshStream? stream = null)
+		public SshTerminal create(Connection connection, SshStream? stream = null)
 		{
 			HostPage page;
 			if (this.by_uuid.has_key(connection.uuid)) {
@@ -105,25 +108,21 @@ namespace RooTerm
 			term.close_tab.connect(() => {
 				page.tab_view.close_page(tab);
 			});
-			term.stream.sudo_password_failed.connect(() => {
-				this.sudo_password_failed(connection);
-			});
-			term.spawn();
 			page.tab_view.selected_page = tab;
 			this.stack.pages.visible_child = page;
 			this.focus();
-			term.terminal.grab_focus();
 			return term;
 		}
 
 		/**
-		 * Open another tab like the focused one: SSH clone, or local shell in
-		 * the same cwd. Falls back to a new local shell in home when nothing
-		 * is focused.
+		 * Open another tab like the focused one: SSH clone via {@link OpenSession},
+		 * or local shell in the same cwd. Falls back to a new local shell in home
+		 * when nothing is focused.
 		 *
 		 * @param localhost Localhost connection for local / empty fallback
+		 * @param window Main window (for {@link OpenSession})
 		 */
-		public void open_new(Connection localhost)
+		public void open_new(Connection localhost, MainWindow window)
 		{
 			if (this.shown_uuid.length == 0 || !this.by_uuid.has_key(this.shown_uuid)) {
 				this.open_local(localhost);
@@ -136,7 +135,16 @@ namespace RooTerm
 				return;
 			}
 			if (term is SshTerminal) {
-				this.open(term.connection);
+				var job = new OpenSession(window, term.connection);
+				job.terminal.terminal.grab_focus();
+				job.run.begin((obj, res) => {
+					try {
+						job.run.end(res);
+					} catch (JobError e) {
+						GLib.warning("open session failed name=%s: %s",
+							term.connection.name, e.message);
+					}
+				});
 				return;
 			}
 			var local = term as LocalTerminal;

@@ -362,7 +362,16 @@ namespace RooTerm
 						};
 						refresh_item.clicked.connect(() => {
 							pop.popdown();
-							menu_conn.refresh_containers(this.window);
+							menu_conn.refresh_containers.begin(this.window, (obj, res) => {
+								try {
+									menu_conn.apply_containers(
+										menu_conn.refresh_containers.end(res), this.window
+									);
+								} catch (JobError e) {
+									GLib.warning("fetch hosts failed name=%s: %s",
+										menu_conn.name, e.message);
+								}
+							});
 						});
 						box.append(refresh_item);
 					}

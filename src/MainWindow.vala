@@ -154,7 +154,15 @@ namespace RooTerm
 					this.sessions.open_local(conn.parent, conn.name);
 					return;
 				}
-				this.sessions.open(conn);
+				var job = new OpenSession(this, conn);
+				job.terminal.terminal.grab_focus();
+				job.run.begin((obj, res) => {
+					try {
+						job.run.end(res);
+					} catch (JobError e) {
+						GLib.warning("open session failed name=%s: %s", conn.name, e.message);
+					}
+				});
 			});
 			this.host_tree.connection_highlighted.connect((conn) => {
 				if (conn.kind == ConnectionKind.LOCAL_PATH) {
@@ -285,7 +293,16 @@ namespace RooTerm
 						this.sessions.open_local(conn);
 						return;
 					}
-					this.sessions.open(conn);
+					var job = new OpenSession(this, conn);
+					job.terminal.terminal.grab_focus();
+					job.run.begin((obj, res) => {
+						try {
+							job.run.end(res);
+						} catch (JobError e) {
+							GLib.warning("open session failed name=%s: %s",
+								conn.name, e.message);
+						}
+					});
 					return;
 				}
 				this.host_stack.pages.visible_child = page;
@@ -304,7 +321,7 @@ namespace RooTerm
 
 			var new_term_action = new GLib.SimpleAction("new-terminal", null);
 			new_term_action.activate.connect(() => {
-				this.sessions.open_new(localhost);
+				this.sessions.open_new(localhost, this);
 			});
 			this.add_action(new_term_action);
 			app.set_accels_for_action("win.new-terminal", { "<Control><Shift>t" });

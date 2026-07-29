@@ -31,13 +31,6 @@ namespace RooTerm
 	}
 
 	/**
-	 * Callback for staged ``lxc-ls`` results (dialog Save applies later).
-	 *
-	 * @param names Container names from the remote host
-	 */
-	public delegate void ContainerNamesCb(string[] names);
-
-	/**
 	 * Connection or group ({@link ConnectionKind}); JSON via {@link Json.Serializable}.
 	 */
 	public class Connection : Object, Json.Serializable
@@ -292,33 +285,16 @@ namespace RooTerm
 		}
 
 		/**
-		 * Discover LXC containers via a session (``lxc-ls``).
-		 *
-		 * With ``on_listed`` null, applies names to the tree and saves. Otherwise
-		 * only invokes the callback (dialog can stage until Save). Closes the
-		 * list tab after five seconds.
+		 * Discover LXC containers via {@link FetchHosts}.
 		 *
 		 * @param window Window providing sessions / config
-		 * @param on_listed Optional handler instead of applying to the tree
-		 * @return The list terminal tab
+		 * @return Parsed container names from ``lxc-ls``
 		 */
-		public SshTerminal refresh_containers(MainWindow window, owned ContainerNamesCb? on_listed = null)
+		public async string[] refresh_containers(MainWindow window) throws JobError
 		{
-			var stream = new SshStream();
-			stream.list_containers = true;
-			var term = window.sessions.open(this, stream);
-			term.stream.containers_found.connect((names) => {
-				if (on_listed != null) {
-					on_listed(names);
-				} else {
-					this.apply_containers(names, window);
-				}
-				GLib.Timeout.add_seconds(5, () => {
-					term.close_tab();
-					return false;
-				});
-			});
-			return term;
+			var job = new FetchHosts(window, this);
+			yield job.run();
+			return job.container_names;
 		}
 
 		/**

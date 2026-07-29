@@ -151,57 +151,20 @@ namespace RooTerm
 					this.target.pass = this.pass_entry.text;
 				}
 				this.close();
-				var term = this.target.refresh_containers(this.window, (names) => {
-					this.pending_lxc_names = names;
-					this.pending_lxc_sync = true;
-					GLib.debug("fetch hosts staged count=%d", names.length);
-					this.present(this.window);
-				});
-				term.close_tab.connect(() => {
+				this.target.refresh_containers.begin(this.window, (obj, res) => {
+					try {
+						this.pending_lxc_names = this.target.refresh_containers.end(res);
+						this.pending_lxc_sync = true;
+						GLib.debug("fetch hosts staged count=%d", this.pending_lxc_names.length);
+					} catch (JobError e) {
+						GLib.warning("fetch hosts failed name=%s: %s", this.target.name, e.message);
+					}
 					this.present(this.window);
 				});
 			});
 			this.setup_key_btn.clicked.connect(() => {
 				this.ensure_key(() => {
-					this.target.host = this.host_entry.text.strip();
-					this.target.user = this.user_entry.text.strip();
-					var port = int.parse(this.port_entry.text.strip());
-					if (port > 0 && port <= 65535) {
-						this.target.port = port;
-					}
-					if (this.pass_entry.text.length > 0) {
-						this.target.pass = this.pass_entry.text;
-					}
-					this.close();
-					var stream = new SshStream();
-					stream.install_key = true;
-					var term = this.window.sessions.open(this.target, stream);
-					term.stream.key_installed.connect((identity) => {
-						this.pending_key_identity = identity;
-						this.target.auth = "ssh_key";
-						this.target.public_key = identity;
-						this.setup_key_btn.visible = false;
-						this.auth_key.visible = true;
-						this.auth_key.active = true;
-						try {
-							this.window.config.save();
-						} catch (GLib.Error e) {
-							GLib.warning("config save failed: %s", e.message);
-						}
-						this.pass_box.visible = this.auth_password.active || this.sudo_check.active;
-						this.pass_label.label = this.auth_key.active && this.sudo_check.active
-							? "Password (required for sudo)"
-							: "Password";
-						GLib.debug("ssh key installed identity=%s name=%s", identity, this.target.name);
-						GLib.Timeout.add_seconds(2, () => {
-							term.close_tab();
-							return false;
-						});
-						this.present(this.window);
-					});
-					term.close_tab.connect(() => {
-						this.present(this.window);
-					});
+					this.begin_setup_key.begin();
 				});
 			});
 			var sudo_row = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 12);
@@ -552,6 +515,47 @@ namespace RooTerm
 		}
 
 		/**
+		 * Install default identity via {@link SetupKey}, then re-present.
+		 */
+		private async void begin_setup_key()
+		{
+			this.target.host = this.host_entry.text.strip();
+			this.target.user = this.user_entry.text.strip();
+			var port = int.parse(this.port_entry.text.strip());
+			if (port > 0 && port <= 65535) {
+				this.target.port = port;
+			}
+			if (this.pass_entry.text.length > 0) {
+				this.target.pass = this.pass_entry.text;
+			}
+			this.close();
+			var job = new SetupKey(this.window, this.target);
+			try {
+				yield job.run();
+				this.pending_key_identity = job.installed_identity;
+				this.target.auth = "ssh_key";
+				this.target.public_key = job.installed_identity;
+				this.setup_key_btn.visible = false;
+				this.auth_key.visible = true;
+				this.auth_key.active = true;
+				try {
+					this.window.config.save();
+				} catch (GLib.Error e) {
+					GLib.warning("config save failed: %s", e.message);
+				}
+				this.pass_box.visible = this.auth_password.active || this.sudo_check.active;
+				this.pass_label.label = this.auth_key.active && this.sudo_check.active
+					? "Password (required for sudo)"
+					: "Password";
+				GLib.debug("ssh key installed identity=%s name=%s",
+					job.installed_identity, this.target.name);
+			} catch (JobError e) {
+				GLib.warning("setup key failed name=%s: %s", this.target.name, e.message);
+			}
+			this.present(this.window);
+		}
+
+		/**
 		 * Step 1: create a new passphrased key, install it, keep {@link Connection.retire_key}
 		 * for the old identity until step 2.
 		 */
@@ -603,49 +607,57 @@ namespace RooTerm
 					this.target.pass = this.pass_entry.text;
 				}
 				this.close();
-				var stream = new SshStream();
-				stream.install_key = true;
-				stream.install_identity = identity;
-				var term = this.window.sessions.open(this.target, stream);
-				term.stream.key_installed.connect((installed) => {
-					this.target.auth = "ssh_key";
-					this.target.retire_key = old_identity;
-					this.target.public_key = installed;
-					this.pending_key_identity = installed;
-					this.setup_key_btn.visible = false;
-					this.auth_key.visible = true;
-					this.auth_key.active = true;
-					this.upgrade_key_btn.visible = false;
-					this.retire_key_btn.visible = true;
-					try {
-						this.window.config.save();
-					} catch (GLib.Error e) {
-						GLib.warning("config save failed: %s", e.message);
-					}
-					GLib.debug("key replaced new=%s old=%s name=%s",
-						installed, old_identity, this.target.name);
-					GLib.Timeout.add_seconds(2, () => {
-						term.close_tab();
-						return false;
-					});
-					var done = new Adw.AlertDialog(
-						"New key installed",
-"""Verify login with the new key works, then use
-“Remove old key from server” on this connection."""
-					);
-					done.add_response("ok", "OK");
-					done.default_response = "ok";
-					done.close_response = "ok";
-					done.response.connect(() => {
-						this.present(this.window);
-					});
-					done.present(this.window);
-				});
-				term.close_tab.connect(() => {
-					this.present(this.window);
-				});
+				this.run_key_upgrade.begin(identity, old_identity);
 			});
 			dlg.present(this);
+		}
+
+		/**
+		 * Run {@link ReplaceKey} after the new identity exists.
+		 *
+		 * @param identity New private key path
+		 * @param old_identity Previous identity to retire later
+		 */
+		private async void run_key_upgrade(string identity, string old_identity)
+		{
+			var job = new ReplaceKey(this.window, this.target, identity) {
+				old_identity = old_identity
+			};
+			try {
+				yield job.run();
+				this.target.auth = "ssh_key";
+				this.target.retire_key = old_identity;
+				this.target.public_key = job.installed_identity;
+				this.pending_key_identity = job.installed_identity;
+				this.setup_key_btn.visible = false;
+				this.auth_key.visible = true;
+				this.auth_key.active = true;
+				this.upgrade_key_btn.visible = false;
+				this.retire_key_btn.visible = true;
+				try {
+					this.window.config.save();
+				} catch (GLib.Error e) {
+					GLib.warning("config save failed: %s", e.message);
+				}
+				GLib.debug("key replaced new=%s old=%s name=%s",
+					job.installed_identity, old_identity, this.target.name);
+				var done = new Adw.AlertDialog(
+					"New key installed",
+"""Verify login with the new key works, then use
+“Remove old key from server” on this connection."""
+				);
+				done.add_response("ok", "OK");
+				done.default_response = "ok";
+				done.close_response = "ok";
+				done.response.connect(() => {
+					this.present(this.window);
+				});
+				done.present(this.window);
+				return;
+			} catch (JobError e) {
+				GLib.warning("replace key failed name=%s: %s", this.target.name, e.message);
+			}
+			this.present(this.window);
 		}
 
 		/**
@@ -678,11 +690,21 @@ namespace RooTerm
 				this.target.port = port;
 			}
 			this.close();
-			var stream = new SshStream();
-			stream.remove_old_key = true;
-			stream.remove_pub_line = pub_line;
-			var term = this.window.sessions.open(this.target, stream);
-			term.stream.old_key_removed.connect(() => {
+			this.run_key_retire.begin(pub_line);
+		}
+
+		/**
+		 * Run {@link RetireKey} with the old pubkey line.
+		 *
+		 * @param pub_line Line to strip from ``authorized_keys``
+		 */
+		private async void run_key_retire(string pub_line)
+		{
+			var job = new RetireKey(this.window, this.target) {
+				remove_pub_line = pub_line
+			};
+			try {
+				yield job.run();
 				this.target.retire_key = "";
 				this.retire_key_btn.visible = false;
 				try {
@@ -691,15 +713,10 @@ namespace RooTerm
 					GLib.warning("config save failed: %s", e.message);
 				}
 				GLib.debug("retire_key cleared name=%s", this.target.name);
-				GLib.Timeout.add_seconds(2, () => {
-					term.close_tab();
-					return false;
-				});
-				this.present(this.window);
-			});
-			term.close_tab.connect(() => {
-				this.present(this.window);
-			});
+			} catch (JobError e) {
+				GLib.warning("retire key failed name=%s: %s", this.target.name, e.message);
+			}
+			this.present(this.window);
 		}
 
 		/**

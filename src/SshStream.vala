@@ -22,15 +22,16 @@ namespace RooTerm
 	 * VTE ``commit`` / ``contents_changed`` handlers for one {@link SshTerminal}.
 	 *
 	 * Construct with both ``terminal`` and ``connection`` to wire handlers.
-	 * Construct with neither for a null stream (flags bag for {@link SessionController.open}).
+	 * Construct with neither for a flags bag; {@link SshTerminal} calls {@link attach}.
+	 *
+	 * Login / sudo / passphrase / ``lxc-console`` feeds live in Jobs. This stream
+	 * scrapes prompts for tab labels, session-logs, and watches ``ssh-copy-id``.
 	 *
 	 * == Example ==
 	 *
 	 * {{{
 	 * var stream = new SshStream(term.terminal, conn);
 	 * stream.label_changed.connect(() => { ... });
-	 * var opts = new SshStream();
-	 * opts.install_key = true;
 	 * }}}
 	 */
 	public class SshStream : Object
@@ -42,7 +43,6 @@ namespace RooTerm
 		 */
 		public string prompt_hint = "";
 		public uint prompt_timeout = 0;
-		public bool sent_secret = false;
 		public GLib.FileStream? session_log = null;
 		public bool hide_input = false;
 		/**
@@ -50,53 +50,9 @@ namespace RooTerm
 		 */
 		public long log_line = -1;
 		/**
-		 * ``sudo -i`` has been fed (wait for the next prompt before LXC steps).
-		 */
-		public bool sudo_sent = false;
-		/**
-		 * Ready for post-sudo steps (no sudo needed, or a prompt arrived after {@link sudo_sent}).
-		 */
-		public bool sudo_done = false;
-		/**
-		 * Sudo password was fed; another sudo prompt means failure.
-		 */
-		public bool sudo_password_fed = false;
-		/**
-		 * After a short arm delay, a repeated sudo password prompt emits {@link sudo_password_failed}.
-		 */
-		public bool sudo_fail_armed = false;
-		/**
-		 * ``lxc-ls`` has been fed (refresh containers).
-		 */
-		public bool list_sent = false;
-		/**
-		 * ``lxc-ls`` output has been parsed.
-		 */
-		public bool list_parsed = false;
-		/**
-		 * ``lxc-console`` has been fed.
-		 */
-		public bool lxc_sent = false;
-		/**
 		 * When true, spawn is ``ssh-copy-id``; watch output for success.
 		 */
 		public bool install_key = false;
-		/**
-		 * When true, after login remove {@link remove_pub_line} from ``authorized_keys``.
-		 */
-		public bool remove_old_key = false;
-		/**
-		 * Full line from the old ``.pub`` file to delete on the server.
-		 */
-		public string remove_pub_line = "";
-		/**
-		 * Remote remove command has been fed.
-		 */
-		public bool remove_sent = false;
-		/**
-		 * When true, after login feed ``lxc-ls`` and emit {@link containers_found}.
-		 */
-		public bool list_containers = false;
 		/**
 		 * Private key path used for {@link install_key} (no ``.pub`` suffix).
 		 */
@@ -115,97 +71,37 @@ namespace RooTerm
 		public signal void key_installed(string identity);
 
 		/**
-		 * Emitted when ``sudo -i`` rejects the password (prompt returns).
-		 */
-		public signal void sudo_password_failed();
-
-		/**
-		 * Emitted after the old pubkey line was removed from ``authorized_keys``.
-		 */
-		public signal void old_key_removed();
-
-		/**
-		 * Emitted after ``lxc-ls`` output is parsed (refresh containers).
+		 * Wire ``on_*`` handlers when both arguments are set; otherwise a flags bag
+		 * (attach VTE later via {@link attach}).
 		 *
-		 * @param names Container names from ``lxc-ls``
-		 */
-		public signal void containers_found(string[] names);
-
-		/**
-		 * Wire ``on_*`` handlers when both arguments are set; otherwise a null stream.
-		 *
-		 * @param terminal VTE to watch, or null for a null stream
-		 * @param connection Host credentials / auth, or null for a null stream
+		 * @param terminal VTE to watch, or null for a flags bag
+		 * @param connection Host credentials / auth, or null for a flags bag
 		 */
 		public SshStream(Vte.Terminal? terminal = null, Connection? connection = null)
 		{
 			if (terminal == null || connection == null) {
 				return;
 			}
+			this.attach(terminal, connection);
+		}
+
+		/**
+		 * Bind this stream to a VTE (idempotent if already attached).
+		 *
+		 * @param terminal VTE to watch
+		 * @param connection Host credentials / auth
+		 */
+		public void attach(Vte.Terminal terminal, Connection connection)
+		{
+			if (this.terminal != null) {
+				return;
+			}
 			this.terminal = terminal;
 			this.connection = connection;
 			this.terminal.commit.connect(this.on_commit);
 			this.terminal.contents_changed.connect(this.on_prompt);
-			this.terminal.contents_changed.connect(this.on_password);
-			this.terminal.contents_changed.connect(this.on_sudo_fail);
 			this.terminal.contents_changed.connect(this.on_log);
 			this.terminal.contents_changed.connect(this.on_key);
-			this.label_changed.connect(() => {
-				if (this.install_key) {
-					return;
-				}
-				if (!this.connection.sudo_after_login) {
-					this.sudo_done = true;
-					return;
-				}
-				if (this.sudo_sent) {
-					this.sudo_done = true;
-					this.sudo_fail_armed = false;
-					return;
-				}
-				this.sudo_sent = true;
-				this.sudo_password_fed = false;
-				this.sudo_fail_armed = false;
-				this.sent_secret = false;
-				GLib.debug("sudo -i name=%s auth=%s pass_len=%d",
-					this.connection.name, this.connection.auth, this.connection.pass.length);
-				this.terminal.feed_child("sudo -i\n".data);
-			});
-			this.label_changed.connect(this.on_lxc_ls);
-			this.label_changed.connect(() => {
-				if (this.install_key || this.list_containers || this.lxc_sent) {
-					return;
-				}
-				if (!this.sudo_done || this.connection.lxc_name.length == 0) {
-					return;
-				}
-				this.lxc_sent = true;
-				this.terminal.feed_child(
-					("lxc-console -n " + this.connection.lxc_name + "\n").data
-				);
-			});
-			this.label_changed.connect(() => {
-				if (!this.remove_old_key || this.remove_sent || this.install_key) {
-					return;
-				}
-				if (!this.sudo_done) {
-					return;
-				}
-				if (this.remove_pub_line.strip().length == 0) {
-					return;
-				}
-				this.remove_sent = true;
-				var line = this.remove_pub_line.strip().replace("'", "'\\''");
-				var cmd = """f="$HOME/.ssh/authorized_keys"
-grep -vxF '""" + line + """' "$f" > "$f.rooterm"
-mv "$f.rooterm" "$f"
-chmod 600 "$f"
-echo RooTerm: old key removed
-""";
-				GLib.debug("remove old key name=%s", this.connection.name);
-				this.terminal.feed_child(cmd.data);
-			});
-			this.terminal.contents_changed.connect(this.on_remove_old);
 		}
 
 		/**
@@ -242,7 +138,11 @@ echo RooTerm: old key removed
 		}
 
 		/**
-		 * Debounced scrape of the cursor row for a shell/sql prompt.
+		 * Debounced scrape of the cursor row for tab-label text ({@link prompt_hint}).
+		 *
+		 * Not login/auth — Jobs own password / passphrase / sudo. This only updates
+		 * the tab title when the line looks like a shell or db prompt, and ignores
+		 * password lines so the label does not briefly become ``Enter passphrase:``.
 		 */
 		private void on_prompt()
 		{
@@ -254,11 +154,13 @@ echo RooTerm: old key removed
 				long col, row;
 				this.terminal.get_cursor_position(out col, out row);
 				size_t len;
+				// Cursor row only — same shape Jobs use for on_content, but for labels.
 				var raw = this.terminal.get_text_range_format(Vte.Format.TEXT, row, 0, row, col, out len);
 				var last = raw != null ? raw.replace("\r", "").strip() : "";
 				if (last.length == 0 || last.length > 240) {
 					return false;
 				}
+				// Auth prompts are not titles.
 				if (GLib.Regex.match_simple("(password|passphrase).*:\\s*$", last, GLib.RegexCompileFlags.CASELESS, 0)) {
 					return false;
 				}
@@ -268,231 +170,13 @@ echo RooTerm: old key removed
 				if (!is_prompt) {
 					return false;
 				}
-				var waiting_lxc = this.list_containers && this.list_sent && !this.list_parsed;
-				if (last == this.prompt_hint && !waiting_lxc) {
+				if (last == this.prompt_hint) {
 					return false;
 				}
 				this.prompt_hint = last;
 				this.label_changed();
 				return false;
 			});
-		}
-
-		/**
-		 * Feed ``lxc-ls -f -F name,state`` after sudo; on the next prompt parse rows.
-		 */
-		private void on_lxc_ls()
-		{
-			if (this.install_key || !this.list_containers) {
-				return;
-			}
-			if (!this.sudo_done) {
-				return;
-			}
-			if (!this.list_sent) {
-				this.list_sent = true;
-				GLib.debug("lxc-ls feed name=%s", this.connection.name);
-				this.terminal.feed_child("lxc-ls -f -F name,state\n".data);
-				return;
-			}
-			if (this.list_parsed) {
-				return;
-			}
-			this.list_parsed = true;
-			long end_col, end_row;
-			this.terminal.get_cursor_position(out end_col, out end_row);
-			size_t full_len;
-			var full = this.terminal.get_text_range_format(
-				Vte.Format.TEXT, 0, 0, end_row, end_col, out full_len
-			);
-			string[] names = {};
-			if (full == null) {
-				GLib.debug("lxc-ls empty buffer name=%s", this.connection.name);
-				this.containers_found(names);
-				return;
-			}
-			var after = full;
-			var cmd_at = full.last_index_of("lxc-ls");
-			if (cmd_at >= 0) {
-				after = full.substring(cmd_at);
-			}
-			var saw_header = false;
-			foreach (var part in after.split("\n")) {
-				var line = part.replace("\r", "").strip();
-				if (line.length == 0) {
-					continue;
-				}
-				var cols = line.split_set(" \t", 0);
-				string[] fields = {};
-				foreach (var col in cols) {
-					if (col.length == 0) {
-						continue;
-					}
-					fields += col;
-				}
-				if (fields.length < 2) {
-					continue;
-				}
-				if (fields[0] == "NAME") {
-					saw_header = true;
-					continue;
-				}
-				if (!saw_header) {
-					continue;
-				}
-				if (!GLib.Regex.match_simple(
-						"^(RUNNING|STOPPED|FROZEN|STARTING|ABORTING|STOPPING)$",
-						fields[1], 0, 0)) {
-					continue;
-				}
-				if (!GLib.Regex.match_simple(
-						"^[A-Za-z0-9][A-Za-z0-9_.-]*$", fields[0], 0, 0)) {
-					continue;
-				}
-				names += fields[0];
-			}
-			GLib.debug("lxc-ls parsed name=%s header=%d count=%d",
-				this.connection.name, (int) saw_header, names.length);
-			this.containers_found(names);
-		}
-
-		/**
-		 * After a sudo password was fed, ``Sorry, try again`` means it failed.
-		 */
-		private void on_sudo_fail()
-		{
-			if (!this.sudo_password_fed || this.sudo_done) {
-				return;
-			}
-			long col, row;
-			this.terminal.get_cursor_position(out col, out row);
-			size_t len;
-			var start = row > 6 ? row - 6 : 0;
-			var raw = this.terminal.get_text_range_format(
-				Vte.Format.TEXT, start, 0, row, col, out len
-			);
-			if (raw == null) {
-				return;
-			}
-			if (raw.index_of("Sorry, try again") < 0
-					&& raw.index_of("incorrect password attempt") < 0) {
-				return;
-			}
-			this.sudo_fail_armed = false;
-			this.sudo_password_fed = false;
-			GLib.debug("sudo password failed (sorry) name=%s", this.connection.name);
-			this.sudo_password_failed();
-		}
-
-		/**
-		 * Detect password/passphrase prompts and feed from connection / libsecret.
-		 */
-		private void on_password()
-		{
-			if (this.hide_input) {
-				return;
-			}
-			long col, row;
-			this.terminal.get_cursor_position(out col, out row);
-			size_t len;
-			var raw = this.terminal.get_text_range_format(Vte.Format.TEXT, row, 0, row, col, out len);
-			var line = raw != null ? raw.replace("\r", "").strip() : "";
-			if (line.length == 0) {
-				return;
-			}
-			if (!GLib.Regex.match_simple(
-					"(password|passphrase|\\[sudo\\].*password).*:\\s*$",
-					line, GLib.RegexCompileFlags.CASELESS, 0)) {
-				return;
-			}
-			var is_sudo = GLib.Regex.match_simple(
-				"\\[sudo\\].*password.*:\\s*$", line, GLib.RegexCompileFlags.CASELESS, 0
-			);
-			GLib.debug("password line=%s sudo=%d sent=%d auth=%s pass_len=%d name=%s",
-				line, (int) is_sudo, (int) this.sent_secret, this.connection.auth,
-				this.connection.pass.length, this.connection.name);
-			if (is_sudo && this.sudo_password_fed && !this.sudo_done) {
-				if (this.sudo_fail_armed) {
-					this.sudo_fail_armed = false;
-					this.sudo_password_fed = false;
-					GLib.debug("sudo password failed name=%s", this.connection.name);
-					this.sudo_password_failed();
-				}
-				return;
-			}
-			if (this.sent_secret) {
-				return;
-			}
-			if (GLib.Regex.match_simple("passphrase.*:\\s*$", line, GLib.RegexCompileFlags.CASELESS, 0)
-				&& this.connection.passphrase.length > 0
-				&& this.connection.auth != "manual") {
-				this.sent_secret = true;
-				this.terminal.feed_child((this.connection.passphrase + "\n").data);
-				GLib.debug("fed passphrase name=%s", this.connection.name);
-				return;
-			}
-			if (!GLib.Regex.match_simple("password.*:\\s*$", line, GLib.RegexCompileFlags.CASELESS, 0)
-					&& !is_sudo) {
-				GLib.debug("password skip no match name=%s", this.connection.name);
-				return;
-			}
-			if (this.connection.auth == "manual") {
-				GLib.debug("password skip manual name=%s", this.connection.name);
-				return;
-			}
-			if (!is_sudo
-					&& (this.connection.auth == "ssh_key" || this.connection.auth == "publickey")
-					&& !this.install_key) {
-				GLib.debug("password skip ssh_key name=%s", this.connection.name);
-				return;
-			}
-			if (this.connection.pass.length == 0) {
-				var secret_uuid = this.connection.uuid;
-				if (this.connection.kind == ConnectionKind.LXC && this.connection.parent_uuid.length > 0) {
-					secret_uuid = this.connection.parent_uuid;
-				}
-				try {
-					var pass = Secret.password_lookup_sync(
-						new Secret.Schema(
-							"org.roojs.rooterm.Connection", Secret.SchemaFlags.NONE,
-							"uuid", Secret.SchemaAttributeType.STRING
-						),
-						null,
-						"uuid",
-						secret_uuid
-					);
-					this.connection.pass = pass != null ? pass : "";
-				} catch (GLib.Error e) {
-					GLib.warning("secret load failed uuid=%s: %s", secret_uuid, e.message);
-				}
-				GLib.debug("password secret uuid=%s pass_len=%d name=%s",
-					secret_uuid, this.connection.pass.length, this.connection.name);
-			}
-			if (this.connection.pass.length == 0) {
-				GLib.debug("password skip empty name=%s line=%s", this.connection.name, line);
-				if (is_sudo) {
-					this.terminal.feed(
-						"\r\n# RooTerm: no sudo password in keyring — edit connection and save it\r\n".data
-					);
-					this.sudo_password_failed();
-				}
-				return;
-			}
-			this.sent_secret = true;
-			this.hide_input = true;
-			this.terminal.feed_child((this.connection.pass + "\n").data);
-			this.hide_input = false;
-			if (is_sudo) {
-				this.sudo_password_fed = true;
-				this.sudo_fail_armed = false;
-				GLib.Timeout.add(500, () => {
-					if (this.sudo_password_fed && !this.sudo_done) {
-						this.sudo_fail_armed = true;
-					}
-					return false;
-				});
-			}
-			GLib.debug("fed password name=%s sudo=%d", this.connection.name, (int) is_sudo);
 		}
 
 		/**
@@ -519,28 +203,6 @@ echo RooTerm: old key removed
 			var identity = this.install_identity;
 			this.install_key = false;
 			this.key_installed(identity);
-		}
-
-		/**
-		 * Watch for ``RooTerm: old key removed`` after {@link remove_old_key}.
-		 */
-		private void on_remove_old()
-		{
-			if (!this.remove_old_key || !this.remove_sent) {
-				return;
-			}
-			long col, row;
-			this.terminal.get_cursor_position(out col, out row);
-			size_t len;
-			var raw = this.terminal.get_text_range_format(
-				Vte.Format.TEXT, 0, 0, row, col, out len
-			);
-			if (raw == null || raw.index_of("RooTerm: old key removed") < 0) {
-				return;
-			}
-			this.remove_old_key = false;
-			GLib.debug("old key removed name=%s", this.connection.name);
-			this.old_key_removed();
 		}
 
 		/**
