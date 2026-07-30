@@ -21,9 +21,10 @@ namespace RooTerm
 	/**
 	 * RooTerm GNOME Shell extension (``rooterm@roojs.com``).
 	 *
-	 * Installs the bundled extension into the user extensions dir (unless a
-	 * system copy is already present), enables it, and if Shell has not loaded
-	 * it yet (common on Wayland until a session restart) shows a hint dialog.
+	 * Compares the bundled ``metadata.json`` ``version`` to the installed
+	 * copy; installs or upgrades into the user extensions dir when newer,
+	 * enables it, and if Shell has not loaded the new code yet (common on
+	 * Wayland until a session restart) shows a hint dialog.
 	 *
 	 * == Example ==
 	 *
@@ -52,8 +53,8 @@ namespace RooTerm
 		}
 
 		/**
-		 * Install from GResource if needed, enable when Shell knows it, else
-		 * explain session restart.
+		 * Install or upgrade from GResource when the bundled version is
+		 * newer, enable when Shell knows it, else explain session restart.
 		 */
 		public void ensure()
 		{
@@ -67,16 +68,47 @@ namespace RooTerm
 				"/usr/share/gnome-shell/extensions", this.uuid, "metadata.json"
 			);
 
-			if (!GLib.FileUtils.test(system_meta, GLib.FileTest.IS_REGULAR)) {
+			var bundled = 0;
+			try {
+				var bundled_data = GLib.resources_lookup_data(
+					"/rooterm/extension/metadata.json", GLib.ResourceLookupFlags.NONE
+				);
+				var bundled_parser = new Json.Parser();
+				bundled_parser.load_from_data(
+					(string) bundled_data.get_data(), (ssize_t) bundled_data.get_size()
+				);
+				bundled = (int) bundled_parser.get_root().get_object().get_int_member("version");
+			} catch (GLib.Error e) {
+				GLib.warning("Shell extension bundled metadata: %s", e.message);
+			}
+
+			var installed = 0;
+			foreach (var path in new string[] { user_meta, system_meta }) {
+				if (!GLib.FileUtils.test(path, GLib.FileTest.IS_REGULAR)) {
+					continue;
+				}
+				try {
+					var installed_parser = new Json.Parser();
+					installed_parser.load_from_file(path);
+					installed = (int) installed_parser.get_root().get_object().get_int_member("version");
+				} catch (GLib.Error e) {
+					GLib.debug("Shell extension metadata %s: %s", path, e.message);
+				}
+				break;
+			}
+
+			var updated = false;
+			if (bundled > 0 && installed < bundled) {
 				try {
 					this.install(data_home, user_dir);
+					updated = true;
 				} catch (GLib.Error e) {
 					GLib.warning("Shell extension install failed: %s", e.message);
 					var key = Config.load().toggle_key;
 					var body = @"Could not install the RooTerm GNOME Shell extension:
 $(e.message)
 
-Global $(key) / panel Toggle will not work until this is fixed. You can still use this window, or run: rooterm --toggle";
+Global $(key) / panel icon will not work until this is fixed. You can still use this window, or run: rooterm --toggle";
 					var alert = new Adw.AlertDialog("Shell extension install failed", body);
 					alert.add_response("ok", "OK");
 					alert.default_response = "ok";
@@ -117,12 +149,17 @@ Global $(key) / panel Toggle will not work until this is fixed. You can still us
 				GLib.debug("Shell extension check failed: %s", e.message);
 			}
 
+			if (updated) {
+				this.show_restart_shell_messages();
+				return;
+			}
+
 			if (enabled) {
 				return;
 			}
 
 			if (!shell_knows) {
-				this.show_restart_shell_messages(false);
+				this.show_restart_shell_messages();
 				return;
 			}
 
@@ -146,28 +183,22 @@ Global $(key) / panel Toggle will not work until this is fixed. You can still us
 			if (enabled) {
 				return;
 			}
-			this.show_restart_shell_messages(true);
+			this.show_restart_shell_messages();
 		}
 
 		/**
-		 * Show why the global toggle / panel Toggle is not active yet.
-		 *
-		 * @param shell_knows Whether Shell already lists this UUID
+		 * Show why the global toggle / panel icon is not active yet.
 		 */
-		public void show_restart_shell_messages(bool shell_knows)
+		public void show_restart_shell_messages()
 		{
 			var key = Config.load().toggle_key;
-			var middle = @"On Wayland, log out and back in (or restart the session) once so Shell picks up the new extension. After that, $(key) and the panel icon work.
-
-";
-			if (GLib.Environment.get_variable("XDG_SESSION_TYPE") != "wayland" && shell_knows) {
-				middle = @"Try Extensions → enable \"RooTerm\", or: gnome-extensions enable $(this.uuid)
-
-";
+			var middle = "You are using Wayland, so unfortunately the only way is to log out and log in again.";
+			if (GLib.Environment.get_variable("XDG_SESSION_TYPE") != "wayland") {
+				middle = "Press Alt+F2, type r, and press Enter.";
 			}
-			var body = @"RooTerm's GNOME Shell extension is installed (global $(key) / panel Toggle), but GNOME Shell has not loaded it yet.
+			var body = @"$(middle)
 
-$(middle)Until then you can use this window normally, or run: rooterm --toggle";
+After that, $(key) and the panel icon will work.";
 			var alert = new Adw.AlertDialog("Shell extension needs a session restart", body);
 			alert.add_response("ok", "OK");
 			alert.default_response = "ok";

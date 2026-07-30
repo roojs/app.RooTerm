@@ -1,5 +1,7 @@
+import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
+import GObject from 'gi://GObject';
 import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
@@ -13,37 +15,62 @@ const DBUS_DEST = 'org.roojs.RooTerm.DBus';
 const DBUS_PATH = '/org/roojs/RooTerm/DBus';
 const DBUS_IFACE = 'org.roojs.RooTerm.DBus';
 
+const RooTermIndicator = GObject.registerClass(
+class RooTermIndicator extends PanelMenu.Button {
+    _init(extension) {
+        super._init(0.0, 'RooTerm', false);
+        this._extension = extension;
+
+        this.add_child(new St.Icon({
+            icon_name: 'utilities-terminal-symbolic',
+            style_class: 'system-status-icon',
+        }));
+
+        var self = this;
+        var quitItem = new PopupMenu.PopupMenuItem('Quit');
+        quitItem.connect('activate', function() {
+            Gio.DBus.session.call(
+                DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'Quit',
+                null, null, Gio.DBusCallFlags.NONE, 2000, null,
+                self._extension.onDBusFinished.bind(self._extension, 'Quit')
+            );
+        });
+        this.menu.addMenuItem(quitItem);
+    }
+
+    vfunc_event(event) {
+        if (!this.menu) {
+            return Clutter.EVENT_PROPAGATE;
+        }
+        if (event.type() !== Clutter.EventType.TOUCH_BEGIN &&
+            event.type() !== Clutter.EventType.BUTTON_PRESS) {
+            return Clutter.EVENT_PROPAGATE;
+        }
+
+        // Left click / touch → toggle; right click → menu
+        if (event.type() === Clutter.EventType.TOUCH_BEGIN ||
+            event.get_button() === Clutter.BUTTON_PRIMARY) {
+            Gio.DBus.session.call(
+                DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'Toggle',
+                null, null, Gio.DBusCallFlags.NONE, 2000, null,
+                this._extension.onDBusFinished.bind(this._extension, 'Toggle')
+            );
+            return Clutter.EVENT_PROPAGATE;
+        }
+        if (event.get_button() === Clutter.BUTTON_SECONDARY) {
+            this.menu.toggle();
+        }
+        return Clutter.EVENT_PROPAGATE;
+    }
+});
+
 export default class RooTermExtension extends Extension {
     enable() {
         var self = this;
         this.settings = this.getSettings();
         this.keybindingNames = [];
 
-        this.indicator = new PanelMenu.Button(0.0, 'RooTerm', false);
-        this.indicator.add_child(new St.Icon({
-            icon_name: 'utilities-terminal-symbolic',
-            style_class: 'system-status-icon',
-        }));
-
-        var toggleItem = new PopupMenu.PopupMenuItem('Toggle');
-        toggleItem.connect('activate', function() {
-            Gio.DBus.session.call(
-                DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'Toggle',
-                null, null, Gio.DBusCallFlags.NONE, 2000, null,
-                self.onDBusFinished.bind(self, 'Toggle')
-            );
-        });
-        this.indicator.menu.addMenuItem(toggleItem);
-
-        var quitItem = new PopupMenu.PopupMenuItem('Quit');
-        quitItem.connect('activate', function() {
-            Gio.DBus.session.call(
-                DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'Quit',
-                null, null, Gio.DBusCallFlags.NONE, 2000, null,
-                self.onDBusFinished.bind(self, 'Quit')
-            );
-        });
-        this.indicator.menu.addMenuItem(quitItem);
+        this.indicator = new RooTermIndicator(this);
 
         if (Main.layoutManager && Main.layoutManager.uiGroup) {
             this.panelTooltip = new St.BoxLayout({
@@ -67,7 +94,7 @@ export default class RooTermExtension extends Extension {
                     key = shortcuts[0];
                 }
             }
-            self.panelTooltipLabel.text = key + ' — hide/show · use rooterm --toggle-key to change';
+            self.panelTooltipLabel.text = key + ' / click — hide/show · right-click for Quit';
             var pos = self.indicator.get_transformed_position();
             var size = self.indicator.get_transformed_size();
             self.panelTooltip.set_position(pos[0], pos[1] + size[1] + 5);
@@ -83,6 +110,26 @@ export default class RooTermExtension extends Extension {
         });
 
         Main.panel.addToStatusArea('rooterm', this.indicator, 1, 'right');
+        this.indicator.visible = false;
+        this.nameWatchId = Gio.DBus.session.watch_name(
+            DBUS_DEST,
+            Gio.BusNameWatcherFlags.NONE,
+            function() {
+                if (self.indicator) {
+                    self.indicator.visible = true;
+                }
+            },
+            function() {
+                if (self.panelTooltip) {
+                    self.panelTooltip.visible = false;
+                    self.panelTooltip.opacity = 0;
+                }
+                if (self.indicator) {
+                    self.indicator.menu.close();
+                    self.indicator.visible = false;
+                }
+            }
+        );
         this.registerKeybindings();
         this.settings.connect('changed::toggle', function() {
             self.registerKeybindings();
@@ -90,6 +137,10 @@ export default class RooTermExtension extends Extension {
     }
 
     disable() {
+        if (this.nameWatchId) {
+            Gio.DBus.session.unwatch_name(this.nameWatchId);
+            this.nameWatchId = 0;
+        }
         for (var i = 0; i < this.keybindingNames.length; i++) {
             Main.wm.removeKeybinding(this.keybindingNames[i]);
         }
