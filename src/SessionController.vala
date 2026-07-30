@@ -104,7 +104,6 @@ namespace RooTerm
 
 			var term = new SshTerminal(connection, this.terminal_font, stream);
 			var tab = page.add(term);
-			tab.title = term.label();
 			term.close_tab.connect(() => {
 				page.tab_view.close_page(tab);
 			});
@@ -186,7 +185,6 @@ namespace RooTerm
 
 			var term = new LocalTerminal(connection, this.terminal_font, cwd);
 			var tab = page.add(term);
-			tab.title = term.label();
 			term.close_tab.connect(() => {
 				page.tab_view.close_page(tab);
 			});
@@ -241,6 +239,45 @@ namespace RooTerm
 			page.tab_view.close_page(page.tab_view.selected_page);
 			this.focus();
 			return true;
+		}
+
+		/**
+		 * Move selection by ``delta`` tabs within the visible host page.
+		 *
+		 * @param delta ``-1`` previous / ``1`` next (wraps)
+		 */
+		public void select_tab(int delta)
+		{
+			if (this.shown_uuid.length == 0 || !this.by_uuid.has_key(this.shown_uuid)) {
+				return;
+			}
+			var page = this.by_uuid.get(this.shown_uuid);
+			if (page.tab_view.n_pages < 2 || page.tab_view.selected_page == null) {
+				return;
+			}
+			var next = (page.tab_view.get_page_position(page.tab_view.selected_page) + delta)
+				% page.tab_view.n_pages;
+			next = next < 0 ? next + page.tab_view.n_pages : next;
+			page.tab_view.selected_page = page.tab_view.get_nth_page(next);
+			this.focus();
+			if (page.current != null) {
+				page.current.terminal.grab_focus();
+			}
+		}
+
+		/**
+		 * Select all text in the focused VTE.
+		 */
+		public void select_all()
+		{
+			if (this.shown_uuid.length == 0 || !this.by_uuid.has_key(this.shown_uuid)) {
+				return;
+			}
+			var page = this.by_uuid.get(this.shown_uuid);
+			if (page.current == null) {
+				return;
+			}
+			page.current.terminal.select_all();
 		}
 
 		/**

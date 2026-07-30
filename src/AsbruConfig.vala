@@ -38,14 +38,6 @@ namespace RooTerm
 		 * Global ``defaults.terminal font`` (e.g. ``Monospace 9``).
 		 */
 		public string terminal_font = "Monospace 9";
-		/**
-		 * Global ``defaults.terminal windows hsize``.
-		 */
-		public int window_width = 1024;
-		/**
-		 * Global ``defaults.terminal windows vsize``.
-		 */
-		public int window_height = 768;
 
 		/**
 		 * Load config from the default Ásbrú path or an override.
@@ -196,12 +188,6 @@ namespace RooTerm
 							if (key == "terminal font" && val.length > 0) {
 								this.terminal_font = val;
 							}
-							if (key == "terminal windows hsize" && val.length > 0) {
-								this.window_width = int.parse(val);
-							}
-							if (key == "terminal windows vsize" && val.length > 0) {
-								this.window_height = int.parse(val);
-							}
 							want_key = true;
 							continue;
 						}
@@ -231,8 +217,8 @@ namespace RooTerm
 				return a.name.collate(b.name);
 			});
 
-			GLib.debug("loaded connections=%d roots=%d font=%s size=%dx%d from %s",
-				this.by_uuid.size, this.roots.size, this.terminal_font, this.window_width, this.window_height, this.path);
+			GLib.debug("loaded connections=%d roots=%d font=%s from %s",
+				this.by_uuid.size, this.roots.size, this.terminal_font, this.path);
 		}
 
 		/**
@@ -248,8 +234,6 @@ namespace RooTerm
 		{
 			var config = new Config();
 			config.terminal_font = this.terminal_font;
-			config.window_width = this.window_width;
-			config.window_height = this.window_height;
 			foreach (var conn in this.by_uuid.values) {
 				if (conn.auth == "publickey") {
 					conn.auth = "ssh_key";

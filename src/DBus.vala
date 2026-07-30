@@ -22,7 +22,7 @@ namespace RooTerm
 	 * Session-bus API for Guake toggle / quit (Shell extension + CLI).
 	 *
 	 * Owns ``org.roojs.RooTerm.DBus`` at ``/org/roojs/RooTerm/DBus``.
-	 * Methods export as ``Toggle`` / ``Quit`` on the bus. Constructed from
+	 * Methods export as ``Toggle`` / ``Quit`` / ``About`` on the bus. Constructed from
 	 * {@link Application.startup}; the Shell extension (15b) calls it for global F12.
 	 *
 	 * == Example ==
@@ -69,19 +69,32 @@ namespace RooTerm
 		}
 
 		/**
+		 * Fired after a successful show (Shell extension docks under the panel).
+		 */
+		public signal void shown();
+
+		/**
 		 * Toggle main window: create if missing, else hide when visible / present when hidden.
 		 */
 		public void toggle()
 		{
-			if (this.application.active_window == null) {
+			if (this.application.window == null) {
 				this.application.activate();
+				this.shown();
 				return;
 			}
-			if (this.application.active_window.visible) {
-				this.application.active_window.visible = false;
+			var window = this.application.window;
+			if (window.visible) {
+				window.visible = false;
 				return;
 			}
-			this.application.active_window.present();
+			window.visible = true;
+			window.present();
+			window.set_default_size(
+				window.monitor_geo.width * window.config.width / 100,
+				window.monitor_geo.height * window.config.height / 100
+			);
+			this.shown();
 		}
 
 		/**
@@ -90,6 +103,27 @@ namespace RooTerm
 		public void quit()
 		{
 			this.application.quit();
+		}
+
+		/**
+		 * Present {@link Adw.AboutDialog} (Shell panel menu).
+		 */
+		public void about()
+		{
+			if (this.application.window == null) {
+				this.application.activate();
+			}
+			var about = new Adw.AboutDialog() {
+				application_name = "Roo Term",
+				application_icon = "org.roojs.rooterm",
+				developer_name = "Alan Knowles",
+				version = "0.1.0",
+				website = "https://github.com/roojs/app.RooTerm",
+				issue_url = "https://github.com/roojs/app.RooTerm/issues",
+				license_type = Gtk.License.LGPL_3_0,
+				comments = "Guake-style drop-down terminal with Ásbrú-cm-like hosts."
+			};
+			about.present(this.application.window);
 		}
 	}
 }

@@ -14,12 +14,13 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 const DBUS_DEST = 'org.roojs.RooTerm.DBus';
 const DBUS_PATH = '/org/roojs/RooTerm/DBus';
 const DBUS_IFACE = 'org.roojs.RooTerm.DBus';
+const APP_ID = 'org.roojs.rooterm';
 
 const RooTermIndicator = GObject.registerClass(
 class RooTermIndicator extends PanelMenu.Button {
     _init(extension) {
         super._init(0.0, 'RooTerm', false);
-        this._extension = extension;
+        this.extension = extension;
 
         this.add_child(new St.Icon({
             icon_name: 'utilities-terminal-symbolic',
@@ -27,12 +28,22 @@ class RooTermIndicator extends PanelMenu.Button {
         }));
 
         var self = this;
+        var aboutItem = new PopupMenu.PopupMenuItem('About');
+        aboutItem.connect('activate', function() {
+            Gio.DBus.session.call(
+                DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'About',
+                null, null, Gio.DBusCallFlags.NONE, 2000, null,
+                self.extension.onDBusFinished.bind(self.extension, 'About')
+            );
+        });
+        this.menu.addMenuItem(aboutItem);
+
         var quitItem = new PopupMenu.PopupMenuItem('Quit');
         quitItem.connect('activate', function() {
             Gio.DBus.session.call(
                 DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'Quit',
                 null, null, Gio.DBusCallFlags.NONE, 2000, null,
-                self._extension.onDBusFinished.bind(self._extension, 'Quit')
+                self.extension.onDBusFinished.bind(self.extension, 'Quit')
             );
         });
         this.menu.addMenuItem(quitItem);
@@ -42,18 +53,18 @@ class RooTermIndicator extends PanelMenu.Button {
         if (!this.menu) {
             return Clutter.EVENT_PROPAGATE;
         }
-        if (event.type() !== Clutter.EventType.TOUCH_BEGIN &&
-            event.type() !== Clutter.EventType.BUTTON_PRESS) {
+        if (event.type() !== Clutter.EventType.TOUCH_BEGIN
+                && event.type() !== Clutter.EventType.BUTTON_PRESS) {
             return Clutter.EVENT_PROPAGATE;
         }
 
         // Left click / touch → toggle; right click → menu
-        if (event.type() === Clutter.EventType.TOUCH_BEGIN ||
-            event.get_button() === Clutter.BUTTON_PRIMARY) {
+        if (event.type() === Clutter.EventType.TOUCH_BEGIN
+                || event.get_button() === Clutter.BUTTON_PRIMARY) {
             Gio.DBus.session.call(
                 DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'Toggle',
                 null, null, Gio.DBusCallFlags.NONE, 2000, null,
-                this._extension.onDBusFinished.bind(this._extension, 'Toggle')
+                this.extension.onDBusFinished.bind(this.extension, 'Toggle')
             );
             return Clutter.EVENT_PROPAGATE;
         }
@@ -68,7 +79,10 @@ export default class RooTermExtension extends Extension {
     enable() {
         var self = this;
         this.settings = this.getSettings();
-        this.keybindingNames = [];
+        this.windowCreatedId = 0;
+        this.mapId = 0;
+        this.shownSignalId = 0;
+        this.dockTimeoutId = 0;
 
         this.indicator = new RooTermIndicator(this);
 
@@ -90,7 +104,7 @@ export default class RooTermExtension extends Extension {
             var key = 'F12';
             if (self.settings) {
                 var shortcuts = self.settings.get_strv('toggle');
-                if (shortcuts && shortcuts.length > 0) {
+                if (shortcuts && shortcuts.length > 0 && shortcuts[0]) {
                     key = shortcuts[0];
                 }
             }
@@ -130,21 +144,56 @@ export default class RooTermExtension extends Extension {
                 }
             }
         );
-        this.registerKeybindings();
-        this.settings.connect('changed::toggle', function() {
-            self.registerKeybindings();
+        // Global toggle is a settings-daemon custom shortcut (rooterm --toggle).
+        // Dock on map / Shown so media-keys path still pins under the panel.
+        this.windowCreatedId = global.display.connect('window-created', function(display, window) {
+            window.connect('shown', function() {
+                self.dockWindow(window);
+            });
         });
+        this.mapId = global.window_manager.connect('map', function(wm, actor) {
+            self.dockWindow(actor.meta_window);
+        });
+        this.shownSignalId = Gio.DBus.session.signal_subscribe(
+            DBUS_DEST, DBUS_IFACE, 'Shown', DBUS_PATH, null,
+            Gio.DBusSignalFlags.NONE,
+            function() {
+                if (self.dockTimeoutId) {
+                    GLib.source_remove(self.dockTimeoutId);
+                }
+                self.dockTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 80, function() {
+                    self.dockTimeoutId = 0;
+                    var actors = global.get_window_actors();
+                    for (var i = 0; i < actors.length; i++) {
+                        self.dockWindow(actors[i].meta_window);
+                    }
+                    return GLib.SOURCE_REMOVE;
+                });
+            }
+        );
     }
 
     disable() {
+        if (this.dockTimeoutId) {
+            GLib.source_remove(this.dockTimeoutId);
+            this.dockTimeoutId = 0;
+        }
+        if (this.windowCreatedId) {
+            global.display.disconnect(this.windowCreatedId);
+            this.windowCreatedId = 0;
+        }
+        if (this.mapId) {
+            global.window_manager.disconnect(this.mapId);
+            this.mapId = 0;
+        }
+        if (this.shownSignalId) {
+            Gio.DBus.session.signal_unsubscribe(this.shownSignalId);
+            this.shownSignalId = 0;
+        }
         if (this.nameWatchId) {
             Gio.DBus.session.unwatch_name(this.nameWatchId);
             this.nameWatchId = 0;
         }
-        for (var i = 0; i < this.keybindingNames.length; i++) {
-            Main.wm.removeKeybinding(this.keybindingNames[i]);
-        }
-        this.keybindingNames = [];
         if (this.panelTooltip) {
             this.panelTooltip.destroy();
             this.panelTooltip = null;
@@ -157,43 +206,80 @@ export default class RooTermExtension extends Extension {
         this.settings = null;
     }
 
-    registerKeybindings() {
-        for (var i = 0; i < this.keybindingNames.length; i++) {
-            Main.wm.removeKeybinding(this.keybindingNames[i]);
-        }
-        this.keybindingNames = [];
-        if (!this.settings) {
-            return;
-        }
-        var shortcuts = this.settings.get_strv('toggle');
-        if (!shortcuts || shortcuts.length === 0) {
-            return;
-        }
-        var self = this;
-        Main.wm.addKeybinding('toggle', this.settings, Meta.KeyBindingFlags.NONE, Shell.ActionMode.ALL,
-            function() {
-                Gio.DBus.session.call(
-                    DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'Toggle',
-                    null, null, Gio.DBusCallFlags.NONE, 2000, null,
-                    self.onDBusFinished.bind(self, 'Toggle')
-                );
-            });
-        this.keybindingNames.push('toggle');
-    }
-
     onDBusFinished(method, conn, result) {
+        var self = this;
         try {
             conn.call_finish(result);
-            return;
         } catch (e) {
             if (method !== 'Toggle') {
                 return;
             }
+            try {
+                GLib.spawn_command_line_async('rooterm --toggle');
+            } catch (spawnErr) {
+                console.error('rooterm: spawn failed: ' + spawnErr);
+                return;
+            }
+        }
+        if (method !== 'Toggle') {
+            return;
+        }
+        if (this.dockTimeoutId) {
+            GLib.source_remove(this.dockTimeoutId);
+        }
+        // Brief delay so Toggle show/map finishes before Mutter move.
+        this.dockTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 80, function() {
+            self.dockTimeoutId = 0;
+            var actors = global.get_window_actors();
+            for (var i = 0; i < actors.length; i++) {
+                self.dockWindow(actors[i].meta_window);
+            }
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    /**
+     * If ``win`` is RooTerm, move it under the top panel and keep it above.
+     */
+    dockWindow(win) {
+        if (!win || win.minimized) {
+            return;
+        }
+        var match = false;
+        try {
+            match = win.get_gtk_application_id && win.get_gtk_application_id() === APP_ID;
+        } catch (e) {
+        }
+        if (!match) {
+            var cls = win.get_wm_class();
+            var instance = win.get_wm_class_instance();
+            match = (cls && cls.toLowerCase().indexOf('rooterm') !== -1)
+                || (instance && instance.toLowerCase().indexOf('rooterm') !== -1);
+        }
+        if (!match) {
+            return;
+        }
+        var monitor = Main.layoutManager.monitors[win.get_monitor()]
+            || Main.layoutManager.primaryMonitor;
+        if (!monitor) {
+            return;
+        }
+        var rect = win.get_frame_rect();
+        var height = rect.height > 0 ? rect.height : Math.floor(monitor.height * 60 / 100);
+        try {
+            win.unmaximize(Meta.MaximizeFlags.HORIZONTAL | Meta.MaximizeFlags.VERTICAL);
+        } catch (e) {
         }
         try {
-            GLib.spawn_command_line_async('rooterm --toggle');
-        } catch (spawnErr) {
-            console.error('rooterm: spawn failed: ' + spawnErr);
+            win.make_above();
+        } catch (e) {
         }
+        try {
+            win.stick();
+        } catch (e) {
+        }
+        win.move_resize_frame(true, monitor.x,
+            monitor.y + Main.layoutManager.panelBox.get_height(),
+            monitor.width, height);
     }
 }

@@ -20,7 +20,8 @@ namespace RooTerm
 {
 	/**
 	 * One host: {@link Adw.TabView} of {@link Terminal}s with an {@link Adw.TabBar}
-	 * always shown (even for a single tab). Localhost also keeps path children in the tree.
+	 * at the bottom (always shown). Localhost also keeps path children in the tree.
+	 * Tab-strip ``+`` runs ``win.new-terminal`` (same as Ctrl+Shift+T).
 	 * Open terminals live on {@link Connection.sessions} for the host tree.
 	 */
 	public class HostPage : Gtk.Box
@@ -73,12 +74,21 @@ namespace RooTerm
 				hexpand = true,
 				vexpand = true
 			};
+			this.tab_view.add_css_class("vte-host");
 			this.tab_bar = new Adw.TabBar() {
 				view = this.tab_view,
-				autohide = false
+				autohide = false,
+				expand_tabs = false,
+				hexpand = true,
+				end_action_widget = new Gtk.Button.from_icon_name("list-add-symbolic") {
+					tooltip_text = "Ctrl+Shift+T",
+					has_frame = false,
+					action_name = "win.new-terminal"
+				}
 			};
-			this.append(this.tab_bar);
+			this.tab_bar.add_css_class("thin-tabbar");
 			this.append(this.tab_view);
+			this.append(this.tab_bar);
 			this.tab_view.notify["selected-page"].connect(() => {
 				this.wire();
 				this.changed();
@@ -86,7 +96,7 @@ namespace RooTerm
 			this.tab_view.close_page.connect((page) => {
 				var term = (Terminal) page.child;
 				if (!term.close_confirmed) {
-					term.close_in(30);
+					term.close_in(5);
 					this.tab_view.close_page_finish(page, false);
 					return true;
 				}
@@ -122,11 +132,17 @@ namespace RooTerm
 			this.connection.sessions.append(term);
 			term.label_changed.connect(() => {
 				var tab = this.tab_view.get_page(term);
-				tab.title = term.label();
+				var text = term.label();
+				tab.tooltip = text;
+				tab.title = text;
 				this.sync_paths();
 				this.changed();
 			});
-			return this.tab_view.append(term);
+			var tab = this.tab_view.append(term);
+			var text = term.label();
+			tab.tooltip = text;
+			tab.title = text;
+			return tab;
 		}
 
 		/**

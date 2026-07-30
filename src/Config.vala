@@ -25,8 +25,14 @@ namespace RooTerm
 	{
 		public int version { get; set; default = 1; }
 		public string terminal_font { get; set; default = "Monospace 9"; }
-		public int window_width { get; set; default = 1024; }
-		public int window_height { get; set; default = 768; }
+		/**
+		 * Drop-down width as percent of the monitor (1–100). Full width for now.
+		 */
+		public int width { get; set; default = 100; }
+		/**
+		 * Drop-down height as percent of the monitor (1–100).
+		 */
+		public int height { get; set; default = 60; }
 		/**
 		 * Guake global toggle key (Shell extension / ``--toggle-key``).
 		 */

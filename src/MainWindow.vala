@@ -19,18 +19,23 @@
 namespace RooTerm
 {
 	/**
-	 * Main window: header, host search, host tree, and host terminal stack.
-	 * Window close closes the current terminal (then shows another if any).
+	 * Guake-style drop-down: undecorated Gtk window, host tree + search on the
+	 * left, terminal stack on the right. Shell extension docks it under the
+	 * top panel. Window close closes the current terminal (then shows another
+	 * if any); hide via toggle rather than quit.
 	 */
-	public class MainWindow : Adw.ApplicationWindow
+	public class MainWindow : Gtk.ApplicationWindow
 	{
-		private Adw.HeaderBar header_bar;
 		public HostSearchPulldown host_search;
 		public HostTree host_tree;
 		public HostStack host_stack;
 		public SessionController sessions;
 		public Config config;
-		private Gtk.Paned paned;
+		public Connection localhost;
+		/**
+		 * Primary monitor geometry (Shell docks; size percents use this).
+		 */
+		public Gdk.Rectangle monitor_geo;
 
 		/**
 		 * Builds the window: title, search pulldown, host tree, session stack.
@@ -47,13 +52,25 @@ namespace RooTerm
 				config = new Config();
 			}
 
+			var monitors = Gdk.Display.get_default().get_monitors();
+			var geo = Gdk.Rectangle() { width = 1280, height = 800 };
+			if (monitors.get_n_items() > 0) {
+				geo = ((Gdk.Monitor) monitors.get_item(0)).geometry;
+			}
+			int width_px = geo.width * config.width / 100;
+			int height_px = geo.height * config.height / 100;
+
 			Object(
 				application: app,
 				title: "Roo Term",
 				icon_name: "org.roojs.rooterm",
-				default_width: config.window_width,
-				default_height: config.window_height
+				decorated: false,
+				resizable: false,
+				default_width: width_px,
+				default_height: height_px
 			);
+			this.monitor_geo = geo;
+			this.add_css_class("drop-down");
 
 			var css = new Gtk.CssProvider();
 			css.load_from_resource("/style.css");
@@ -64,12 +81,12 @@ namespace RooTerm
 			);
 
 			this.config = config;
-			var localhost = new Connection() {
+			this.localhost = new Connection() {
 				uuid = "localhost",
 				name = "Localhost",
 				kind = ConnectionKind.LOCAL
 			};
-			this.config.tree.append(null, localhost);
+			this.config.tree.append(null, this.localhost);
 			this.config.tree.sort((a, b) => {
 				if (a.kind == ConnectionKind.LOCAL) {
 					return -1;
@@ -84,38 +101,22 @@ namespace RooTerm
 				return false;
 			});
 
-			this.header_bar = new Adw.HeaderBar();
-			var logo = new Gtk.Image.from_icon_name("utilities-terminal-symbolic") {
-				pixel_size = 20,
-				valign = Gtk.Align.CENTER
-			};
-			var title_label = new Gtk.Label("Roo Term") {
-				valign = Gtk.Align.CENTER
-			};
-			title_label.add_css_class("heading");
-			var brand = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 8) {
-				valign = Gtk.Align.CENTER
-			};
-			brand.append(logo);
-			brand.append(title_label);
-			this.header_bar.pack_start(brand);
-
 			this.host_search = new HostSearchPulldown(this.config) {
-				halign = Gtk.Align.CENTER,
-				hexpand = false
+				halign = Gtk.Align.FILL,
+				hexpand = true,
+				vexpand = false,
+				margin_start = 6,
+				margin_end = 4,
+				margin_top = 4,
+				margin_bottom = 6,
+				placeholder_text = "Ctrl+Shift+O — search hosts"
 			};
-			this.header_bar.set_title_widget(this.host_search);
 
 			this.host_stack = new HostStack();
 			this.sessions = new SessionController(this.host_stack, this.config.tree);
 			this.sessions.terminal_font = this.config.terminal_font;
 			this.sessions.display_changed.connect(() => {
 				this.title = this.sessions.display;
-				if (this.sessions.display == "Roo Term") {
-					this.host_search.placeholder_text = "Ctrl+Shift+O";
-					return;
-				}
-				this.host_search.placeholder_text = this.sessions.display;
 			});
 			this.sessions.sudo_password_failed.connect((conn) => {
 				var alert = new Adw.AlertDialog(
@@ -264,42 +265,108 @@ namespace RooTerm
 
 			var new_term_action = new GLib.SimpleAction("new-terminal", null);
 			new_term_action.activate.connect(() => {
-				this.sessions.open_new(localhost, this);
+				this.sessions.open_new(this.localhost, this);
 			});
 			this.add_action(new_term_action);
 			app.set_accels_for_action("win.new-terminal", { "<Control><Shift>t" });
 
-			var tree_pos = (int) (config.window_width * 0.30);
-			this.paned = new Gtk.Paned(Gtk.Orientation.HORIZONTAL) {
-				start_child = this.host_tree,
+			var close_term_action = new GLib.SimpleAction("close-terminal", null);
+			close_term_action.activate.connect(() => {
+				this.sessions.close_current();
+			});
+			this.add_action(close_term_action);
+			app.set_accels_for_action("win.close-terminal", { "<Control><Shift>w" });
+
+			var prev_tab_action = new GLib.SimpleAction("prev-tab", null);
+			prev_tab_action.activate.connect(() => {
+				this.sessions.select_tab(-1);
+			});
+			this.add_action(prev_tab_action);
+			app.set_accels_for_action("win.prev-tab", { "<Control><Shift>Left" });
+
+			var next_tab_action = new GLib.SimpleAction("next-tab", null);
+			next_tab_action.activate.connect(() => {
+				this.sessions.select_tab(1);
+			});
+			this.add_action(next_tab_action);
+			app.set_accels_for_action("win.next-tab", { "<Control><Shift>Right" });
+
+			var select_all_action = new GLib.SimpleAction("select-all", null);
+			select_all_action.activate.connect(() => {
+				this.sessions.select_all();
+			});
+			this.add_action(select_all_action);
+			app.set_accels_for_action("win.select-all", { "<Control><Shift>a" });
+
+			var toggle_action = new GLib.SimpleAction("toggle", null);
+			toggle_action.activate.connect(() => {
+				app.dbus.toggle();
+			});
+			this.add_action(toggle_action);
+			// Shell / media-keys own the global binding; this covers in-app when focused.
+			app.set_accels_for_action("win.toggle", { this.config.toggle_key });
+
+			var tree_width = int.max(180, this.default_width * 18 / 100);
+			this.host_tree.add_css_class("host-tree");
+			this.host_tree.vexpand = true;
+			this.host_tree.hexpand = true;
+
+			// Left: tree scrolls; search pinned under it. Right: VTE + tabs (HostPage).
+			var left = new Gtk.Box(Gtk.Orientation.VERTICAL, 0) {
+				hexpand = false,
+				vexpand = true,
+				width_request = tree_width
+			};
+			left.add_css_class("host-pane");
+			left.append(this.host_tree);
+			left.append(this.host_search);
+
+			var paned = new Gtk.Paned(Gtk.Orientation.HORIZONTAL) {
+				start_child = left,
 				end_child = this.host_stack,
 				resize_start_child = false,
-				shrink_start_child = true,
-				position = tree_pos,
+				shrink_start_child = false,
+				position = tree_width,
 				hexpand = true,
 				vexpand = true
 			};
 
-			var content = new Gtk.Box(Gtk.Orientation.VERTICAL, 0);
-			content.append(this.header_bar);
-			content.append(this.paned);
-			this.content = content;
+			var shadow = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 0) {
+				hexpand = true,
+				vexpand = false,
+				height_request = 14,
+				can_target = false
+			};
+			shadow.add_css_class("drop-shadow");
+
+			var root = new Gtk.Box(Gtk.Orientation.VERTICAL, 0) {
+				hexpand = true,
+				vexpand = true
+			};
+			root.append(paned);
+			root.append(shadow);
+			this.child = root;
+
+			this.map.connect(() => {
+				this.set_default_size(
+					this.monitor_geo.width * this.config.width / 100,
+					this.monitor_geo.height * this.config.height / 100
+				);
+			});
 
 			this.close_request.connect(() => {
 				if (this.sessions.close_current()) {
 					return true;
 				}
+				this.visible = false;
+				return true;
+			});
+
+			this.sessions.open_local(this.localhost);
+			GLib.Idle.add(() => {
+				this.sessions.focus();
 				return false;
 			});
-		}
-
-		public override void size_allocate(int width, int height, int baseline)
-		{
-			base.size_allocate(width, height, baseline);
-			if (this.host_search == null) {
-				return;
-			}
-			this.host_search.width_request = (int) (width * 0.50);
 		}
 	}
 }

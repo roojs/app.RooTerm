@@ -148,6 +148,8 @@ namespace RooTerm
 				var bg = Gdk.RGBA();
 				fg.parse(root.get_string_member("foreground"));
 				bg.parse(root.get_string_member("background"));
+				// See desktop through the terminal (chrome stays theme-opaque).
+				bg.alpha = 0.85f;
 				var arr = root.get_array_member("palette");
 				var palette = new Gdk.RGBA[arr.get_length()];
 				for (var i = 0; i < arr.get_length(); i++) {
@@ -157,11 +159,17 @@ namespace RooTerm
 			} catch (GLib.Error e) {
 				GLib.warning("terminal theme: %s", e.message);
 			}
-			this.append(new Gtk.ScrolledWindow() {
+			var vte_frame = new Gtk.Box(Gtk.Orientation.VERTICAL, 0) {
+				hexpand = true,
+				vexpand = true
+			};
+			vte_frame.add_css_class("vte-frame");
+			vte_frame.append(new Gtk.ScrolledWindow() {
 				child = this.terminal,
 				hexpand = true,
 				vexpand = true
 			});
+			this.append(vte_frame);
 
 			this.close_progress = new Gtk.ProgressBar() {
 				fraction = 1.0,
@@ -196,6 +204,7 @@ namespace RooTerm
 				margin_top = 4,
 				margin_bottom = 6
 			};
+			this.close_bar.add_css_class("close-bar");
 			this.close_bar.append(close_now);
 			this.close_bar.append(this.close_progress);
 			this.close_bar.append(leave_open);
@@ -219,7 +228,33 @@ namespace RooTerm
 					return true;
 				})
 			));
+			shortcuts.add_shortcut(new Gtk.Shortcut(
+				Gtk.ShortcutTrigger.parse_string("<Control><Shift>a"),
+				new Gtk.CallbackAction(() => {
+					this.terminal.select_all();
+					return true;
+				})
+			));
 			this.terminal.add_controller(shortcuts);
+			// mouse zoom
+			var zoom = new Gtk.EventControllerScroll(
+				Gtk.EventControllerScrollFlags.VERTICAL
+				| Gtk.EventControllerScrollFlags.DISCRETE
+			) {
+				propagation_phase = Gtk.PropagationPhase.CAPTURE
+			};
+			zoom.scroll.connect((dx, dy) => {
+				var mods = zoom.get_current_event_state();
+				if ((mods & (Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.SHIFT_MASK))
+						!= (Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.SHIFT_MASK)) {
+					return false;
+				}
+				this.terminal.font_scale = dy < 0
+					? this.terminal.font_scale * 1.1
+					: (dy > 0 ? this.terminal.font_scale / 1.1 : this.terminal.font_scale);
+				return true;
+			});
+			this.terminal.add_controller(zoom);
 
 			this.terminal.termprop_changed.connect((prop) => {
 				if (prop != Vte.TERMPROP_CURRENT_DIRECTORY_URI) {

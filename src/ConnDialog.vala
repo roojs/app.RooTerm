@@ -564,8 +564,10 @@ namespace RooTerm
 		}
 
 		/**
-		 * Step 1: create a new passphrased key, install it, keep {@link Connection.retire_key}
-		 * for the old identity until step 2.
+		 * Step 1: ensure the shared passphrased identity exists, install it on this host,
+		 * keep {@link Connection.retire_key} for the old identity until step 2.
+		 *
+		 * One key for all hosts: ``~/.ssh/id_ed25519_rooterm`` (reused if already present).
 		 */
 		private void begin_key_upgrade()
 		{
@@ -584,10 +586,38 @@ namespace RooTerm
 				GLib.warning("no identity to replace name=%s", this.target.name);
 				return;
 			}
-			var new_identity = GLib.Path.build_filename(
-				home, ".ssh", "id_ed25519_" + this.target.uuid.substring(0, 8)
-			);
-			var dlg = new KeyDialog(new_identity, true);
+			var shared = GLib.Path.build_filename(home, ".ssh", "id_ed25519_rooterm");
+			if (GLib.FileUtils.test(shared, GLib.FileTest.IS_REGULAR)
+					&& GLib.FileUtils.test(shared + ".pub", GLib.FileTest.IS_REGULAR)) {
+				try {
+					var phrase = Secret.password_lookup_sync(
+						new Secret.Schema(
+							"org.roojs.rooterm.SshKey", Secret.SchemaFlags.NONE,
+							"path", Secret.SchemaAttributeType.STRING
+						),
+						null,
+						"path", shared
+					);
+					if (phrase != null && phrase.length > 0) {
+						this.target.passphrase = phrase;
+						this.target.host = this.host_entry.text.strip();
+						this.target.user = this.user_entry.text.strip();
+						var port = int.parse(this.port_entry.text.strip());
+						if (port > 0 && port <= 65535) {
+							this.target.port = port;
+						}
+						if (this.pass_entry.text.length > 0) {
+							this.target.pass = this.pass_entry.text;
+						}
+						this.close();
+						this.run_key_upgrade.begin(shared, old_identity);
+						return;
+					}
+				} catch (GLib.Error e) {
+					GLib.warning("shared key secret load failed: %s", e.message);
+				}
+			}
+			var dlg = new KeyDialog(shared, true);
 			dlg.created.connect((identity, passphrase) => {
 				this.target.passphrase = passphrase;
 				try {

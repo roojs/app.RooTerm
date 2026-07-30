@@ -55,9 +55,17 @@ namespace RooTerm
 		/**
 		 * Install or upgrade from GResource when the bundled version is
 		 * newer, enable when Shell knows it, else explain session restart.
+		 * Also ensures a settings-daemon custom shortcut for global toggle
+		 * (same pattern as Guake — works without relying on Shell keybindings alone).
 		 */
 		public void ensure()
 		{
+			try {
+				this.ensure_toggle_binding(Config.load().toggle_key);
+			} catch (GLib.Error e) {
+				GLib.warning("toggle binding: %s", e.message);
+			}
+
 			var data_home = GLib.Environment.get_variable("XDG_DATA_HOME");
 			if (data_home == null || data_home == "") {
 				data_home = GLib.Path.build_filename(GLib.Environment.get_home_dir(), ".local", "share");
@@ -150,7 +158,11 @@ Global $(key) / panel icon will not work until this is fixed. You can still use 
 			}
 
 			if (updated) {
-				this.show_restart_shell_messages();
+				if (!enabled) {
+					GLib.warning(
+						"Shell extension updated; reload Shell (Alt+F2, r) for the panel icon. F12 still works via rooterm --toggle."
+					);
+				}
 				return;
 			}
 
@@ -159,7 +171,9 @@ Global $(key) / panel icon will not work until this is fixed. You can still use 
 			}
 
 			if (!shell_knows) {
-				this.show_restart_shell_messages();
+				GLib.warning(
+					"Shell extension not loaded yet; reload Shell (Alt+F2, r) for the panel icon. F12 still works via rooterm --toggle."
+				);
 				return;
 			}
 
@@ -183,27 +197,70 @@ Global $(key) / panel icon will not work until this is fixed. You can still use 
 			if (enabled) {
 				return;
 			}
-			this.show_restart_shell_messages();
+			GLib.warning(
+				"Could not enable Shell extension; panel icon unavailable. F12 still works via rooterm --toggle."
+			);
 		}
 
 		/**
-		 * Show why the global toggle / panel icon is not active yet.
+		 * Own ``rooterm --toggle`` custom media-keys shortcut (does not touch other apps).
+		 *
+		 * @param key Accelerator string (e.g. ``F12``)
+		 * @throws GLib.Error On settings write failure
 		 */
-		public void show_restart_shell_messages()
+		public void ensure_toggle_binding(string key) throws GLib.Error
 		{
-			var key = Config.load().toggle_key;
-			var middle = "You are using Wayland, so unfortunately the only way is to log out and log in again.";
-			if (GLib.Environment.get_variable("XDG_SESSION_TYPE") != "wayland") {
-				middle = "Press Alt+F2, type r, and press Enter.";
+			var media = new GLib.Settings("org.gnome.settings-daemon.plugins.media-keys");
+			var paths = media.get_strv("custom-keybindings");
+			string? ours = null;
+			foreach (var path in paths) {
+				var slot = new GLib.Settings.with_path(
+					"org.gnome.settings-daemon.plugins.media-keys.custom-keybinding", path
+				);
+				if (slot.get_string("command") == "rooterm --toggle"
+						|| slot.get_string("name") == "RooTerm") {
+					ours = path;
+					break;
+				}
 			}
-			var body = @"$(middle)
-
-After that, $(key) and the panel icon will work.";
-			var alert = new Adw.AlertDialog("Shell extension needs a session restart", body);
-			alert.add_response("ok", "OK");
-			alert.default_response = "ok";
-			alert.close_response = "ok";
-			alert.present(this.window);
+			if (ours == null) {
+				var n = 0;
+				while (true) {
+					var candidate = @"/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom$(n)/";
+					var taken = false;
+					foreach (var path in paths) {
+						if (path == candidate) {
+							taken = true;
+							break;
+						}
+					}
+					if (!taken) {
+						ours = candidate;
+						break;
+					}
+					n++;
+				}
+				string[] next = {};
+				foreach (var path in paths) {
+					next += path;
+				}
+				next += ours;
+				media.set_strv("custom-keybindings", next);
+			}
+			var slot = new GLib.Settings.with_path(
+				"org.gnome.settings-daemon.plugins.media-keys.custom-keybinding", ours
+			);
+			slot.set_string("name", "RooTerm");
+			slot.set_string("command", "rooterm --toggle");
+			slot.set_string("binding", key);
+			// Extension schema: panel tooltip only (no wm grab).
+			try {
+				var ext = new GLib.Settings("org.gnome.shell.extensions.rooterm");
+				string[] keys = { key };
+				ext.set_strv("toggle", keys);
+			} catch (GLib.Error e) {
+				GLib.debug("extension toggle label: %s", e.message);
+			}
 		}
 
 		/**

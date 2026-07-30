@@ -20,7 +20,8 @@ namespace RooTerm
 {
 	/**
 	 * Create a passphrased private key (passphrase entered twice).
-	 * Create mode writes ``~/.ssh/id_ed25519``; replace mode writes ``identity``.
+	 * Create mode writes ``~/.ssh/id_ed25519``; replace mode writes the shared
+	 * ``identity`` path (``id_ed25519_rooterm``) — reused across hosts when it already exists.
 	 */
 	public class KeyDialog : Adw.Dialog
 	{

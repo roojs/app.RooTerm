@@ -60,7 +60,7 @@ namespace RooTerm
 					continue;
 				}
 				this.selection.selected = i;
-				this.list_view.scroll_to(i, Gtk.ListScrollFlags.NONE, null);
+				this.list_view.scroll_to(i, Gtk.ListScrollFlags.FOCUS, null);
 				return;
 			}
 		}

@@ -112,6 +112,11 @@ namespace RooTerm
 		 */
 		public DBus dbus;
 
+		/**
+		 * Sole drop-down window (kept when hidden; {@link Gtk.Application.active_window} is null then).
+		 */
+		public MainWindow? window;
+
 		private const GLib.OptionEntry[] app_options = {
 			{ "debug", 'd', 0, GLib.OptionArg.NONE, ref opt_debug, "Enable debug output", null },
 			{ "debug-critical", 0, 0, GLib.OptionArg.NONE, ref opt_debug_critical, "Treat critical warnings as errors", null },
@@ -138,15 +143,19 @@ namespace RooTerm
 			});
 
 			this.activate.connect(() => {
-				var open = this.active_window;
-				if (open != null) {
-					open.present();
+				if (this.window != null) {
+					this.window.visible = true;
+					this.window.present();
+					this.window.set_default_size(
+						this.window.monitor_geo.width * this.window.config.width / 100,
+						this.window.monitor_geo.height * this.window.config.height / 100
+					);
 					return;
 				}
-				var window = new MainWindow(this);
-				this.add_window(window);
-				window.present();
-				new GnomeShell(window).ensure();
+				this.window = new MainWindow(this);
+				this.add_window(this.window);
+				this.window.present();
+				new GnomeShell(this.window).ensure();
 			});
 		}
 
@@ -190,9 +199,12 @@ namespace RooTerm
 					var config = Config.load();
 					config.toggle_key = opt_toggle_key;
 					config.save();
-					var settings = new GLib.Settings("org.gnome.shell.extensions.rooterm");
-					string[] keys = { opt_toggle_key };
-					settings.set_strv("toggle", keys);
+					// Prefer the live drop-down; otherwise a throwaway parent (binding needs no UI).
+					var parent = this.window as Gtk.Window;
+					if (parent == null) {
+						parent = new Gtk.Window();
+					}
+					new GnomeShell(parent).ensure_toggle_binding(opt_toggle_key);
 				} catch (GLib.Error e) {
 					GLib.warning("toggle-key save failed: %s", e.message);
 				}
