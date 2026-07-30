@@ -530,28 +530,36 @@ namespace RooTerm
 			}
 			this.close();
 			var job = new SetupKey(this.window, this.target);
+			var ok = false;
 			try {
 				yield job.run();
-				this.pending_key_identity = job.installed_identity;
-				this.target.auth = "ssh_key";
-				this.target.public_key = job.installed_identity;
-				this.setup_key_btn.visible = false;
-				this.auth_key.visible = true;
-				this.auth_key.active = true;
-				try {
-					this.window.config.save();
-				} catch (GLib.Error e) {
-					GLib.warning("config save failed: %s", e.message);
-				}
-				this.pass_box.visible = this.auth_password.active || this.sudo_check.active;
-				this.pass_label.label = this.auth_key.active && this.sudo_check.active
-					? "Password (required for sudo)"
-					: "Password";
-				GLib.debug("ssh key installed identity=%s name=%s",
-					job.installed_identity, this.target.name);
+				ok = true;
 			} catch (JobError e) {
 				GLib.warning("setup key failed name=%s: %s", this.target.name, e.message);
+			} finally {
+				job.terminal.close_tab();
 			}
+			if (!ok) {
+				this.present(this.window);
+				return;
+			}
+			this.pending_key_identity = job.installed_identity;
+			this.target.auth = "ssh_key";
+			this.target.public_key = job.installed_identity;
+			this.setup_key_btn.visible = false;
+			this.auth_key.visible = true;
+			this.auth_key.active = true;
+			try {
+				this.window.config.save();
+			} catch (GLib.Error e) {
+				GLib.warning("config save failed: %s", e.message);
+			}
+			this.pass_box.visible = this.auth_password.active || this.sudo_check.active;
+			this.pass_label.label = this.auth_key.active && this.sudo_check.active
+				? "Password (required for sudo)"
+				: "Password";
+			GLib.debug("ssh key installed identity=%s name=%s",
+				job.installed_identity, this.target.name);
 			this.present(this.window);
 		}
 
@@ -623,41 +631,47 @@ namespace RooTerm
 			var job = new ReplaceKey(this.window, this.target, identity) {
 				old_identity = old_identity
 			};
+			var ok = false;
 			try {
 				yield job.run();
-				this.target.auth = "ssh_key";
-				this.target.retire_key = old_identity;
-				this.target.public_key = job.installed_identity;
-				this.pending_key_identity = job.installed_identity;
-				this.setup_key_btn.visible = false;
-				this.auth_key.visible = true;
-				this.auth_key.active = true;
-				this.upgrade_key_btn.visible = false;
-				this.retire_key_btn.visible = true;
-				try {
-					this.window.config.save();
-				} catch (GLib.Error e) {
-					GLib.warning("config save failed: %s", e.message);
-				}
-				GLib.debug("key replaced new=%s old=%s name=%s",
-					job.installed_identity, old_identity, this.target.name);
-				var done = new Adw.AlertDialog(
-					"New key installed",
-"""Verify login with the new key works, then use
-“Remove old key from server” on this connection."""
-				);
-				done.add_response("ok", "OK");
-				done.default_response = "ok";
-				done.close_response = "ok";
-				done.response.connect(() => {
-					this.present(this.window);
-				});
-				done.present(this.window);
-				return;
+				ok = true;
 			} catch (JobError e) {
 				GLib.warning("replace key failed name=%s: %s", this.target.name, e.message);
+			} finally {
+				job.terminal.close_tab();
 			}
-			this.present(this.window);
+			if (!ok) {
+				this.present(this.window);
+				return;
+			}
+			this.target.auth = "ssh_key";
+			this.target.retire_key = old_identity;
+			this.target.public_key = job.installed_identity;
+			this.pending_key_identity = job.installed_identity;
+			this.setup_key_btn.visible = false;
+			this.auth_key.visible = true;
+			this.auth_key.active = true;
+			this.upgrade_key_btn.visible = false;
+			this.retire_key_btn.visible = true;
+			try {
+				this.window.config.save();
+			} catch (GLib.Error e) {
+				GLib.warning("config save failed: %s", e.message);
+			}
+			GLib.debug("key replaced new=%s old=%s name=%s",
+				job.installed_identity, old_identity, this.target.name);
+			var done = new Adw.AlertDialog(
+				"New key installed",
+"""Verify login with the new key works, then use
+“Remove old key from server” on this connection."""
+			);
+			done.add_response("ok", "OK");
+			done.default_response = "ok";
+			done.close_response = "ok";
+			done.response.connect(() => {
+				this.present(this.window);
+			});
+			done.present(this.window);
 		}
 
 		/**
@@ -703,19 +717,27 @@ namespace RooTerm
 			var job = new RetireKey(this.window, this.target) {
 				remove_pub_line = pub_line
 			};
+			var ok = false;
 			try {
 				yield job.run();
-				this.target.retire_key = "";
-				this.retire_key_btn.visible = false;
-				try {
-					this.window.config.save();
-				} catch (GLib.Error e) {
-					GLib.warning("config save failed: %s", e.message);
-				}
-				GLib.debug("retire_key cleared name=%s", this.target.name);
+				ok = true;
 			} catch (JobError e) {
 				GLib.warning("retire key failed name=%s: %s", this.target.name, e.message);
+			} finally {
+				job.terminal.close_tab();
 			}
+			if (!ok) {
+				this.present(this.window);
+				return;
+			}
+			this.target.retire_key = "";
+			this.retire_key_btn.visible = false;
+			try {
+				this.window.config.save();
+			} catch (GLib.Error e) {
+				GLib.warning("config save failed: %s", e.message);
+			}
+			GLib.debug("retire_key cleared name=%s", this.target.name);
 			this.present(this.window);
 		}
 
@@ -782,7 +804,8 @@ namespace RooTerm
 					"uuid", Secret.SchemaAttributeType.STRING
 				);
 				var keep_secret = this.target.pass.length > 0
-					&& (this.target.auth == "password" || this.sudo_check.active);
+					&& (this.target.auth == "password" || this.target.auth == "userpass"
+						|| this.sudo_check.active);
 				if (keep_secret) {
 					Secret.password_store_sync(
 						schema,

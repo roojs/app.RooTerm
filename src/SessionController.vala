@@ -136,7 +136,11 @@ namespace RooTerm
 			}
 			if (term is SshTerminal) {
 				var job = new OpenSession(window, term.connection);
-				job.terminal.terminal.grab_focus();
+				GLib.Idle.add(() => {
+					window.present();
+					job.terminal.terminal.grab_focus();
+					return false;
+				});
 				job.run.begin((obj, res) => {
 					try {
 						job.run.end(res);

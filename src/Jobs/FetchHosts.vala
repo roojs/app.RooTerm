@@ -48,7 +48,10 @@ namespace RooTerm
 			yield this.sudo();
 			this.current_state = State.UNKNOWN;
 			this.terminal.terminal.feed_child("lxc-ls -f -F name,state\n".data);
-			yield this.expect(State.WAIT_ROOT_PROMPT, 60000);
+			if (!yield this.expect(State.WAIT_ROOT_PROMPT, 60000)) {
+				throw new JobError.TIMEOUT("fetch hosts timeout name=%s".printf(
+					this.connection.name));
+			}
 			long end_col, end_row;
 			this.terminal.terminal.get_cursor_position(out end_col, out end_row);
 			size_t full_len;

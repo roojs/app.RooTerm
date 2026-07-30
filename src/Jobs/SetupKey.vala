@@ -22,6 +22,7 @@ namespace RooTerm
 	 * ``ssh-copy-id``: password → {@link State.KEY_INSTALLED}.
 	 *
 	 * Sets ``install_key`` on {@link Job.stream} in the ctor. {@link KeyDialog} stays outside.
+	 * May see host-key confirm (manual yes), then passphrase and/or host password.
 	 */
 	public class SetupKey : SshLogin
 	{
@@ -61,14 +62,47 @@ namespace RooTerm
 		}
 
 		/**
-		 * Password (ssh-copy-id) → {@link State.KEY_INSTALLED} → {@link State.DONE}.
+		 * Secrets (ssh-copy-id) → {@link State.KEY_INSTALLED} → {@link State.DONE}.
+		 *
+		 * Same expect → feed_child → expect shape as {@link SshLogin.login}.
+		 * Passphrase once if set, then host password on later prompts.
 		 */
 		public override async void run() throws JobError
 		{
 			this.terminal.spawn();
-			yield this.expect(State.WAIT_SSH_PASSWORD, 30000);
-			this.terminal.terminal.feed_child((this.connection.pass + "\n").data);
-			yield this.expect(State.KEY_INSTALLED, 60000);
+			var fed_phrase = false;
+			while (this.current_state != State.KEY_INSTALLED) {
+				if (!yield this.expect(State.WAIT_SSH_PASSWORD, 30000)) {
+					if (this.current_state == State.KEY_INSTALLED) {
+						break;
+					}
+					if (this.current_state == State.WAIT_HOST_CONFIRM
+							|| this.current_state == State.WAIT_VERIFICATION_CODE) {
+						continue;
+					}
+					throw new JobError.TIMEOUT("setup key password timeout name=%s".printf(
+						this.connection.name));
+				}
+				if (this.connection.passphrase.length > 0 && !fed_phrase) {
+					this.terminal.terminal.feed_child((this.connection.passphrase + "\n").data);
+					fed_phrase = true;
+				} else {
+					this.terminal.terminal.feed_child((this.connection.pass + "\n").data);
+				}
+				this.current_state = State.UNKNOWN;
+				if (yield this.expect(State.KEY_INSTALLED, 60000)) {
+					break;
+				}
+				if (this.current_state == State.WAIT_SSH_PASSWORD
+						|| this.current_state == State.WAIT_VERIFICATION_CODE) {
+					continue;
+				}
+				if (this.current_state == State.KEY_INSTALLED) {
+					break;
+				}
+				throw new JobError.TIMEOUT("setup key install timeout name=%s".printf(
+					this.connection.name));
+			}
 			this.current_state = State.DONE;
 		}
 	}

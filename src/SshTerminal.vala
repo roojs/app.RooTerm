@@ -52,7 +52,7 @@ namespace RooTerm
 				fraction = 1.0,
 				hexpand = true
 			};
-			this.close_label = new Gtk.Label("Closing in 30 seconds…") {
+			this.close_label = new Gtk.Label("") {
 				hexpand = true,
 				xalign = 0.0f
 			};
@@ -117,19 +117,20 @@ namespace RooTerm
 					GLib.Source.remove(this.settle_timeout);
 					this.settle_timeout = 0;
 				}
-				if (this.stream.install_identity.length > 0) {
-					this.close_tab();
-					this.exited();
-					return;
-				}
 				if (this.state != SessionState.DEAD) {
 					this.state = SessionState.DEAD;
+				}
+				var delay = this.close_after < 0 ? 30 : this.close_after;
+				if (delay == 0) {
+					this.exited();
+					this.close_tab();
+					return;
 				}
 				if (this.selected) {
 					var done = "\r\n[ssh exited: " + exit_code.to_string()
 						+ " - Enter to reconnect, or wait to close]\r\n";
 					this.terminal.feed(done.data);
-					this.start_close();
+					this.start_close(delay);
 				} else {
 					var done = "\r\n[ssh exited: " + exit_code.to_string()
 						+ " - open this tab to close, or Enter to reconnect]\r\n";
@@ -166,7 +167,10 @@ namespace RooTerm
 				}
 				this.selected = on;
 				if (on && !this.close_paused && !this.close_armed) {
-					this.start_close();
+					var delay = this.close_after < 0 ? 30 : this.close_after;
+					if (delay > 0) {
+						this.start_close(delay);
+					}
 				}
 				return;
 			}
@@ -174,22 +178,25 @@ namespace RooTerm
 		}
 
 		/**
-		 * Show the draining close bar and start a 30s countdown.
+		 * Show the draining close bar and start a countdown of ``seconds``.
+		 *
+		 * @param seconds Countdown length (must be ``>0``)
 		 */
-		private void start_close()
+		private void start_close(int seconds)
 		{
-			if (this.close_armed || this.close_paused) {
+			if (this.close_armed || this.close_paused || seconds <= 0) {
 				return;
 			}
 			this.close_armed = true;
-			this.close_left = 30;
+			this.close_left = seconds;
 			this.close_bar.visible = true;
-			this.close_label.label = "Closing in 30 seconds…";
+			this.close_label.label = "Closing in " + this.close_left.to_string() + " seconds…";
 			this.close_progress.fraction = 1.0;
 			this.terminal.grab_focus();
 			if (this.close_tick != 0) {
 				GLib.Source.remove(this.close_tick);
 			}
+			var total = seconds;
 			this.close_tick = GLib.Timeout.add_seconds(1, () => {
 				if (this.close_paused) {
 					this.close_tick = 0;
@@ -203,7 +210,7 @@ namespace RooTerm
 					return false;
 				}
 				this.close_label.label = "Closing in " + this.close_left.to_string() + " seconds…";
-				this.close_progress.fraction = (double) this.close_left / 30.0;
+				this.close_progress.fraction = (double) this.close_left / (double) total;
 				return true;
 			});
 		}
@@ -267,6 +274,7 @@ namespace RooTerm
 			if (this.connection.pass.length == 0
 					&& this.connection.auth != "manual"
 					&& (this.connection.auth == "password"
+						|| this.connection.auth == "userpass"
 						|| this.connection.sudo_after_login
 						|| this.stream.install_key)) {
 				var secret_uuid = this.connection.uuid;

@@ -31,6 +31,12 @@ namespace RooTerm
 		 */
 		public string cwd = "";
 		/**
+		 * Auto-close after the child exits (SSH uses this; local ignores it):
+		 * ``-1`` interactive — 30s countdown on exit; ``0`` close immediately;
+		 * ``>0`` countdown that many seconds.
+		 */
+		public int close_after = 0;
+		/**
 		 * Mark for the host-tree session icon (active look is {@link tree_active}).
 		 */
 		public SessionState state {

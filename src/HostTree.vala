@@ -345,7 +345,6 @@ namespace RooTerm
 					break;
 
 				case ConnectionKind.HOST:
-				case ConnectionKind.LXC:
 					var edit_item = new Gtk.Button.with_label("Edit connection") {
 						has_frame = false,
 						halign = Gtk.Align.FILL
@@ -355,7 +354,7 @@ namespace RooTerm
 						this.edit_connection(menu_conn);
 					});
 					box.append(edit_item);
-					if (menu_conn.kind == ConnectionKind.HOST && menu_conn.lxc_host) {
+					if (menu_conn.lxc_host) {
 						var refresh_item = new Gtk.Button.with_label("Refresh containers") {
 							has_frame = false,
 							halign = Gtk.Align.FILL
@@ -384,6 +383,19 @@ namespace RooTerm
 						this.delete_connection(menu_conn);
 					});
 					box.append(host_del);
+					break;
+
+				case ConnectionKind.LXC:
+					// TODO: container management (console vs attach) — no ConnDialog edit
+					var lxc_del = new Gtk.Button.with_label("Delete") {
+						has_frame = false,
+						halign = Gtk.Align.FILL
+					};
+					lxc_del.clicked.connect(() => {
+						pop.popdown();
+						this.delete_connection(menu_conn);
+					});
+					box.append(lxc_del);
 					break;
 			}
 			pop.child = box;

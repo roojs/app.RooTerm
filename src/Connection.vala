@@ -293,8 +293,12 @@ namespace RooTerm
 		public async string[] refresh_containers(MainWindow window) throws JobError
 		{
 			var job = new FetchHosts(window, this);
-			yield job.run();
-			return job.container_names;
+			try {
+				yield job.run();
+				return job.container_names;
+			} finally {
+				job.terminal.close_tab();
+			}
 		}
 
 		/**

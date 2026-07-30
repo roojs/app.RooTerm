@@ -69,7 +69,10 @@ namespace RooTerm
 			this.sudo_fail_armed = false;
 			this.sudo_done = false;
 			this.terminal.terminal.feed_child("sudo -i\n".data);
-			yield this.expect(State.WAIT_SUDO_PASSWORD, 15000);
+			if (!yield this.expect(State.WAIT_SUDO_PASSWORD, 15000)) {
+				throw new JobError.TIMEOUT("sudo password timeout name=%s".printf(
+					this.connection.name));
+			}
 			this.terminal.terminal.feed_child((this.connection.pass + "\n").data);
 			this.sudo_password_fed = true;
 			GLib.Timeout.add(500, () => {
@@ -78,7 +81,10 @@ namespace RooTerm
 				}
 				return false;
 			});
-			yield this.expect(State.WAIT_ROOT_PROMPT, 15000);
+			if (!yield this.expect(State.WAIT_ROOT_PROMPT, 15000)) {
+				throw new JobError.TIMEOUT("sudo root timeout name=%s".printf(
+					this.connection.name));
+			}
 			this.sudo_done = true;
 		}
 

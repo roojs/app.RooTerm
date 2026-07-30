@@ -45,23 +45,75 @@ namespace RooTerm
 		/**
 		 * Password prompt → feed password → shell prompt.
 		 *
+		 * Host-key / 2FA / already-at-shell are caller decisions on ``expect`` false.
 		 * Does not set {@link State.DONE} — subclasses finish after this.
-		 * {@link OpenSession} overrides for password-or-shell / passphrase.
+		 * {@link OpenSession} overrides for passphrase.
 		 */
 		protected virtual async void login() throws JobError
 		{
-			yield this.expect(State.WAIT_SSH_PASSWORD, 30000);
+			while (!yield this.expect(State.WAIT_SSH_PASSWORD, 30000)) {
+				switch (this.current_state) {
+					case State.WAIT_SHELL_PROMPT:
+						return;
+					case State.WAIT_HOST_CONFIRM:
+					case State.WAIT_VERIFICATION_CODE:
+						continue;
+					default:
+						throw new JobError.TIMEOUT("login password timeout name=%s".printf(
+							this.connection.name));
+				}
+			}
 			this.terminal.terminal.feed_child((this.connection.pass + "\n").data);
-			yield this.expect(State.WAIT_SHELL_PROMPT, 30000);
+			GLib.debug("login feed password name=%s pass_len=%d auth=%s",
+				this.connection.name, this.connection.pass.length, this.connection.auth);
+			this.current_state = State.UNKNOWN;
+			while (!yield this.expect(State.WAIT_SHELL_PROMPT, 30000)) {
+				switch (this.current_state) {
+					case State.WAIT_VERIFICATION_CODE:
+						continue;
+					default:
+						throw new JobError.TIMEOUT("login shell timeout name=%s".printf(
+							this.connection.name));
+				}
+			}
 		}
 
 		/**
-		 * SSH password / passphrase and user shell prompt; then {@link Job.on_content}.
+		 * Host-key confirm, 2FA, SSH password / passphrase, and user shell prompt;
+		 * then {@link Job.on_content}.
 		 *
 		 * @param cursor_line Non-empty cursor row text
 		 */
 		protected override void on_content(string cursor_line)
 		{
+			// SSH host-key fingerprint — user types yes/no in the VTE
+			if (GLib.Regex.match_simple(
+					"continue connecting|\\(yes/no",
+					cursor_line, GLib.RegexCompileFlags.CASELESS, 0)) {
+				if (this.current_state != State.WAIT_HOST_CONFIRM) {
+					GLib.debug("job current_state name=%s %d -> %d want=%d",
+						this.connection.name, (int) this.current_state,
+						(int) State.WAIT_HOST_CONFIRM, (int) this.want);
+					this.current_state = State.WAIT_HOST_CONFIRM;
+					this.window.present();
+					this.terminal.terminal.grab_focus();
+				}
+				return;
+			}
+			// 2FA / TOTP — user types the code
+			if (GLib.Regex.match_simple(
+					"verification code:\\s*$",
+					cursor_line, GLib.RegexCompileFlags.CASELESS, 0)) {
+				if (this.current_state != State.WAIT_VERIFICATION_CODE) {
+					GLib.debug("job current_state name=%s %d -> %d want=%d",
+						this.connection.name, (int) this.current_state,
+						(int) State.WAIT_VERIFICATION_CODE, (int) this.want);
+					this.current_state = State.WAIT_VERIFICATION_CODE;
+					this.window.present();
+					this.terminal.terminal.grab_focus();
+				}
+				return;
+			}
 			// ssh password / passphrase (not [sudo])
 			if (GLib.Regex.match_simple(
 					"(password|passphrase).*:\\s*$",

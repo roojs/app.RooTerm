@@ -254,6 +254,9 @@ namespace RooTerm
 				if (conn.auth == "publickey") {
 					conn.auth = "ssh_key";
 				}
+				if (conn.auth == "userpass") {
+					conn.auth = "password";
+				}
 				if (conn.pass.length > 0) {
 					config.pending_secrets.set(conn.uuid, conn.pass);
 					conn.pass = "";

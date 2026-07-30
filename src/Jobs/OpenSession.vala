@@ -22,7 +22,8 @@ namespace RooTerm
 	 * Open-ended SSH session: login (password, passphrase, or already at shell),
 	 * optional sudo / ``lxc-console``; tab stays open when the job is disposed.
 	 *
-	 * {@link Job.keep_open} — {@link dispose} unwires but does not close the tab.
+	 * Sets {@link Terminal.close_after} to ``-1`` (30s countdown if SSH exits).
+	 * Host-key focus lives in {@link SshLogin.on_content}; shell focus is here after login.
 	 */
 	public class OpenSession : SudoLogin
 	{
@@ -33,78 +34,50 @@ namespace RooTerm
 		public OpenSession(MainWindow window, Connection connection)
 		{
 			base(window, connection);
-			this.keep_open = true;
+			this.terminal.close_after = -1;
 		}
 
 		/**
 		 * Password / passphrase prompt, or already at a shell — then shell.
+		 * Same ``expect`` false handling as {@link SshLogin.login}; feeds passphrase when set.
 		 */
 		protected override async void login() throws JobError
 		{
-			this.want = State.WAIT_SSH_PASSWORD;
-			GLib.debug("job open login name=%s current_state=%d",
-				this.connection.name, (int) this.current_state);
-			switch (this.current_state) {
-				case State.WAIT_SHELL_PROMPT:
-					return;
-				case State.WAIT_SSH_PASSWORD:
-					break;
-				case State.CANCELLED:
-					throw new JobError.CANCEL("job cancelled name=%s".printf(this.connection.name));
-				case State.FAILED:
-					throw new JobError.FAIL("terminal failure name=%s".printf(this.connection.name));
-				case State.TIMEOUT:
-					throw new JobError.TIMEOUT("login timeout name=%s".printf(this.connection.name));
-				default:
-					var resumed = false;
-					ulong notify_state = this.notify["current_state"].connect(() => {
-						if (resumed) {
-							return;
-						}
-						switch (this.current_state) {
-							case State.WAIT_SSH_PASSWORD:
-							case State.WAIT_SHELL_PROMPT:
-							case State.FAILED:
-							case State.CANCELLED:
-							case State.TIMEOUT:
-								resumed = true;
-								login.callback();
-								break;
-						}
-					});
-					uint timeout_id = GLib.Timeout.add(30000, () => {
-						if (resumed) {
-							return false;
-						}
-						this.current_state = State.TIMEOUT;
-						return false;
-					});
-					yield;
-					this.disconnect(notify_state);
-					GLib.Source.remove(timeout_id);
-					break;
-			}
-			switch (this.current_state) {
-				case State.WAIT_SHELL_PROMPT:
-					return;
-				case State.WAIT_SSH_PASSWORD:
-					break;
-				case State.CANCELLED:
-					throw new JobError.CANCEL("job cancelled name=%s".printf(this.connection.name));
-				case State.FAILED:
-					throw new JobError.FAIL("terminal failure name=%s".printf(this.connection.name));
-				case State.TIMEOUT:
-					throw new JobError.TIMEOUT("login timeout name=%s".printf(this.connection.name));
-				default:
-					throw new JobError.FAIL("login unexpected state=%d name=%s".printf(
-						(int) this.current_state, this.connection.name));
+			while (!yield this.expect(State.WAIT_SSH_PASSWORD, 30000)) {
+				switch (this.current_state) {
+					case State.WAIT_SHELL_PROMPT:
+						this.window.present();
+						this.terminal.terminal.grab_focus();
+						return;
+					case State.WAIT_HOST_CONFIRM:
+					case State.WAIT_VERIFICATION_CODE:
+						continue;
+					default:
+						throw new JobError.TIMEOUT("login password timeout name=%s".printf(
+							this.connection.name));
+				}
 			}
 			if (this.connection.passphrase.length > 0) {
+				GLib.debug("login feed passphrase name=%s phrase_len=%d",
+					this.connection.name, this.connection.passphrase.length);
 				this.terminal.terminal.feed_child((this.connection.passphrase + "\n").data);
 			} else {
+				GLib.debug("login feed password name=%s pass_len=%d auth=%s",
+					this.connection.name, this.connection.pass.length, this.connection.auth);
 				this.terminal.terminal.feed_child((this.connection.pass + "\n").data);
 			}
-			yield this.expect(State.WAIT_SHELL_PROMPT, 30000);
+			this.current_state = State.UNKNOWN;
+			while (!yield this.expect(State.WAIT_SHELL_PROMPT, 30000)) {
+				switch (this.current_state) {
+					case State.WAIT_VERIFICATION_CODE:
+						continue;
+					default:
+						throw new JobError.TIMEOUT("login shell timeout name=%s".printf(
+							this.connection.name));
+				}
+			}
+			this.window.present();
+			this.terminal.terminal.grab_focus();
 		}
 
 		/**
@@ -122,9 +95,14 @@ namespace RooTerm
 				this.terminal.terminal.feed_child(
 					("lxc-console -n " + this.connection.lxc_name + "\n").data
 				);
-				yield this.expect(State.WAIT_SHELL_PROMPT, 30000);
+				if (!yield this.expect(State.WAIT_SHELL_PROMPT, 30000)) {
+					throw new JobError.TIMEOUT("lxc console timeout name=%s".printf(
+						this.connection.name));
+				}
 			}
 			this.current_state = State.DONE;
+			this.window.present();
+			this.terminal.terminal.grab_focus();
 		}
 	}
 }

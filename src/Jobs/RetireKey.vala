@@ -55,7 +55,10 @@ mv "$f.rooterm" "$f"
 chmod 600 "$f"
 echo RooTerm: old key removed
 """).data);
-			yield this.expect(State.WAIT_SHELL_PROMPT, 60000);
+			if (!yield this.expect(State.WAIT_SHELL_PROMPT, 60000)) {
+				throw new JobError.TIMEOUT("retire key timeout name=%s".printf(
+					this.connection.name));
+			}
 			long end_col, end_row;
 			this.terminal.terminal.get_cursor_position(out end_col, out end_row);
 			size_t full_len;

@@ -155,7 +155,11 @@ namespace RooTerm
 					return;
 				}
 				var job = new OpenSession(this, conn);
-				job.terminal.terminal.grab_focus();
+				GLib.Idle.add(() => {
+					this.present();
+					job.terminal.terminal.grab_focus();
+					return false;
+				});
 				job.run.begin((obj, res) => {
 					try {
 						job.run.end(res);
@@ -220,6 +224,9 @@ namespace RooTerm
 				dlg.present(this);
 			});
 			this.host_tree.edit_connection.connect((host) => {
+				if (host.kind == ConnectionKind.LXC) {
+					return;
+				}
 				var dlg = new ConnDialog(this);
 				dlg.fill(host, null);
 				dlg.saved.connect((conn) => {
@@ -294,7 +301,11 @@ namespace RooTerm
 						return;
 					}
 					var job = new OpenSession(this, conn);
-					job.terminal.terminal.grab_focus();
+					GLib.Idle.add(() => {
+						this.present();
+						job.terminal.terminal.grab_focus();
+						return false;
+					});
 					job.run.begin((obj, res) => {
 						try {
 							job.run.end(res);

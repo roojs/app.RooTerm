@@ -35,7 +35,8 @@ namespace RooTerm
 	 * {@link SessionController.create} (no spawn), and exposes the live
 	 * {@link stream} so subclass ctors can set flags / connect signals.
 	 * Subclass {@link run} calls {@link Terminal.spawn} then the yield flow.
-	 * {@link dispose} closes the tab.
+	 * One-shot callers close the tab after {@link run}; interactive jobs set
+	 * {@link Terminal.close_after} to ``-1``.
 	 */
 	public abstract class Job : Object
 	{
@@ -51,6 +52,8 @@ namespace RooTerm
 			// --- waits (prompts / UI) ---
 			WAIT_KEY_DIALOG,
 			WAIT_ALERT,
+			WAIT_HOST_CONFIRM,
+			WAIT_VERIFICATION_CODE,
 			WAIT_SSH_PASSWORD,
 			WAIT_SHELL_PROMPT,
 			WAIT_SUDO_PASSWORD,
@@ -92,17 +95,13 @@ namespace RooTerm
 		/**
 		 * What the current {@link expect} is hoping to see.
 		 */
-		public State want = State.UNKNOWN;
+		public State want { get; set; default = State.UNKNOWN; }
 
 		/**
 		 * What the VTE (or UI) looks like right now — set by {@link on_content}.
+		 * Property so assignment emits ``notify`` and wakes {@link expect}.
 		 */
-		public State current_state = State.UNKNOWN;
-
-		/**
-		 * When true, {@link dispose} unwires but does not close the tab.
-		 */
-		public bool keep_open = false;
+		public State current_state { get; set; default = State.UNKNOWN; }
 
 		private ulong contents_changed_id = 0;
 		private uint content_debounce = 0;
@@ -160,9 +159,6 @@ namespace RooTerm
 				this.close_tab_id = 0;
 			}
 			if (this.terminal != null) {
-				if (!this.keep_open) {
-					this.terminal.close_tab();
-				}
 				this.terminal = null;
 			}
 			base.dispose();
@@ -184,18 +180,21 @@ namespace RooTerm
 		}
 
 		/**
-		 * Park until {@link current_state} equals {@link want_state}, else throw.
+		 * Park until {@link current_state} equals ``want_state``.
 		 *
-		 * @param want_state Prompt or conclusion we are waiting to see
-		 * @param timeout_ms Deadline → sets {@link State.TIMEOUT}
+		 * @param want_state The only state that counts as success
+		 * @param timeout_ms Deadline — does not overwrite {@link current_state}
+		 * @return ``true`` if ``want_state`` was reached; ``false`` on timeout
+		 *         or another classified state (caller inspects {@link current_state}).
+		 *         {@link JobError} on cancel / fail only.
 		 */
-		protected async void expect(State want_state, uint timeout_ms) throws JobError
+		protected async bool expect(State want_state, uint timeout_ms) throws JobError
 		{
 			this.want = want_state;
 			GLib.debug("job expect name=%s want=%d timeout_ms=%u current_state=%d",
 				this.connection.name, (int) want_state, timeout_ms, (int) this.current_state);
 			if (this.current_state == want_state) {
-				return;
+				return true;
 			}
 			switch (this.current_state) {
 				case State.CANCELLED:
@@ -203,18 +202,17 @@ namespace RooTerm
 				case State.FAILED:
 					throw new JobError.FAIL("terminal failure name=%s want=%d".printf(
 						this.connection.name, (int) want_state));
-				case State.TIMEOUT:
-					throw new JobError.TIMEOUT("expect timeout want=%d name=%s".printf(
-						(int) want_state, this.connection.name));
 			}
 
 			var resumed = false;
+			var matched = false;
 
-			ulong notify_state = this.notify["current_state"].connect(() => {
+			ulong notify_state = this.notify["current-state"].connect(() => {
 				if (resumed) {
 					return;
 				}
 				if (this.current_state == want_state) {
+					matched = true;
 					resumed = true;
 					expect.callback();
 					return;
@@ -222,7 +220,13 @@ namespace RooTerm
 				switch (this.current_state) {
 					case State.FAILED:
 					case State.CANCELLED:
-					case State.TIMEOUT:
+						resumed = true;
+						expect.callback();
+						break;
+					case State.UNKNOWN:
+						break;
+					default:
+						// Other classified state — false; caller checks current_state
 						resumed = true;
 						expect.callback();
 						break;
@@ -232,7 +236,8 @@ namespace RooTerm
 				if (resumed) {
 					return false;
 				}
-				this.current_state = State.TIMEOUT;
+				resumed = true;
+				expect.callback();
 				return false;
 			});
 
@@ -241,8 +246,8 @@ namespace RooTerm
 			this.disconnect(notify_state);
 			GLib.Source.remove(timeout_id);
 
-			if (this.current_state == want_state) {
-				return;
+			if (matched || this.current_state == want_state) {
+				return true;
 			}
 			switch (this.current_state) {
 				case State.CANCELLED:
@@ -250,10 +255,8 @@ namespace RooTerm
 				case State.FAILED:
 					throw new JobError.FAIL("terminal failure name=%s want=%d".printf(
 						this.connection.name, (int) want_state));
-				case State.TIMEOUT:
-					throw new JobError.TIMEOUT("expect timeout want=%d name=%s".printf(
-						(int) want_state, this.connection.name));
 			}
+			return false;
 		}
 	}
 }
