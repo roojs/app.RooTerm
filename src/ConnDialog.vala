@@ -537,7 +537,7 @@ namespace RooTerm
 			} catch (JobError e) {
 				GLib.warning("setup key failed name=%s: %s", this.target.name, e.message);
 			} finally {
-				job.terminal.close_tab();
+				job.terminal.close_in(ok ? 0 : 30);
 			}
 			if (!ok) {
 				this.present(this.window);
@@ -638,7 +638,7 @@ namespace RooTerm
 			} catch (JobError e) {
 				GLib.warning("replace key failed name=%s: %s", this.target.name, e.message);
 			} finally {
-				job.terminal.close_tab();
+				job.terminal.close_in(ok ? 0 : 30);
 			}
 			if (!ok) {
 				this.present(this.window);
@@ -724,7 +724,7 @@ namespace RooTerm
 			} catch (JobError e) {
 				GLib.warning("retire key failed name=%s: %s", this.target.name, e.message);
 			} finally {
-				job.terminal.close_tab();
+				job.terminal.close_in(ok ? 0 : 30);
 			}
 			if (!ok) {
 				this.present(this.window);

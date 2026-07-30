@@ -52,15 +52,15 @@ button.session-icon.session-ready image {
 	color: #1e4a8c;
 }
 
-button.session-icon.session-dead {
+button.session-icon.session-exited {
 	opacity: 1.0;
 }
 
-button.session-icon.session-dead image {
+button.session-icon.session-exited image {
 	color: #b01020;
 }
 
-/* Dead-session close countdown */
+/* Exited-session close countdown */
 progressbar {
 	min-height: 6px;
 }

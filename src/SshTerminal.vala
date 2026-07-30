@@ -28,10 +28,6 @@ namespace RooTerm
 		private Gtk.Box close_bar;
 		private Gtk.Label close_label;
 		private Gtk.ProgressBar close_progress;
-		private uint close_tick = 0;
-		private int close_left = 0;
-		private bool close_paused = false;
-		private bool close_armed = false;
 
 		/**
 		 * Emitted when the SSH child process exits.
@@ -58,11 +54,7 @@ namespace RooTerm
 			};
 			var keep = new Gtk.Button.with_label("Keep open");
 			keep.clicked.connect(() => {
-				this.close_paused = true;
-				if (this.close_tick != 0) {
-					GLib.Source.remove(this.close_tick);
-					this.close_tick = 0;
-				}
+				this.cancel_close(true);
 				this.close_label.label = "Kept open - Enter to reconnect";
 				this.close_progress.fraction = 1.0;
 			});
@@ -94,7 +86,7 @@ namespace RooTerm
 				propagation_phase = Gtk.PropagationPhase.CAPTURE
 			};
 			keys.key_pressed.connect((keyval, keycode, mods) => {
-				if (this.state != SessionState.DEAD) {
+				if (this.state != SessionState.EXITED) {
 					return false;
 				}
 				if (keyval != Gdk.Key.Return && keyval != Gdk.Key.KP_Enter) {
@@ -117,25 +109,15 @@ namespace RooTerm
 					GLib.Source.remove(this.settle_timeout);
 					this.settle_timeout = 0;
 				}
-				if (this.state != SessionState.DEAD) {
-					this.state = SessionState.DEAD;
+				if (this.state != SessionState.EXITED) {
+					this.state = SessionState.EXITED;
 				}
-				var delay = this.close_after < 0 ? 30 : this.close_after;
-				if (delay == 0) {
-					this.exited();
-					this.close_tab();
-					return;
-				}
-				if (this.selected) {
-					var done = "\r\n[ssh exited: " + exit_code.to_string()
-						+ " - Enter to reconnect, or wait to close]\r\n";
-					this.terminal.feed(done.data);
-					this.start_close(delay);
-				} else {
-					var done = "\r\n[ssh exited: " + exit_code.to_string()
+				var hint = this.selected
+					? "\r\n[ssh exited: " + exit_code.to_string()
+						+ " - Enter to reconnect, or wait to close]\r\n"
+					: "\r\n[ssh exited: " + exit_code.to_string()
 						+ " - open this tab to close, or Enter to reconnect]\r\n";
-					this.terminal.feed(done.data);
-				}
+				this.terminal.feed(hint.data);
 				this.exited();
 			});
 			this.terminal.termprop_changed.connect((prop) => {
@@ -155,22 +137,20 @@ namespace RooTerm
 		}
 
 		/**
-		 * Mark this tab selected; focusing a dead tab starts the close countdown.
+		 * Mark this tab selected; focusing an exited tab starts a 30s close
+		 * countdown (interactive default — jobs call {@link close_in} themselves).
 		 *
 		 * @param on true when this tab is the focused one
 		 */
 		public override void select(bool on)
 		{
-			if (this.state == SessionState.DEAD) {
+			if (this.state == SessionState.EXITED) {
 				if (this.selected == on) {
 					return;
 				}
 				this.selected = on;
-				if (on && !this.close_paused && !this.close_armed) {
-					var delay = this.close_after < 0 ? 30 : this.close_after;
-					if (delay > 0) {
-						this.start_close(delay);
-					}
+				if (on) {
+					this.close_in(30);
 				}
 				return;
 			}
@@ -178,58 +158,34 @@ namespace RooTerm
 		}
 
 		/**
-		 * Show the draining close bar and start a countdown of ``seconds``.
-		 *
-		 * @param seconds Countdown length (must be ``>0``)
+		 * {@inheritDoc}
 		 */
-		private void start_close(int seconds)
+		protected override void close_countdown(int left, int total)
 		{
-			if (this.close_armed || this.close_paused || seconds <= 0) {
+			if (left <= 0 || total <= 0) {
+				this.close_bar.visible = false;
 				return;
 			}
-			this.close_armed = true;
-			this.close_left = seconds;
-			this.close_bar.visible = true;
-			this.close_label.label = "Closing in " + this.close_left.to_string() + " seconds…";
-			this.close_progress.fraction = 1.0;
-			this.terminal.grab_focus();
-			if (this.close_tick != 0) {
-				GLib.Source.remove(this.close_tick);
+			if (!this.close_bar.visible) {
+				this.close_bar.visible = true;
+				this.terminal.grab_focus();
 			}
-			var total = seconds;
-			this.close_tick = GLib.Timeout.add_seconds(1, () => {
-				if (this.close_paused) {
-					this.close_tick = 0;
-					return false;
-				}
-				this.close_left--;
-				if (this.close_left <= 0) {
-					this.close_tick = 0;
-					this.close_bar.visible = false;
-					this.close_tab();
-					return false;
-				}
-				this.close_label.label = "Closing in " + this.close_left.to_string() + " seconds…";
-				this.close_progress.fraction = (double) this.close_left / (double) total;
-				return true;
-			});
+			if (this.close_paused) {
+				return;
+			}
+			this.close_label.label = "Closing in " + left.to_string() + " seconds…";
+			this.close_progress.fraction = (double) left / (double) total;
 		}
 
 		/**
-		 * Re-spawn SSH in this tab after a dead exit (Enter).
+		 * Re-spawn SSH in this tab after an exited session (Enter).
 		 */
 		public void reconnect()
 		{
-			if (this.state != SessionState.DEAD) {
+			if (this.state != SessionState.EXITED) {
 				return;
 			}
-			this.close_paused = false;
-			this.close_armed = false;
-			if (this.close_tick != 0) {
-				GLib.Source.remove(this.close_tick);
-				this.close_tick = 0;
-			}
-			this.close_bar.visible = false;
+			this.cancel_close();
 			this.stream.hide_input = false;
 			this.stream.log_line = -1;
 			this.stream.prompt_hint = "";
@@ -302,10 +258,16 @@ namespace RooTerm
 						|| this.connection.auth == "publickey"
 						|| this.stream.install_key)) {
 				var identity = this.connection.public_key;
-				if (identity.length == 0) {
+				if (identity.length == 0
+						|| !GLib.FileUtils.test(identity, GLib.FileTest.IS_REGULAR)) {
 					identity = GLib.Path.build_filename(
 						GLib.Environment.get_home_dir(), ".ssh", "id_ed25519"
 					);
+					if (!GLib.FileUtils.test(identity, GLib.FileTest.IS_REGULAR)) {
+						identity = GLib.Path.build_filename(
+							GLib.Environment.get_home_dir(), ".ssh", "id_rsa"
+						);
+					}
 				}
 				try {
 					var phrase = Secret.password_lookup_sync(
@@ -338,9 +300,12 @@ namespace RooTerm
 					}
 				}
 				if (pub.length == 0 && this.connection.public_key.length > 0) {
-					pub = this.connection.public_key;
-					if (!pub.has_suffix(".pub")) {
-						pub = pub + ".pub";
+					var candidate = this.connection.public_key;
+					if (!candidate.has_suffix(".pub")) {
+						candidate = candidate + ".pub";
+					}
+					if (GLib.FileUtils.test(candidate, GLib.FileTest.IS_REGULAR)) {
+						pub = candidate;
 					}
 				}
 				if (pub.length == 0 && GLib.FileUtils.test(ed, GLib.FileTest.IS_REGULAR)) {

@@ -35,6 +35,9 @@ namespace RooTerm
 		IDLE,
 		BUSY,
 		READY,
-		DEAD
+		/**
+		 * Child process has exited (SSH); tab may still be open for reconnect / close.
+		 */
+		EXITED
 	}
 }

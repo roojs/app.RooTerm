@@ -22,7 +22,8 @@ namespace RooTerm
 	 * Open-ended SSH session: login (password, passphrase, or already at shell),
 	 * optional sudo / ``lxc-console``; tab stays open when the job is disposed.
 	 *
-	 * Sets {@link Terminal.close_after} to ``-1`` (30s countdown if SSH exits).
+	 * On SSH exit while focused, calls {@link Terminal.close_in} (30s). Unfocused
+	 * exit waits until the user focuses the tab ({@link SshTerminal.select}).
 	 * Host-key focus lives in {@link SshLogin.on_content}; shell focus is here after login.
 	 */
 	public class OpenSession : SudoLogin
@@ -34,7 +35,12 @@ namespace RooTerm
 		public OpenSession(MainWindow window, Connection connection)
 		{
 			base(window, connection);
-			this.terminal.close_after = -1;
+			var ssh = (SshTerminal) this.terminal;
+			ssh.exited.connect(() => {
+				if (ssh.selected) {
+					ssh.close_in(30);
+				}
+			});
 		}
 
 		/**

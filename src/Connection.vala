@@ -20,6 +20,10 @@ namespace RooTerm
 {
 	/**
 	 * Tree / config row role for a {@link Connection}.
+	 *
+	 * Stored as an integer in ``connections.json``. **Order is permanent** —
+	 * never insert or reorder members (that remaps old rows). Always **append**
+	 * new values at the end.
 	 */
 	public enum ConnectionKind
 	{
@@ -185,10 +189,6 @@ namespace RooTerm
 
 		public unowned ParamSpec? find_property(string name)
 		{
-			// Legacy JSON keys map onto {@link kind}.
-			if (name == "is-group" || name == "lxc-container") {
-				return ((ObjectClass) typeof(Connection).class_ref()).find_property("kind");
-			}
 			return ((ObjectClass) typeof(Connection).class_ref()).find_property(name);
 		}
 
@@ -241,22 +241,6 @@ namespace RooTerm
 		public bool deserialize_property(string property_name, out Value value, ParamSpec pspec, Json.Node property_node)
 		{
 			switch (property_name) {
-				case "is-group":
-					if (property_node.get_boolean()) {
-						this.kind = ConnectionKind.GROUP;
-					}
-					value = Value(typeof(ConnectionKind));
-					value.set_enum(this.kind);
-					return true;
-
-				case "lxc-container":
-					if (property_node.get_boolean()) {
-						this.kind = ConnectionKind.LXC;
-					}
-					value = Value(typeof(ConnectionKind));
-					value.set_enum(this.kind);
-					return true;
-
 				case "kind":
 					this.kind = (ConnectionKind) property_node.get_int();
 					value = Value(typeof(ConnectionKind));
@@ -295,9 +279,11 @@ namespace RooTerm
 			var job = new FetchHosts(window, this);
 			try {
 				yield job.run();
+				job.terminal.close_in(0);
 				return job.container_names;
-			} finally {
-				job.terminal.close_tab();
+			} catch (JobError e) {
+				job.terminal.close_in(30);
+				throw e;
 			}
 		}
 

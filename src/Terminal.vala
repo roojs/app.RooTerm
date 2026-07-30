@@ -31,12 +31,6 @@ namespace RooTerm
 		 */
 		public string cwd = "";
 		/**
-		 * Auto-close after the child exits (SSH uses this; local ignores it):
-		 * ``-1`` interactive — 30s countdown on exit; ``0`` close immediately;
-		 * ``>0`` countdown that many seconds.
-		 */
-		public int close_after = 0;
-		/**
 		 * Mark for the host-tree session icon (active look is {@link tree_active}).
 		 */
 		public SessionState state {
@@ -82,16 +76,24 @@ namespace RooTerm
 					case SessionState.READY:
 						return "session-ready";
 
-					case SessionState.DEAD:
-						return "session-dead";
+					case SessionState.EXITED:
+						return "session-exited";
 
 					default:
 						return "session-idle";
 				}
 			}
 		}
-		protected bool selected = true;
+		/**
+		 * Whether this tab is the focused one on its host page.
+		 */
+		public bool selected = true;
 		protected uint settle_timeout = 0;
+		private uint close_tick = 0;
+		private int close_left = 0;
+		private int close_total = 0;
+		protected bool close_paused = false;
+		protected bool close_armed = false;
 
 		/**
 		 * Emitted when the tab should be closed (exit / countdown).
@@ -104,7 +106,7 @@ namespace RooTerm
 		public signal void label_changed();
 
 		/**
-		 * Emitted when {@link state} changes (busy / ready / idle / dead).
+		 * Emitted when {@link state} changes (busy / ready / idle / exited).
 		 */
 		public signal void state_changed();
 
@@ -171,7 +173,7 @@ namespace RooTerm
 				this.label_changed();
 			});
 			this.terminal.contents_changed.connect(() => {
-				if (this.selected || this.state == SessionState.DEAD) {
+				if (this.selected || this.state == SessionState.EXITED) {
 					return;
 				}
 				if (this.settle_timeout != 0) {
@@ -211,6 +213,75 @@ namespace RooTerm
 				return;
 			}
 			this.state = SessionState.IDLE;
+		}
+
+		/**
+		 * Close this tab after ``seconds`` (``0`` = immediately). Callers own the
+		 * policy; shared 1s countdown — subclasses refresh chrome via
+		 * {@link close_countdown}.
+		 *
+		 * @param seconds Delay before {@link close_tab}; ``0`` closes now
+		 */
+		public void close_in(int seconds)
+		{
+			if (seconds <= 0) {
+				this.close_tab();
+				return;
+			}
+			if (this.close_armed || this.close_paused) {
+				return;
+			}
+			this.close_armed = true;
+			this.close_left = seconds;
+			this.close_total = seconds;
+			this.close_countdown(this.close_left, this.close_total);
+			if (this.close_tick != 0) {
+				GLib.Source.remove(this.close_tick);
+			}
+			this.close_tick = GLib.Timeout.add_seconds(1, () => {
+				if (this.close_paused) {
+					this.close_tick = 0;
+					return false;
+				}
+				this.close_left--;
+				if (this.close_left <= 0) {
+					this.close_tick = 0;
+					this.close_countdown(0, this.close_total);
+					this.close_tab();
+					return false;
+				}
+				this.close_countdown(this.close_left, this.close_total);
+				return true;
+			});
+		}
+
+		/**
+		 * Stop the close countdown. ``keep_open`` leaves the tab open and blocks
+		 * another {@link close_in}; otherwise reset fully (e.g. before reconnect).
+		 *
+		 * @param keep_open true = Keep open; false = clear state / hide chrome
+		 */
+		public void cancel_close(bool keep_open = false)
+		{
+			if (this.close_tick != 0) {
+				GLib.Source.remove(this.close_tick);
+				this.close_tick = 0;
+			}
+			this.close_paused = keep_open;
+			if (!keep_open) {
+				this.close_armed = false;
+			}
+			this.close_countdown(keep_open ? this.close_left : 0, this.close_total);
+		}
+
+		/**
+		 * Update close chrome each second. ``left == 0`` means hide / done.
+		 *
+		 * @param left Seconds remaining
+		 * @param total Original delay from {@link close_in}
+		 */
+		protected virtual void close_countdown(int left, int total)
+		{
 		}
 
 		/**

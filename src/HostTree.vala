@@ -271,6 +271,7 @@ namespace RooTerm
 				btn.remove_css_class("session-busy");
 				btn.remove_css_class("session-ready");
 				btn.remove_css_class("session-dead");
+				btn.remove_css_class("session-exited");
 				btn.add_css_class(term.session_css);
 				if (!term.tree_active && term.state == SessionState.BUSY) {
 					btn.child = new Gtk.Spinner() {

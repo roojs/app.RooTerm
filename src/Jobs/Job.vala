@@ -35,8 +35,9 @@ namespace RooTerm
 	 * {@link SessionController.create} (no spawn), and exposes the live
 	 * {@link stream} so subclass ctors can set flags / connect signals.
 	 * Subclass {@link run} calls {@link Terminal.spawn} then the yield flow.
-	 * One-shot callers close the tab after {@link run}; interactive jobs set
-	 * {@link Terminal.close_after} to ``-1``.
+	 * One-shot callers finish with {@link Terminal.close_in} — ``0`` on success,
+	 * ``30`` on failure so helper output stays visible. Interactive
+	 * {@link OpenSession} arms close on {@link SshTerminal.exited} when focused.
 	 */
 	public abstract class Job : Object
 	{
@@ -117,6 +118,11 @@ namespace RooTerm
 			this.terminal = this.window.sessions.create(this.connection);
 			var ssh = this.terminal as SshTerminal;
 			this.stream = ssh.stream;
+			ssh.exited.connect(() => {
+				if (this.current_state != State.CANCELLED && this.current_state != State.DONE) {
+					this.current_state = State.CANCELLED;
+				}
+			});
 			this.contents_changed_id = this.terminal.terminal.contents_changed.connect(() => {
 				if (this.content_debounce != 0) {
 					return;
