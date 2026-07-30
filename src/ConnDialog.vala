@@ -476,24 +476,38 @@ namespace RooTerm
 		}
 
 		/**
-		 * If neither ``id_ed25519`` nor ``id_rsa`` exists, open {@link KeyDialog}
-		 * to create a passphrased key, then call ``next``.
+		 * Ensure the shared passphrased identity ``~/.ssh/id_ed25519_rooterm`` exists,
+		 * then call ``next``.
 		 *
-		 * @param next Continues SSH key setup when a public key is ready
+		 * @param next Continues SSH key setup when the shared key is ready
 		 */
 		private void ensure_key(owned KeyNext next)
 		{
 			var home = GLib.Environment.get_home_dir();
-			var ed = GLib.Path.build_filename(home, ".ssh", "id_ed25519.pub");
-			var rsa = GLib.Path.build_filename(home, ".ssh", "id_rsa.pub");
-			if (GLib.FileUtils.test(ed, GLib.FileTest.IS_REGULAR)
-					|| GLib.FileUtils.test(rsa, GLib.FileTest.IS_REGULAR)) {
+			var shared = GLib.Path.build_filename(home, ".ssh", "id_ed25519_rooterm");
+			if (GLib.FileUtils.test(shared, GLib.FileTest.IS_REGULAR)
+					&& GLib.FileUtils.test(shared + ".pub", GLib.FileTest.IS_REGULAR)) {
+				try {
+					var phrase = Secret.password_lookup_sync(
+						new Secret.Schema(
+							"org.roojs.rooterm.SshKey", Secret.SchemaFlags.NONE,
+							"path", Secret.SchemaAttributeType.STRING
+						),
+						null,
+						"path", shared
+					);
+					this.target.passphrase = phrase != null ? phrase : "";
+				} catch (GLib.Error e) {
+					GLib.warning("shared key secret load failed: %s", e.message);
+				}
+				this.target.public_key = shared;
 				next();
 				return;
 			}
-			var dlg = new KeyDialog();
+			var dlg = new KeyDialog(shared, true);
 			dlg.created.connect((identity, passphrase) => {
 				this.target.passphrase = passphrase;
+				this.target.public_key = identity;
 				try {
 					Secret.password_store_sync(
 						new Secret.Schema(
@@ -515,7 +529,7 @@ namespace RooTerm
 		}
 
 		/**
-		 * Install default identity via {@link SetupKey}, then re-present.
+		 * Install the shared passphrased identity via {@link SetupKey}, then re-present.
 		 */
 		private async void begin_setup_key()
 		{
@@ -529,7 +543,14 @@ namespace RooTerm
 				this.target.pass = this.pass_entry.text;
 			}
 			this.close();
+			var identity = this.target.public_key;
+			if (identity.length == 0) {
+				identity = GLib.Path.build_filename(
+					GLib.Environment.get_home_dir(), ".ssh", "id_ed25519_rooterm"
+				);
+			}
 			var job = new SetupKey(this.window, this.target);
+			job.stream.install_identity = identity;
 			var ok = false;
 			try {
 				yield job.run();
@@ -543,9 +564,10 @@ namespace RooTerm
 				this.present(this.window);
 				return;
 			}
-			this.pending_key_identity = job.installed_identity;
+			this.pending_key_identity = job.installed_identity.length > 0
+				? job.installed_identity : identity;
 			this.target.auth = "ssh_key";
-			this.target.public_key = job.installed_identity;
+			this.target.public_key = this.pending_key_identity;
 			this.setup_key_btn.visible = false;
 			this.auth_key.visible = true;
 			this.auth_key.active = true;
@@ -559,7 +581,7 @@ namespace RooTerm
 				? "Password (required for sudo)"
 				: "Password";
 			GLib.debug("ssh key installed identity=%s name=%s",
-				job.installed_identity, this.target.name);
+				this.target.public_key, this.target.name);
 			this.present(this.window);
 		}
 
