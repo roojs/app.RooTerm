@@ -27,7 +27,7 @@ namespace RooTerm
 		private Adw.HeaderBar header_bar;
 		public HostSearchPulldown host_search;
 		public HostTree host_tree;
-		private HostStack host_stack;
+		public HostStack host_stack;
 		public SessionController sessions;
 		public Config config;
 		private Gtk.Paned paned;
@@ -207,74 +207,6 @@ namespace RooTerm
 				this.host_tree.select(conn);
 				this.host_stack.pages.visible_child = page;
 				page.tab_view.selected_page = page.tab_view.get_nth_page(index);
-				this.sessions.focus();
-			});
-			this.host_tree.add_connection.connect((group) => {
-				var dlg = new ConnDialog(this);
-				dlg.fill(null, group);
-				dlg.saved.connect((conn) => {
-					this.config.by_uuid.set(conn.uuid, conn);
-					this.config.tree.append(group, conn);
-					try {
-						this.config.save();
-					} catch (GLib.Error e) {
-						GLib.warning("config save failed: %s", e.message);
-					}
-				});
-				dlg.present(this);
-			});
-			this.host_tree.edit_connection.connect((host) => {
-				if (host.kind == ConnectionKind.LXC) {
-					return;
-				}
-				var dlg = new ConnDialog(this);
-				dlg.fill(host, null);
-				dlg.saved.connect((conn) => {
-					try {
-						this.config.save();
-					} catch (GLib.Error e) {
-						GLib.warning("config save failed: %s", e.message);
-					}
-				});
-				dlg.present(this);
-			});
-			this.host_tree.delete_connection.connect((conn) => {
-				var alert = new Adw.AlertDialog("Delete " + conn.name + "?", null);
-				alert.add_response("cancel", "Cancel");
-				alert.add_response("delete", "Delete");
-				alert.set_response_appearance("delete", Adw.ResponseAppearance.DESTRUCTIVE);
-				alert.default_response = "cancel";
-				alert.close_response = "cancel";
-				alert.response.connect((response) => {
-					if (response != "delete") {
-						return;
-					}
-					conn.deleted = true;
-					this.config.tree.remove(conn);
-					try {
-						this.config.save();
-					} catch (GLib.Error e) {
-						GLib.warning("config save failed: %s", e.message);
-					}
-				});
-				alert.present(this);
-			});
-			this.host_tree.new_local.connect((conn) => {
-				if (conn.kind == ConnectionKind.LOCAL_PATH) {
-					this.sessions.open_local(conn.parent, conn.name);
-					return;
-				}
-				this.sessions.open_local(conn);
-			});
-			this.host_tree.close_local.connect((conn) => {
-				if (conn.parent == null || conn.local_tab < 0) {
-					return;
-				}
-				var page = this.host_stack.pages.get_child_by_name(conn.parent.uuid) as HostPage;
-				if (page == null || conn.local_tab >= page.tab_view.n_pages) {
-					return;
-				}
-				page.tab_view.close_page(page.tab_view.get_nth_page(conn.local_tab));
 				this.sessions.focus();
 			});
 			this.host_search.connection_selected.connect((conn) => {

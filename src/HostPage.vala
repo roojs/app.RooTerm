@@ -19,8 +19,8 @@
 namespace RooTerm
 {
 	/**
-	 * One host: {@link Adw.TabView} of {@link Terminal}s with an {@link Adw.TabBar}.
-	 * Localhost also keeps path children in the tree as a second switcher.
+	 * One host: {@link Adw.TabView} of {@link Terminal}s with an {@link Adw.TabBar}
+	 * always shown (even for a single tab). Localhost also keeps path children in the tree.
 	 * Open terminals live on {@link Connection.sessions} for the host tree.
 	 */
 	public class HostPage : Gtk.Box
@@ -74,7 +74,8 @@ namespace RooTerm
 				vexpand = true
 			};
 			this.tab_bar = new Adw.TabBar() {
-				view = this.tab_view
+				view = this.tab_view,
+				autohide = false
 			};
 			this.append(this.tab_bar);
 			this.append(this.tab_view);

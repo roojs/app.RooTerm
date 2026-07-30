@@ -2,7 +2,7 @@
 
 Written for **AI agents** — **mandatory** when an agent drafts, reviews, or implements from **`docs/plans/*`**. Human contributors may treat this as a helpful guide.
 
-Plan markdown files live in **`docs/plans/`**; completed work is archived under **`docs/plans/done/`** (see **Done / archive** below). This document is intentionally **not** named `README.md` so it is not mistaken for a generic package readme.
+Plan markdown files live in **`docs/plans/`**. Completed plans stay in that folder with **`DONE`** in the filename (e.g. **`0.1-DONE-base-plan.md`**) — **no** separate **`done/`** archive. See **Done / archive** below. This document is intentionally **not** named `README.md` so it is not mistaken for a generic package readme.
 
 It is the **canonical** place for: plan shape, code-proposal fences, **ordered chunk format** for large methods, **implementation workflow**, and the **checklist for plans**. Coding and build standards live in **`docs/coding-standards.md`** and **`docs/build-rules.md`**. When **implementing** Vala from a plan, use **`docs/coding-standards-router.md`** to choose which coding-standards sections to read (do not read the whole file by default).
 
@@ -426,7 +426,7 @@ Follow **`docs/coding-standards.md`** — [Defensive code and null checks](codin
 
 ## Done / archive
 
-When implemented: move or copy to **`docs/plans/done/`**, prefix filename with **`DONE`** or **`REJECTED`**, one-line **Status: DONE** and pointer to files changed.
+When implemented: rename in place under **`docs/plans/`** to include **`DONE`** (or **`REJECTED`**) after the version prefix — e.g. **`0.5-DONE-dialog-terminal-workflows.md`**. Set **`Status: DONE`**. Do **not** use a **`docs/plans/done/`** subfolder in this repo.
 
 ### Sub-plans and `1.0-summary.md`
 

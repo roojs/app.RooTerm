@@ -27,7 +27,7 @@ namespace RooTerm
 		private Gtk.ListView list_view;
 		public Gtk.SingleSelection selection;
 		private Gtk.TreeListModel tree_model;
-		private weak MainWindow window;
+		private HostTreeMenu menu;
 
 		/**
 		 * Emitted on double-click / activate of a non-group connection.
@@ -46,41 +46,6 @@ namespace RooTerm
 		 * @param tab_index Zero-based tab index to focus
 		 */
 		public signal void terminal_selected(Connection connection, int tab_index);
-
-		/**
-		 * Emitted for group context menu **Add connection**.
-		 *
-		 * @param group Parent group for the new host
-		 */
-		public signal void add_connection(Connection group);
-
-		/**
-		 * Emitted for host context menu **Edit connection**.
-		 *
-		 * @param host Host to edit
-		 */
-		public signal void edit_connection(Connection host);
-
-		/**
-		 * Emitted for host context menu **Delete** (after the user picks the item; confirm in window).
-		 *
-		 * @param connection Host or group to soft-delete
-		 */
-		public signal void delete_connection(Connection connection);
-
-		/**
-		 * Emitted for Localhost / path context menu **New terminal**.
-		 *
-		 * @param connection Localhost root or a {@link ConnectionKind.LOCAL_PATH} row
-		 */
-		public signal void new_local(Connection connection);
-
-		/**
-		 * Emitted for path context menu **Close**.
-		 *
-		 * @param connection {@link ConnectionKind.LOCAL_PATH} row to close
-		 */
-		public signal void close_local(Connection connection);
 
 		/**
 		 * Highlight ``connection`` in the tree (no spawn).
@@ -103,7 +68,7 @@ namespace RooTerm
 		/**
 		 * Build tree UI bound to ``config.tree`` (live root {@link HostTreeNodes}).
 		 *
-		 * @param window Main window (sessions / config for LXC refresh)
+		 * @param window Main window (passed to {@link HostTreeMenu})
 		 */
 		public HostTree(MainWindow window)
 		{
@@ -113,7 +78,6 @@ namespace RooTerm
 				hexpand: false,
 				vexpand: true
 			);
-			this.window = window;
 
 			this.tree_model = new Gtk.TreeListModel(
 				window.config.tree,
@@ -236,6 +200,8 @@ namespace RooTerm
 				hexpand = true,
 				vexpand = true
 			};
+			this.menu = new HostTreeMenu(window, this);
+			this.menu.set_parent(this.list_view);
 			var menu_click = new Gtk.GestureClick() {
 				button = Gdk.BUTTON_SECONDARY
 			};
@@ -246,7 +212,7 @@ namespace RooTerm
 					if (expander != null && expander.list_row != null) {
 						var menu_conn = expander.list_row.item as Connection;
 						if (menu_conn != null) {
-							this.popup_menu(this.list_view, menu_conn, x, y);
+							this.menu.popup_for(menu_conn, x, y);
 						}
 						return;
 					}
@@ -272,136 +238,6 @@ namespace RooTerm
 				hscrollbar_policy = Gtk.PolicyType.NEVER
 			};
 			this.append(scrolled);
-		}
-
-		/**
-		 * Context menu for ``menu_conn`` at the click point on ``row_box``.
-		 */
-		private void popup_menu(Gtk.Widget row_box, Connection menu_conn, double x, double y)
-		{
-			var pop = new Gtk.Popover();
-			var box = new Gtk.Box(Gtk.Orientation.VERTICAL, 0);
-			switch (menu_conn.kind) {
-				case ConnectionKind.LOCAL:
-					var new_item = new Gtk.Button.with_label("New terminal") {
-						has_frame = false,
-						halign = Gtk.Align.FILL
-					};
-					new_item.clicked.connect(() => {
-						pop.popdown();
-						this.new_local(menu_conn);
-					});
-					box.append(new_item);
-					break;
-
-				case ConnectionKind.LOCAL_PATH:
-					var path_new = new Gtk.Button.with_label("New terminal here") {
-						has_frame = false,
-						halign = Gtk.Align.FILL
-					};
-					path_new.clicked.connect(() => {
-						pop.popdown();
-						this.new_local(menu_conn);
-					});
-					box.append(path_new);
-					var close_item = new Gtk.Button.with_label("Close") {
-						has_frame = false,
-						halign = Gtk.Align.FILL
-					};
-					close_item.clicked.connect(() => {
-						pop.popdown();
-						this.close_local(menu_conn);
-					});
-					box.append(close_item);
-					break;
-
-				case ConnectionKind.GROUP:
-					var add_item = new Gtk.Button.with_label("Add connection") {
-						has_frame = false,
-						halign = Gtk.Align.FILL
-					};
-					add_item.clicked.connect(() => {
-						pop.popdown();
-						this.add_connection(menu_conn);
-					});
-					box.append(add_item);
-					var can_delete = true;
-					foreach (var child in menu_conn.children) {
-						if (!child.deleted) {
-							can_delete = false;
-							break;
-						}
-					}
-					var group_del = new Gtk.Button.with_label("Delete") {
-						has_frame = false,
-						halign = Gtk.Align.FILL,
-						sensitive = can_delete
-					};
-					group_del.clicked.connect(() => {
-						pop.popdown();
-						this.delete_connection(menu_conn);
-					});
-					box.append(group_del);
-					break;
-
-				case ConnectionKind.HOST:
-					var edit_item = new Gtk.Button.with_label("Edit connection") {
-						has_frame = false,
-						halign = Gtk.Align.FILL
-					};
-					edit_item.clicked.connect(() => {
-						pop.popdown();
-						this.edit_connection(menu_conn);
-					});
-					box.append(edit_item);
-					if (menu_conn.lxc_host) {
-						var refresh_item = new Gtk.Button.with_label("Refresh containers") {
-							has_frame = false,
-							halign = Gtk.Align.FILL
-						};
-						refresh_item.clicked.connect(() => {
-							pop.popdown();
-							menu_conn.refresh_containers.begin(this.window, (obj, res) => {
-								try {
-									menu_conn.apply_containers(
-										menu_conn.refresh_containers.end(res), this.window
-									);
-								} catch (JobError e) {
-									GLib.warning("fetch hosts failed name=%s: %s",
-										menu_conn.name, e.message);
-								}
-							});
-						});
-						box.append(refresh_item);
-					}
-					var host_del = new Gtk.Button.with_label("Delete") {
-						has_frame = false,
-						halign = Gtk.Align.FILL
-					};
-					host_del.clicked.connect(() => {
-						pop.popdown();
-						this.delete_connection(menu_conn);
-					});
-					box.append(host_del);
-					break;
-
-				case ConnectionKind.LXC:
-					// TODO: container management (console vs attach) — no ConnDialog edit
-					var lxc_del = new Gtk.Button.with_label("Delete") {
-						has_frame = false,
-						halign = Gtk.Align.FILL
-					};
-					lxc_del.clicked.connect(() => {
-						pop.popdown();
-						this.delete_connection(menu_conn);
-					});
-					box.append(lxc_del);
-					break;
-			}
-			pop.child = box;
-			pop.set_parent(row_box);
-			pop.pointing_to = Gdk.Rectangle() { x = (int) x, y = (int) y, width = 1, height = 1 };
-			pop.popup();
 		}
 
 		/**
