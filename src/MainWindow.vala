@@ -56,7 +56,7 @@ namespace RooTerm
 			);
 
 			var css = new Gtk.CssProvider();
-			css.load_from_resource("/rooterm/style.css");
+			css.load_from_resource("/style.css");
 			Gtk.StyleContext.add_provider_for_display(
 				this.get_display(),
 				css,

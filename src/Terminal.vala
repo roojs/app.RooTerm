@@ -133,6 +133,30 @@ namespace RooTerm
 				font_desc = Pango.FontDescription.from_string(font)
 			};
 			this.terminal.set_size(80, 24);
+			try {
+
+				// needs a design temporary for now
+
+				var bytes = GLib.resources_lookup_data(
+					"/solarized-dark.json",
+					GLib.ResourceLookupFlags.NONE
+				);
+				var parser = new Json.Parser();
+				parser.load_from_data((string) bytes.get_data(), (ssize_t) bytes.get_size());
+				var root = parser.get_root().get_object();
+				var fg = Gdk.RGBA();
+				var bg = Gdk.RGBA();
+				fg.parse(root.get_string_member("foreground"));
+				bg.parse(root.get_string_member("background"));
+				var arr = root.get_array_member("palette");
+				var palette = new Gdk.RGBA[arr.get_length()];
+				for (var i = 0; i < arr.get_length(); i++) {
+					palette[i].parse(arr.get_string_element(i));
+				}
+				this.terminal.set_colors(fg, bg, palette);
+			} catch (GLib.Error e) {
+				GLib.warning("terminal theme: %s", e.message);
+			}
 			this.append(new Gtk.ScrolledWindow() {
 				child = this.terminal,
 				hexpand = true,
