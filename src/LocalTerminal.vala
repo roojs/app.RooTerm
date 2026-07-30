@@ -47,7 +47,7 @@ namespace RooTerm
 					GLib.Source.remove(this.settle_timeout);
 					this.settle_timeout = 0;
 				}
-				this.close_tab();
+				this.close_in(0);
 			});
 		}
 

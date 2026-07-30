@@ -94,6 +94,13 @@ namespace RooTerm
 		private int close_total = 0;
 		protected bool close_paused = false;
 		protected bool close_armed = false;
+		/**
+		 * True when the tab may be removed (countdown finished or Close now).
+		 * Tab X starts a countdown until this is set.
+		 */
+		public bool close_confirmed = false;
+		private Gtk.Box close_bar;
+		private Gtk.ProgressBar close_progress;
 
 		/**
 		 * Emitted when the tab should be closed (exit / countdown).
@@ -131,6 +138,44 @@ namespace RooTerm
 				hexpand = true,
 				vexpand = true
 			});
+
+			this.close_progress = new Gtk.ProgressBar() {
+				fraction = 1.0,
+				hexpand = true,
+				valign = Gtk.Align.CENTER,
+				show_text = true,
+				text = ""
+			};
+			var close_now = new Gtk.Button.with_label("Close now") {
+				valign = Gtk.Align.CENTER
+			};
+			close_now.add_css_class("destructive-action");
+			close_now.clicked.connect(() => {
+				this.close_in(0);
+			});
+			var leave_open = new Gtk.Button.with_label("Leave open") {
+				valign = Gtk.Align.CENTER,
+				tooltip_text = "Enter to reconnect"
+			};
+			leave_open.add_css_class("suggested-action");
+			leave_open.clicked.connect(() => {
+				this.cancel_close();
+				if (this.state != SessionState.EXITED) {
+					return;
+				}
+				this.terminal.feed("\r\n[Leave open - Enter to reconnect]\r\n".data);
+			});
+			this.close_bar = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 8) {
+				visible = false,
+				margin_start = 8,
+				margin_end = 8,
+				margin_top = 4,
+				margin_bottom = 6
+			};
+			this.close_bar.append(close_now);
+			this.close_bar.append(this.close_progress);
+			this.close_bar.append(leave_open);
+			this.append(this.close_bar);
 
 			var shortcuts = new Gtk.ShortcutController() {
 				propagation_phase = Gtk.PropagationPhase.CAPTURE,
@@ -225,6 +270,14 @@ namespace RooTerm
 		public void close_in(int seconds)
 		{
 			if (seconds <= 0) {
+				if (this.close_tick != 0) {
+					GLib.Source.remove(this.close_tick);
+					this.close_tick = 0;
+				}
+				this.close_armed = false;
+				this.close_paused = false;
+				this.close_countdown(0, this.close_total);
+				this.close_confirmed = true;
 				this.close_tab();
 				return;
 			}
@@ -247,6 +300,7 @@ namespace RooTerm
 				if (this.close_left <= 0) {
 					this.close_tick = 0;
 					this.close_countdown(0, this.close_total);
+					this.close_confirmed = true;
 					this.close_tab();
 					return false;
 				}
@@ -256,10 +310,11 @@ namespace RooTerm
 		}
 
 		/**
-		 * Stop the close countdown. ``keep_open`` leaves the tab open and blocks
-		 * another {@link close_in}; otherwise reset fully (e.g. before reconnect).
+		 * Stop the close countdown and hide chrome. ``keep_open`` blocks another
+		 * {@link close_in} (unused by Leave open — that resets fully so X can
+		 * start the countdown again).
 		 *
-		 * @param keep_open true = Keep open; false = clear state / hide chrome
+		 * @param keep_open true = block another close_in; false = full reset
 		 */
 		public void cancel_close(bool keep_open = false)
 		{
@@ -270,6 +325,7 @@ namespace RooTerm
 			this.close_paused = keep_open;
 			if (!keep_open) {
 				this.close_armed = false;
+				this.close_confirmed = false;
 			}
 			this.close_countdown(keep_open ? this.close_left : 0, this.close_total);
 		}
@@ -282,6 +338,19 @@ namespace RooTerm
 		 */
 		protected virtual void close_countdown(int left, int total)
 		{
+			if (left <= 0 || total <= 0) {
+				this.close_bar.visible = false;
+				return;
+			}
+			if (!this.close_bar.visible) {
+				this.close_bar.visible = true;
+				this.terminal.grab_focus();
+			}
+			if (this.close_paused) {
+				return;
+			}
+			this.close_progress.text = "Closing in " + left.to_string() + " seconds…";
+			this.close_progress.fraction = (double) left / (double) total;
 		}
 
 		/**

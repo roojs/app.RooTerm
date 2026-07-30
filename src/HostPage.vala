@@ -85,6 +85,11 @@ namespace RooTerm
 			});
 			this.tab_view.close_page.connect((page) => {
 				var term = (Terminal) page.child;
+				if (!term.close_confirmed) {
+					term.close_in(30);
+					this.tab_view.close_page_finish(page, false);
+					return true;
+				}
 				var at = this.terminals.index_of(term);
 				this.terminals.remove_at(at);
 				this.connection.sessions.remove(at);

@@ -25,9 +25,6 @@ namespace RooTerm
 	{
 		public SshStream stream;
 		private string window_title = "";
-		private Gtk.Box close_bar;
-		private Gtk.Label close_label;
-		private Gtk.ProgressBar close_progress;
 
 		/**
 		 * Emitted when the SSH child process exits.
@@ -44,33 +41,6 @@ namespace RooTerm
 		public SshTerminal(Connection connection, string font = "Monospace 9", SshStream? in_stream = null)
 		{
 			base(connection, font);
-			this.close_progress = new Gtk.ProgressBar() {
-				fraction = 1.0,
-				hexpand = true
-			};
-			this.close_label = new Gtk.Label("") {
-				hexpand = true,
-				xalign = 0.0f
-			};
-			var keep = new Gtk.Button.with_label("Keep open");
-			keep.clicked.connect(() => {
-				this.cancel_close(true);
-				this.close_label.label = "Kept open - Enter to reconnect";
-				this.close_progress.fraction = 1.0;
-			});
-			var close_row = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 8);
-			close_row.append(this.close_label);
-			close_row.append(keep);
-			this.close_bar = new Gtk.Box(Gtk.Orientation.VERTICAL, 4) {
-				visible = false,
-				margin_start = 8,
-				margin_end = 8,
-				margin_top = 4,
-				margin_bottom = 6
-			};
-			this.close_bar.append(this.close_progress);
-			this.close_bar.append(close_row);
-			this.append(this.close_bar);
 
 			if (in_stream != null) {
 				this.stream = in_stream;
@@ -155,26 +125,6 @@ namespace RooTerm
 				return;
 			}
 			base.select(on);
-		}
-
-		/**
-		 * {@inheritDoc}
-		 */
-		protected override void close_countdown(int left, int total)
-		{
-			if (left <= 0 || total <= 0) {
-				this.close_bar.visible = false;
-				return;
-			}
-			if (!this.close_bar.visible) {
-				this.close_bar.visible = true;
-				this.terminal.grab_focus();
-			}
-			if (this.close_paused) {
-				return;
-			}
-			this.close_label.label = "Closing in " + left.to_string() + " seconds…";
-			this.close_progress.fraction = (double) left / (double) total;
 		}
 
 		/**
