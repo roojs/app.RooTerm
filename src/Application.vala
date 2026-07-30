@@ -86,21 +86,44 @@ namespace RooTerm
 	}
 
 	/**
-	 * RooTerm GTK application: ``--debug`` logging and main window.
+	 * RooTerm GTK application: ``--debug`` logging, session-bus {@link DBus}, main window.
+	 *
+	 * Daemon-style: {@link hold} keeps the process up when the window is hidden
+	 * or closed; quit via {@link DBus.quit} / ``rooterm --quit``.
+	 *
+	 * == Example ==
+	 *
+	 * {{{
+	 * rooterm --toggle
+	 * rooterm --toggle-key F1
+	 * rooterm --quit
+	 * }}}
 	 */
 	public class Application : Adw.Application
 	{
 		public static bool opt_debug = false;
 		public static bool opt_debug_critical = false;
+		public static bool opt_toggle = false;
+		public static bool opt_quit = false;
+		public static string opt_toggle_key = "";
+
+		/**
+		 * Session-bus object (registered under org.roojs.RooTerm.DBus).
+		 */
+		public DBus dbus;
 
 		private const GLib.OptionEntry[] app_options = {
 			{ "debug", 'd', 0, GLib.OptionArg.NONE, ref opt_debug, "Enable debug output", null },
 			{ "debug-critical", 0, 0, GLib.OptionArg.NONE, ref opt_debug_critical, "Treat critical warnings as errors", null },
+			{ "toggle", 0, 0, GLib.OptionArg.NONE, ref opt_toggle, "Show or hide the main window", null },
+			{ "quit", 0, 0, GLib.OptionArg.NONE, ref opt_quit, "Quit the running RooTerm", null },
+			{ "toggle-key", 0, 0, GLib.OptionArg.STRING, ref opt_toggle_key, "Set global toggle key (e.g. F12)", "KEY" },
 			{ null }
 		};
 
 		/**
-		 * Creates the application and installs the debug log handler.
+		 * Creates the application and installs debug logging.
+		 * Session-bus {@link DBus} + daemon {@link hold} run in {@link startup} (primary only).
 		 */
 		public Application()
 		{
@@ -123,13 +146,27 @@ namespace RooTerm
 				var window = new MainWindow(this);
 				this.add_window(window);
 				window.present();
+				new GnomeShell(window).ensure();
 			});
+		}
+
+		/**
+		 * Primary only: create session-bus {@link DBus} and hold so hide/close does not quit.
+		 */
+		protected override void startup()
+		{
+			base.startup();
+			this.dbus = new DBus(this);
+			this.hold();
 		}
 
 		protected override int command_line(GLib.ApplicationCommandLine command_line)
 		{
 			opt_debug = false;
 			opt_debug_critical = false;
+			opt_toggle = false;
+			opt_quit = false;
+			opt_toggle_key = "";
 
 			string[] args = command_line.get_arguments();
 			var opt_context = new GLib.OptionContext(this.get_application_id());
@@ -148,10 +185,33 @@ namespace RooTerm
 			RooTerm.debug_on = opt_debug;
 			RooTerm.debug_critical_enabled = opt_debug_critical;
 
-			this.hold();
-			this.activate();
-			this.release();
+			if (opt_toggle_key != "") {
+				try {
+					var config = Config.load();
+					config.toggle_key = opt_toggle_key;
+					config.save();
+					var settings = new GLib.Settings("org.gnome.shell.extensions.rooterm");
+					string[] keys = { opt_toggle_key };
+					settings.set_strv("toggle", keys);
+				} catch (GLib.Error e) {
+					GLib.warning("toggle-key save failed: %s", e.message);
+				}
+				if (!opt_toggle && !opt_quit) {
+					return 0;
+				}
+			}
 
+			if (opt_quit) {
+				this.quit();
+				return 0;
+			}
+
+			if (opt_toggle) {
+				this.dbus.toggle();
+				return 0;
+			}
+
+			this.activate();
 			return 0;
 		}
 	}

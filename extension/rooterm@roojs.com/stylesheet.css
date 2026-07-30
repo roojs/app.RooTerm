@@ -1,0 +1,9 @@
+/* Panel hover tooltip. */
+.rooterm-tooltip {
+  background-color: rgba(0, 0, 0, 0.8);
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+.rooterm-tooltip StLabel {
+  color: #ffffff;
+}

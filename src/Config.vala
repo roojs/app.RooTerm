@@ -19,49 +19,18 @@
 namespace RooTerm
 {
 	/**
-	 * Nested defaults block in ``connections.json``.
-	 */
-	public class ConfigDefaults : Object, Json.Serializable
-	{
-		public string terminal_font { get; set; default = "Monospace 9"; }
-		public int window_width { get; set; default = 1024; }
-		public int window_height { get; set; default = 768; }
-
-		public unowned ParamSpec? find_property(string name)
-		{
-			return ((ObjectClass) typeof(ConfigDefaults).class_ref()).find_property(name);
-		}
-
-		public new void Json.Serializable.set_property(ParamSpec pspec, Value value)
-		{
-			((Object) this).set_property(pspec.get_name(), value);
-		}
-
-		public new Value Json.Serializable.get_property(ParamSpec pspec)
-		{
-			Value val = Value(pspec.value_type);
-			((Object) this).get_property(pspec.get_name(), ref val);
-			return val;
-		}
-
-		public Json.Node serialize_property(string property_name, Value value, ParamSpec pspec)
-		{
-			return default_serialize_property(property_name, value, pspec);
-		}
-
-		public bool deserialize_property(string property_name, out Value value, ParamSpec pspec, Json.Node property_node)
-		{
-			return default_deserialize_property(property_name, out value, pspec, property_node);
-		}
-	}
-
-	/**
 	 * RooTerm ``connections.json``: load/save and one-shot Ásbrú import.
 	 */
 	public class Config : Object, Json.Serializable
 	{
 		public int version { get; set; default = 1; }
-		public ConfigDefaults defaults { get; set; default = new ConfigDefaults(); }
+		public string terminal_font { get; set; default = "Monospace 9"; }
+		public int window_width { get; set; default = 1024; }
+		public int window_height { get; set; default = 768; }
+		/**
+		 * Guake global toggle key (Shell extension / ``--toggle-key``).
+		 */
+		public string toggle_key { get; set; default = "F12"; }
 		public Gee.ArrayList<Connection> connections {
 			get;
 			set;
@@ -90,18 +59,6 @@ namespace RooTerm
 			set;
 			default = new Gee.HashMap<string, string>();
 		}
-		public string terminal_font {
-			get { return this.defaults.terminal_font; }
-			set { this.defaults.terminal_font = value; }
-		}
-		public int window_width {
-			get { return this.defaults.window_width; }
-			set { this.defaults.window_width = value; }
-		}
-		public int window_height {
-			get { return this.defaults.window_height; }
-			set { this.defaults.window_height = value; }
-		}
 
 		public unowned ParamSpec? find_property(string name)
 		{
@@ -127,12 +84,7 @@ namespace RooTerm
 				case "tree":
 				case "path":
 				case "pending-secrets":
-				case "terminal-font":
-				case "window-width":
-				case "window-height":
 					return null;
-				case "defaults":
-					return Json.gobject_serialize(this.defaults);
 				case "connections":
 					var arr = new Json.Array();
 					foreach (var conn in this.connections) {
@@ -149,11 +101,6 @@ namespace RooTerm
 		public bool deserialize_property(string property_name, out Value value, ParamSpec pspec, Json.Node property_node)
 		{
 			switch (property_name) {
-				case "defaults":
-					this.defaults = (ConfigDefaults) Json.gobject_deserialize(typeof(ConfigDefaults), property_node);
-					value = Value(typeof(ConfigDefaults));
-					value.set_object(this.defaults);
-					return true;
 				case "connections":
 					this.connections.clear();
 					if (property_node.get_node_type() == Json.NodeType.ARRAY) {

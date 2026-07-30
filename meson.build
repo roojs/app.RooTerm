@@ -22,7 +22,7 @@ secret_dep = dependency('libsecret-1')
 rooterm_resources = gnome.compile_resources(
   'rooterm-resources',
   'resources/gresources.xml',
-  source_dir: 'resources',
+  source_dir: meson.project_source_root(),
   c_name: 'rooterm_resources',
 )
 
@@ -30,6 +30,8 @@ executable('rooterm',
   files(
     'src/main.vala',
     'src/Application.vala',
+    'src/DBus.vala',
+    'src/GnomeShell.vala',
     'src/MainWindow.vala',
     'src/Connection.vala',
     'src/HostTreeNodes.vala',
@@ -72,6 +74,11 @@ executable('rooterm',
 install_data(
   'data/icons/hicolor/scalable/apps/org.roojs.rooterm.svg',
   install_dir: get_option('datadir') / 'icons' / 'hicolor' / 'scalable' / 'apps',
+)
+
+install_subdir(
+  'extension/rooterm@roojs.com',
+  install_dir: get_option('datadir') / 'gnome-shell' / 'extensions',
 )
 
 desktop_conf = configuration_data()

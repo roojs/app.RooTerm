@@ -1,0 +1,14 @@
+{
+  "uuid": "rooterm@roojs.com",
+  "name": "RooTerm",
+  "description": "Global toggle and panel menu for RooTerm (Guake-style drop-down).",
+  "shell-version": [
+    "45",
+    "46",
+    "47",
+    "48",
+    "49"
+  ],
+  "settings-schema": "org.gnome.shell.extensions.rooterm",
+  "version": 1
+}
