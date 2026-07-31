@@ -178,11 +178,24 @@ namespace RooTerm
 				}
 				try {
 					var link = GLib.FileUtils.read_link("/proc/%d/cwd".printf(pid));
-					if (link.length == 0 || link == this.session.cwd) {
+					if (link.length == 0) {
 						return false;
 					}
-					GLib.debug("local cwd pid=%d path=%s", pid, link);
+					var user = "";
+					Posix.Stat st;
+					if (Posix.stat("/proc/%d".printf(pid), out st) == 0) {
+						unowned Posix.Passwd? pw = Posix.getpwuid(st.st_uid);
+						if (pw != null) {
+							user = pw.pw_name;
+						}
+					}
+					var local = (LocalTerminal) this.session;
+					if (link == this.session.cwd && user == local.peer_user) {
+						return false;
+					}
+					GLib.debug("local cwd pid=%d user=%s path=%s", pid, user, link);
 					this.session.cwd = link;
+					local.peer_user = user;
 					this.session.label_changed();
 				} catch (GLib.FileError e) {
 					GLib.debug("local cwd read failed pid=%d: %s", pid, e.message);
@@ -281,18 +294,21 @@ namespace RooTerm
 				}
 				GLib.debug("prompt_hint name=%s hint=%s", this.connection.name, last);
 				this.prompt_hint = last;
-				try {
-					var re = new GLib.Regex("^[^\\s@]+@[^\\s:]+:(.+)[#$]\\s*$");
-					MatchInfo info;
-					if (re.match(last, 0, out info)) {
-						var dir = info.fetch(1);
-						if (dir != null && dir.length > 0 && dir != this.session.cwd) {
-							this.session.cwd = dir;
-							this.session.label_changed();
+				// Local tabs use ``/proc`` cwd; prompt path is often ``~`` and would clobber it.
+				if (this.session.connection.kind != ConnectionKind.LOCAL_PATH) {
+					try {
+						var re = new GLib.Regex("^[^\\s@]+@[^\\s:]+:(.+)[#$]\\s*$");
+						MatchInfo info;
+						if (re.match(last, 0, out info)) {
+							var dir = info.fetch(1);
+							if (dir != null && dir.length > 0 && dir != this.session.cwd) {
+								this.session.cwd = dir;
+								this.session.label_changed();
+							}
 						}
+					} catch (GLib.RegexError e) {
+						GLib.debug("prompt cwd parse: %s", e.message);
 					}
-				} catch (GLib.RegexError e) {
-					GLib.debug("prompt cwd parse: %s", e.message);
 				}
 				this.label_changed();
 				return false;

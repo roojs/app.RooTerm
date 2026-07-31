@@ -29,6 +29,11 @@ namespace RooTerm
 		 * Directory to spawn in (home when empty).
 		 */
 		public string start_cwd = "";
+		/**
+		 * Effective username of the foreground process (from ``/proc``).
+		 * Empty until {@link TerminalStream} has read it.
+		 */
+		public string peer_user = "";
 
 		/**
 		 * Build a local shell tab (call {@link spawn} to start).
@@ -56,16 +61,37 @@ namespace RooTerm
 
 		/**
 		 * {@inheritDoc}
+		 * Own home → ``~`` / ``~/…``; other user → ``user:~`` / ``user:path``.
 		 */
 		public override string label()
 		{
-			if (this.cwd.length > 0) {
-				return this.cwd;
+			var path = this.cwd;
+			if (path.length == 0) {
+				path = this.start_cwd;
 			}
-			if (this.start_cwd.length > 0) {
-				return this.start_cwd;
+			if (path.length == 0) {
+				path = GLib.Environment.get_home_dir();
 			}
-			return GLib.Environment.get_home_dir();
+			var me = GLib.Environment.get_user_name();
+			if (this.peer_user.length == 0 || this.peer_user == me) {
+				var home = GLib.Environment.get_home_dir();
+				if (path == home || path == "~") {
+					return "~";
+				}
+				if (path.has_prefix(home + "/")) {
+					return "~" + path.substring(home.length);
+				}
+				return path;
+			}
+			unowned Posix.Passwd? pw = Posix.getpwnam(this.peer_user);
+			var home = pw != null ? pw.pw_dir : "";
+			var show = path;
+			if (home.length > 0 && (path == home || path == "~")) {
+				show = "~";
+			} else if (home.length > 0 && path.has_prefix(home + "/")) {
+				show = "~" + path.substring(home.length);
+			}
+			return this.peer_user + ":" + show;
 		}
 
 		/**
