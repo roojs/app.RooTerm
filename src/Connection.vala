@@ -87,10 +87,6 @@ namespace RooTerm
 		 * Container name for ``lxc-console -n`` (on the host or this child row).
 		 */
 		public string lxc_name { get; set; default = ""; }
-		/**
-		 * Tab index on the Localhost {@link HostPage} for a {@link ConnectionKind.LOCAL_PATH} row.
-		 */
-		public int local_tab { get; set; default = -1; }
 		public Gee.ArrayList<Forward> forwards {
 			get;
 			set;

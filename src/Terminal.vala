@@ -27,7 +27,15 @@ namespace RooTerm
 		public Connection connection;
 		public Vte.Terminal terminal;
 		/**
-		 * Live cwd from OSC 7 when the shell reports it.
+		 * VTE commit / contents / cwd watcher for this tab.
+		 */
+		public TerminalStream stream;
+		/**
+		 * Child pid from the last successful {@link spawn} (``-1`` if none).
+		 */
+		public int child_pid = -1;
+		/**
+		 * Live cwd from OSC 7 / stream when known.
 		 */
 		public string cwd = "";
 		/**
@@ -118,7 +126,8 @@ namespace RooTerm
 		public signal void state_changed();
 
 		/**
-		 * Build scrolled VTE with copy/paste shortcuts, OSC 7 cwd, and busy/ready marks.
+		 * Build scrolled VTE with copy/paste shortcuts and busy/ready marks.
+		 * Cwd / prompt watching is {@link TerminalStream} (created by subclasses).
 		 *
 		 * @param connection Host or Localhost this tab belongs to
 		 * @param font Pango font string
@@ -256,26 +265,6 @@ namespace RooTerm
 			});
 			this.terminal.add_controller(zoom);
 
-			this.terminal.termprop_changed.connect((prop) => {
-				if (prop != Vte.TERMPROP_CURRENT_DIRECTORY_URI) {
-					return;
-				}
-				var uri = this.terminal.ref_termprop_uri(prop);
-				if (uri == null) {
-					return;
-				}
-				// Prefer Uri path: File.get_path() is null for file://hostname/...
-				var path = uri.get_path();
-				if (path == null || path.length == 0) {
-					path = GLib.File.new_for_uri(uri.to_string()).get_path();
-				}
-				if (path == null || path.length == 0) {
-					return;
-				}
-				var unesc = GLib.Uri.unescape_string(path);
-				this.cwd = unesc != null ? unesc : path;
-				this.label_changed();
-			});
 			this.terminal.contents_changed.connect(() => {
 				if (this.selected || this.state == SessionState.EXITED) {
 					return;

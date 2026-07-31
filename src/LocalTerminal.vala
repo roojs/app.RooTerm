@@ -21,6 +21,7 @@ namespace RooTerm
 	/**
 	 * Local PTY terminal ({@link Terminal} subclass).
 	 * Spawns ``$SHELL`` in a working directory; exit closes the tab immediately.
+	 * Path labels follow {@link TerminalStream} cwd updates via {@link label_changed}.
 	 */
 	public class LocalTerminal : Terminal
 	{
@@ -41,12 +42,14 @@ namespace RooTerm
 			base(connection, font);
 			this.start_cwd = cwd;
 			this.cwd = cwd;
+			this.stream = new TerminalStream(this);
 			this.terminal.child_exited.connect((status) => {
 				GLib.debug("local shell exited status=%d", status);
 				if (this.settle_timeout != 0) {
 					GLib.Source.remove(this.settle_timeout);
 					this.settle_timeout = 0;
 				}
+				this.child_pid = -1;
 				this.close_in(0);
 			});
 		}
@@ -78,8 +81,10 @@ namespace RooTerm
 			if (dir.length == 0) {
 				dir = GLib.Environment.get_home_dir();
 			}
-			this.cwd = dir;
-			this.label_changed();
+			if (dir != this.cwd) {
+				this.cwd = dir;
+				this.label_changed();
+			}
 			string[] argv = { shell };
 			GLib.debug("local spawn shell=%s cwd=%s", shell, dir);
 			this.terminal.spawn_async(
@@ -93,11 +98,13 @@ namespace RooTerm
 				null,
 				(term, pid, error) => {
 					if (error != null) {
+						this.child_pid = -1;
 						GLib.warning("local spawn failed: %s", error.message);
 						var fail = "spawn failed: " + error.message + "\r\n";
 						this.terminal.feed(fail.data);
 						return;
 					}
+					this.child_pid = pid;
 					GLib.debug("local pid=%d", pid);
 				}
 			);

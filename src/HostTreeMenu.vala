@@ -86,16 +86,17 @@ namespace RooTerm
 			};
 			this.close_path.clicked.connect(() => {
 				this.popdown();
-				if (this.target == null || this.target.parent == null || this.target.local_tab < 0) {
+				if (this.target == null) {
 					return;
 				}
+				var term = (Terminal) this.target.sessions.get_item(0);
 				var page = this.window.host_stack.pages.get_child_by_name(
 					this.target.parent.uuid
 				) as HostPage;
-				if (page == null || this.target.local_tab >= page.tab_view.n_pages) {
+				if (page == null) {
 					return;
 				}
-				page.tab_view.close_page(page.tab_view.get_nth_page(this.target.local_tab));
+				page.tab_view.close_page(page.tab_view.get_page(term));
 				this.window.sessions.focus();
 			});
 			box.append(this.close_path);
@@ -219,8 +220,7 @@ namespace RooTerm
 			this.close_path.visible = conn.kind == ConnectionKind.LOCAL_PATH;
 			this.add_connection_btn.visible = conn.kind == ConnectionKind.GROUP;
 			this.edit_connection_btn.visible = conn.kind == ConnectionKind.HOST;
-			this.refresh_containers_btn.visible =
-				conn.kind == ConnectionKind.HOST && conn.lxc_host;
+			this.refresh_containers_btn.visible = conn.kind == ConnectionKind.HOST && conn.lxc_host;
 			this.delete_btn.visible = conn.kind == ConnectionKind.HOST
 				|| conn.kind == ConnectionKind.GROUP
 				|| conn.kind == ConnectionKind.LXC;
@@ -236,7 +236,10 @@ namespace RooTerm
 				this.delete_btn.sensitive = can_delete;
 			}
 			this.pointing_to = Gdk.Rectangle() {
-				x = (int) x, y = (int) y, width = 1, height = 1
+				x = (int) x, 
+				y = (int) y,
+				width = 1, 
+				height = 1
 			};
 			this.popup();
 		}

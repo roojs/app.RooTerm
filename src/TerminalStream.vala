@@ -19,23 +19,28 @@
 namespace RooTerm
 {
 	/**
-	 * VTE ``commit`` / ``contents_changed`` handlers for one {@link SshTerminal}.
+	 * VTE ``commit`` / ``contents_changed`` / cwd handlers for one {@link Terminal}.
 	 *
-	 * Construct with both ``terminal`` and ``connection`` to wire handlers.
-	 * Construct with neither for a flags bag; {@link SshTerminal} calls {@link attach}.
+	 * Construct with a {@link Terminal} to wire handlers, or with neither for a
+	 * flags bag; {@link SshTerminal} then calls {@link attach}.
 	 *
-	 * Login / sudo / passphrase / ``lxc-console`` feeds live in Jobs. This stream
-	 * scrapes prompts for tab labels, session-logs, and watches ``ssh-copy-id``.
+	 * Local tabs: ``/proc`` cwd → session {@link Terminal.cwd}. SSH tabs: prompt
+	 * scrape for labels, session log, ``ssh-copy-id`` watch. OSC 7 also lands here.
+	 * Login / sudo / passphrase / ``lxc-console`` feeds live in Jobs.
 	 *
 	 * == Example ==
 	 *
 	 * {{{
-	 * var stream = new SshStream(term.terminal, conn);
+	 * var stream = new TerminalStream(term);
 	 * stream.label_changed.connect(() => { ... });
 	 * }}}
 	 */
-	public class SshStream : Object
+	public class TerminalStream : Object
 	{
+		/**
+		 * Owning tab (pid / pty / {@link Terminal.cwd}).
+		 */
+		public weak Terminal session;
 		public Vte.Terminal terminal;
 		public Connection connection;
 		/**
@@ -43,6 +48,7 @@ namespace RooTerm
 		 */
 		public string prompt_hint = "";
 		public uint prompt_timeout = 0;
+		public uint cwd_timeout = 0;
 		public GLib.FileStream? session_log = null;
 		public bool hide_input = false;
 		/**
@@ -59,7 +65,7 @@ namespace RooTerm
 		public string install_identity = "";
 
 		/**
-		 * Emitted when {@link prompt_hint} changes.
+		 * Emitted when {@link prompt_hint} changes (SSH tab labels).
 		 */
 		public signal void label_changed();
 
@@ -71,37 +77,118 @@ namespace RooTerm
 		public signal void key_installed(string identity);
 
 		/**
-		 * Wire ``on_*`` handlers when both arguments are set; otherwise a flags bag
-		 * (attach VTE later via {@link attach}).
+		 * Wire ``on_*`` when ``session`` is set; otherwise a flags bag
+		 * (attach later via {@link attach}).
 		 *
-		 * @param terminal VTE to watch, or null for a flags bag
-		 * @param connection Host credentials / auth, or null for a flags bag
+		 * @param session Tab to watch, or null for a flags bag
+		 * @param connection Host credentials / auth (defaults to ``session.connection``)
 		 */
-		public SshStream(Vte.Terminal? terminal = null, Connection? connection = null)
+		public TerminalStream(Terminal? session = null, Connection? connection = null)
 		{
-			if (terminal == null || connection == null) {
+			if (session == null) {
 				return;
 			}
-			this.attach(terminal, connection);
+			this.attach(session, connection);
 		}
 
 		/**
-		 * Bind this stream to a VTE (idempotent if already attached).
+		 * Bind this stream to a tab (idempotent if already attached).
 		 *
-		 * @param terminal VTE to watch
-		 * @param connection Host credentials / auth
+		 * @param session Tab to watch
+		 * @param connection Host credentials / auth (defaults to ``session.connection``)
 		 */
-		public void attach(Vte.Terminal terminal, Connection connection)
+		public void attach(Terminal session, Connection? connection = null)
 		{
 			if (this.terminal != null) {
 				return;
 			}
-			this.terminal = terminal;
-			this.connection = connection;
+			this.session = session;
+			this.terminal = session.terminal;
+			this.connection = connection != null ? connection : session.connection;
 			this.terminal.commit.connect(this.on_commit);
 			this.terminal.contents_changed.connect(this.on_prompt);
 			this.terminal.contents_changed.connect(this.on_log);
 			this.terminal.contents_changed.connect(this.on_key);
+			this.terminal.contents_changed.connect(this.on_cwd);
+			this.terminal.termprop_changed.connect(this.on_termprop);
+			this.terminal.child_exited.connect(() => {
+				if (this.cwd_timeout != 0) {
+					GLib.Source.remove(this.cwd_timeout);
+					this.cwd_timeout = 0;
+				}
+				if (this.prompt_timeout != 0) {
+					GLib.Source.remove(this.prompt_timeout);
+					this.prompt_timeout = 0;
+				}
+			});
+		}
+
+		/**
+		 * OSC 7 → session {@link Terminal.cwd}.
+		 *
+		 * @param prop Termprop name from VTE
+		 */
+		private void on_termprop(string prop)
+		{
+			if (prop != Vte.TERMPROP_CURRENT_DIRECTORY_URI) {
+				return;
+			}
+			var uri = this.terminal.ref_termprop_uri(prop);
+			if (uri == null) {
+				return;
+			}
+			// Prefer Uri path: File.get_path() is null for file://hostname/...
+			var path = uri.get_path();
+			if (path == null || path.length == 0) {
+				path = GLib.File.new_for_uri(uri.to_string()).get_path();
+			}
+			if (path == null || path.length == 0) {
+				return;
+			}
+			var unesc = GLib.Uri.unescape_string(path);
+			var dir = unesc != null ? unesc : path;
+			if (dir.length > 0 && dir != this.session.cwd) {
+				this.session.cwd = dir;
+				this.session.label_changed();
+			}
+		}
+
+		/**
+		 * Local ``/proc`` cwd after screen activity (no-op for SSH child pids).
+		 */
+		private void on_cwd()
+		{
+			if (this.session.connection.kind != ConnectionKind.LOCAL_PATH) {
+				return;
+			}
+			if (this.cwd_timeout != 0) {
+				GLib.Source.remove(this.cwd_timeout);
+			}
+			this.cwd_timeout = GLib.Timeout.add(150, () => {
+				this.cwd_timeout = 0;
+				if (this.session.child_pid <= 0) {
+					return false;
+				}
+				var pid = this.session.child_pid;
+				if (this.terminal.pty != null) {
+					var fg = Posix.tcgetpgrp(this.terminal.pty.fd);
+					if (fg > 0) {
+						pid = (int) fg;
+					}
+				}
+				try {
+					var link = GLib.FileUtils.read_link("/proc/%d/cwd".printf(pid));
+					if (link.length == 0 || link == this.session.cwd) {
+						return false;
+					}
+					GLib.debug("local cwd pid=%d path=%s", pid, link);
+					this.session.cwd = link;
+					this.session.label_changed();
+				} catch (GLib.FileError e) {
+					GLib.debug("local cwd read failed pid=%d: %s", pid, e.message);
+				}
+				return false;
+			});
 		}
 
 		/**
@@ -138,25 +225,44 @@ namespace RooTerm
 		}
 
 		/**
-		 * Debounced scrape of the cursor row for tab-label text ({@link prompt_hint}).
+		 * Trailing-edge scrape of the cursor row for tab-label text ({@link prompt_hint}).
 		 *
 		 * Not login/auth — Jobs own password / passphrase / sudo. This only updates
 		 * the tab title when the line looks like a shell or db prompt, and ignores
 		 * password lines so the label does not briefly become ``Enter passphrase:``.
+		 * Resets the timer on each change so a slow redraw still catches the final prompt.
 		 */
 		private void on_prompt()
 		{
 			if (this.prompt_timeout != 0) {
-				return;
+				GLib.Source.remove(this.prompt_timeout);
 			}
 			this.prompt_timeout = GLib.Timeout.add(120, () => {
 				this.prompt_timeout = 0;
 				long col, row;
 				this.terminal.get_cursor_position(out col, out row);
 				size_t len;
-				// Cursor row only — same shape Jobs use for on_content, but for labels.
-				var raw = this.terminal.get_text_range_format(Vte.Format.TEXT, row, 0, row, col, out len);
+				// Prefer full row (trailing spaces stripped) so a short cursor col still works.
+				var end_col = this.terminal.get_column_count();
+				if (col > end_col) {
+					end_col = col;
+				}
+				var raw = this.terminal.get_text_range_format(
+					Vte.Format.TEXT, row, 0, row, end_col, out len
+				);
 				var last = raw != null ? raw.replace("\r", "").strip() : "";
+				// Multiline prompts: path often on the previous row, ``$``/``#`` alone here.
+				if (last.length > 0 && last.length <= 2
+						&& (last == "$" || last == "#" || last == "%")
+						&& row > 0) {
+					var prev_raw = this.terminal.get_text_range_format(
+						Vte.Format.TEXT, row - 1, 0, row - 1, end_col, out len
+					);
+					var prev = prev_raw != null ? prev_raw.replace("\r", "").strip() : "";
+					if (prev.length > 0 && prev.length < 240) {
+						last = prev + last;
+					}
+				}
 				if (last.length == 0 || last.length > 240) {
 					return false;
 				}
@@ -173,7 +279,21 @@ namespace RooTerm
 				if (last == this.prompt_hint) {
 					return false;
 				}
+				GLib.debug("prompt_hint name=%s hint=%s", this.connection.name, last);
 				this.prompt_hint = last;
+				try {
+					var re = new GLib.Regex("^[^\\s@]+@[^\\s:]+:(.+)[#$]\\s*$");
+					MatchInfo info;
+					if (re.match(last, 0, out info)) {
+						var dir = info.fetch(1);
+						if (dir != null && dir.length > 0 && dir != this.session.cwd) {
+							this.session.cwd = dir;
+							this.session.label_changed();
+						}
+					}
+				} catch (GLib.RegexError e) {
+					GLib.debug("prompt cwd parse: %s", e.message);
+				}
 				this.label_changed();
 				return false;
 			});

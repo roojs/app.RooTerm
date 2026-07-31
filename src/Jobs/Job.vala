@@ -86,7 +86,7 @@ namespace RooTerm
 		 * {@link SessionController.create}. Subclass ctors set flags / connect
 		 * signals; {@link run} spawns.
 		 */
-		public SshStream stream;
+		public TerminalStream stream;
 
 		/**
 		 * Helper tab — VTE is ``terminal.terminal``.

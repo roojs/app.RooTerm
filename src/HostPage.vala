@@ -20,7 +20,8 @@ namespace RooTerm
 {
 	/**
 	 * One host: {@link Adw.TabView} of {@link Terminal}s with an {@link Adw.TabBar}
-	 * at the bottom (always shown). Localhost also keeps path children in the tree.
+	 * at the bottom (always shown). Localhost children are {@link ConnectionKind.LOCAL_PATH}
+	 * rows owned by each local tab’s {@link Terminal.connection}.
 	 * Tab-strip ``+`` runs ``win.new-terminal`` (same as Ctrl+Shift+T).
 	 * Open terminals live on {@link Connection.sessions} for the host tree.
 	 */
@@ -35,13 +36,9 @@ namespace RooTerm
 		 */
 		public Terminal current;
 		/**
-		 * Terminals on this page, parallel to tab / path order.
+		 * Terminals on this page, parallel to tab order.
 		 */
 		public Gee.ArrayList<Terminal> terminals = new Gee.ArrayList<Terminal>();
-		/**
-		 * Localhost path rows, parallel to {@link terminals} (looked up by index).
-		 */
-		private Gee.ArrayList<Connection> paths = new Gee.ArrayList<Connection>();
 		private bool on_screen = false;
 
 		/**
@@ -103,10 +100,9 @@ namespace RooTerm
 				var at = this.terminals.index_of(term);
 				this.terminals.remove_at(at);
 				this.connection.sessions.remove(at);
-				if (at < this.paths.size) {
-					var path = this.paths.remove_at(at);
-					path.sessions.remove_all();
-					this.tree.remove(path);
+				if (term.connection.kind == ConnectionKind.LOCAL_PATH) {
+					term.connection.sessions.remove_all();
+					this.tree.remove(term.connection);
 				}
 				this.tab_view.close_page_finish(page, true);
 				if (this.tab_view.n_pages > 0) {
@@ -114,7 +110,6 @@ namespace RooTerm
 					return true;
 				}
 				this.current = null;
-				this.sync_paths();
 				this.empty();
 				return true;
 			});
@@ -135,13 +130,25 @@ namespace RooTerm
 				var text = term.label();
 				tab.tooltip = text;
 				tab.title = text;
-				this.sync_paths();
+				if (term.connection.kind == ConnectionKind.LOCAL_PATH && term.connection.name != text) {
+					term.connection.name = text;
+				}
 				this.changed();
 			});
 			var tab = this.tab_view.append(term);
 			var text = term.label();
 			tab.tooltip = text;
 			tab.title = text;
+			if (this.connection.kind == ConnectionKind.LOCAL) {
+				var row = new Connection() {
+					uuid = GLib.Uuid.string_random(),
+					name = term.label(),
+					kind = ConnectionKind.LOCAL_PATH
+				};
+				term.connection = row;
+				row.sessions.append(term);
+				this.tree.append(this.connection, row);
+			}
 			return tab;
 		}
 
@@ -162,45 +169,6 @@ namespace RooTerm
 		}
 
 		/**
-		 * Keep Localhost path children in sync with open local shells.
-		 */
-		public void sync_paths()
-		{
-			if (this.connection.kind != ConnectionKind.LOCAL) {
-				return;
-			}
-			var active = -1;
-			if (this.tab_view.selected_page != null) {
-				active = this.tab_view.get_page_position(this.tab_view.selected_page);
-			}
-			for (var i = 0; i < this.terminals.size; i++) {
-				var term = this.terminals.get(i);
-				Connection child;
-				if (i < this.paths.size) {
-					child = this.paths.get(i);
-					child.local_tab = i;
-					child.name = term.label();
-				} else {
-					child = new Connection() {
-						uuid = GLib.Uuid.string_random(),
-						name = term.label(),
-						kind = ConnectionKind.LOCAL_PATH,
-						local_tab = i
-					};
-					this.tree.append(this.connection, child);
-					this.paths.add(child);
-				}
-				if (child.sessions.get_n_items() == 0) {
-					child.sessions.append(term);
-				} else if (child.sessions.get_item(0) != term) {
-					child.sessions.remove_all();
-					child.sessions.append(term);
-				}
-				term.tree_active = i == active;
-			}
-		}
-
-		/**
 		 * Point {@link current} at the selected tab; toggle select marks.
 		 */
 		private void wire()
@@ -211,7 +179,6 @@ namespace RooTerm
 					this.current.select(false);
 					this.current = null;
 				}
-				this.sync_paths();
 				return;
 			}
 			var next = (Terminal) this.tab_view.selected_page.child;
@@ -222,7 +189,6 @@ namespace RooTerm
 			this.current = next;
 			this.current.tree_active = true;
 			this.current.select(this.on_screen);
-			this.sync_paths();
 		}
 	}
 }

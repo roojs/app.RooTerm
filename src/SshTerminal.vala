@@ -23,7 +23,6 @@ namespace RooTerm
 	 */
 	public class SshTerminal : Terminal
 	{
-		public SshStream stream;
 		private string window_title = "";
 
 		/**
@@ -38,15 +37,15 @@ namespace RooTerm
 		 * @param font Pango font string (Ásbrú ``terminal font``)
 		 * @param in_stream Optional stream to adopt (flags bag or pre-wired); otherwise a new stream
 		 */
-		public SshTerminal(Connection connection, string font = "Monospace 9", SshStream? in_stream = null)
+		public SshTerminal(Connection connection, string font = "Monospace 9", TerminalStream? in_stream = null)
 		{
 			base(connection, font);
 
 			if (in_stream != null) {
 				this.stream = in_stream;
-				this.stream.attach(this.terminal, this.connection);
+				this.stream.attach(this, this.connection);
 			} else {
-				this.stream = new SshStream(this.terminal, this.connection);
+				this.stream = new TerminalStream(this, this.connection);
 			}
 			this.stream.label_changed.connect(() => {
 				this.label_changed();
@@ -173,7 +172,7 @@ namespace RooTerm
 
 		/**
 		 * Spawn ``ssh`` for this connection; password / passphrase fed on prompt.
-		 * When {@link SshStream.install_key} is set, runs ``ssh-copy-id`` instead.
+		 * When {@link TerminalStream.install_key} is set, runs ``ssh-copy-id`` instead.
 		 */
 		public override void spawn()
 		{
@@ -337,11 +336,13 @@ namespace RooTerm
 				null,
 				(term, pid, error) => {
 					if (error != null) {
+						this.child_pid = -1;
 						GLib.warning("ssh spawn failed: %s", error.message);
 						var fail = "spawn failed: " + error.message + "\r\n";
 						this.terminal.feed(fail.data);
 						return;
 					}
+					this.child_pid = pid;
 					GLib.debug("ssh pid=%d name=%s", pid, this.connection.name);
 				}
 			);

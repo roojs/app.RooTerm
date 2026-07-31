@@ -171,13 +171,13 @@ namespace RooTerm
 			});
 			this.host_tree.connection_highlighted.connect((conn) => {
 				if (conn.kind == ConnectionKind.LOCAL_PATH) {
+					var term = (Terminal) conn.sessions.get_item(0);
 					var local_page = this.host_stack.pages.get_child_by_name(conn.parent.uuid) as HostPage;
-					if (local_page == null || conn.local_tab < 0
-							|| conn.local_tab >= local_page.tab_view.n_pages) {
+					if (local_page == null) {
 						return;
 					}
 					this.host_stack.pages.visible_child = local_page;
-					local_page.tab_view.selected_page = local_page.tab_view.get_nth_page(conn.local_tab);
+					local_page.tab_view.selected_page = local_page.tab_view.get_page(term);
 					this.sessions.focus();
 					return;
 				}
@@ -190,14 +190,14 @@ namespace RooTerm
 			});
 			this.host_tree.terminal_selected.connect((conn, index) => {
 				if (conn.kind == ConnectionKind.LOCAL_PATH) {
+					var term = (Terminal) conn.sessions.get_item(0);
 					var local_page = this.host_stack.pages.get_child_by_name(conn.parent.uuid) as HostPage;
-					if (local_page == null || conn.local_tab < 0
-							|| conn.local_tab >= local_page.tab_view.n_pages) {
+					if (local_page == null) {
 						return;
 					}
 					this.host_tree.select(conn);
 					this.host_stack.pages.visible_child = local_page;
-					local_page.tab_view.selected_page = local_page.tab_view.get_nth_page(conn.local_tab);
+					local_page.tab_view.selected_page = local_page.tab_view.get_page(term);
 					this.sessions.focus();
 					return;
 				}
@@ -213,18 +213,15 @@ namespace RooTerm
 			this.host_search.connection_selected.connect((conn) => {
 				this.host_tree.select(conn);
 				if (conn.kind == ConnectionKind.LOCAL_PATH) {
-					if (conn.parent == null) {
-						return;
-					}
+					var term = (Terminal) conn.sessions.get_item(0);
 					var local_page = this.host_stack.pages.get_child_by_name(conn.parent.uuid) as HostPage;
-					if (local_page == null || conn.local_tab < 0
-							|| conn.local_tab >= local_page.tab_view.n_pages) {
+					if (local_page == null) {
 						return;
 					}
 					this.host_stack.pages.visible_child = local_page;
-					local_page.tab_view.selected_page = local_page.tab_view.get_nth_page(conn.local_tab);
+					local_page.tab_view.selected_page = local_page.tab_view.get_page(term);
 					this.sessions.focus();
-					((Terminal) local_page.tab_view.selected_page.child).terminal.grab_focus();
+					term.terminal.grab_focus();
 					return;
 				}
 				var page = this.host_stack.pages.get_child_by_name(conn.uuid) as HostPage;

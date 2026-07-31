@@ -85,7 +85,7 @@ namespace RooTerm
 		 * @param stream Optional stream to adopt (``install_key`` / signals)
 		 * @return The new terminal tab contents (not yet spawned)
 		 */
-		public SshTerminal create(Connection connection, SshStream? stream = null)
+		public SshTerminal create(Connection connection, TerminalStream? stream = null)
 		{
 			HostPage page;
 			if (this.by_uuid.has_key(connection.uuid)) {
