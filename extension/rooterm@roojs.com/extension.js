@@ -38,6 +38,16 @@ class RooTermIndicator extends PanelMenu.Button {
         });
         this.menu.addMenuItem(aboutItem);
 
+        var prefsItem = new PopupMenu.PopupMenuItem('Preferences');
+        prefsItem.connect('activate', function() {
+            Gio.DBus.session.call(
+                DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'Preferences',
+                null, null, Gio.DBusCallFlags.NONE, 2000, null,
+                self.extension.onDBusFinished.bind(self.extension, 'Preferences')
+            );
+        });
+        this.menu.addMenuItem(prefsItem);
+
         var quitItem = new PopupMenu.PopupMenuItem('Quit');
         quitItem.connect('activate', function() {
             Gio.DBus.session.call(
@@ -78,7 +88,6 @@ class RooTermIndicator extends PanelMenu.Button {
 export default class RooTermExtension extends Extension {
     enable() {
         var self = this;
-        this.settings = this.getSettings();
         this.windowCreatedId = 0;
         this.mapId = 0;
         this.shownSignalId = 0;
@@ -102,11 +111,17 @@ export default class RooTermExtension extends Extension {
                 return;
             }
             var key = 'F12';
-            if (self.settings) {
-                var shortcuts = self.settings.get_strv('toggle');
-                if (shortcuts && shortcuts.length > 0 && shortcuts[0]) {
-                    key = shortcuts[0];
+            try {
+                var confPath = GLib.build_filenamev([
+                    GLib.get_home_dir(), '.config', 'rooterm', 'connections.json',
+                ]);
+                var [, contents] = GLib.file_get_contents(confPath);
+                var conf = JSON.parse(new TextDecoder().decode(contents));
+                if (conf.toggle_key) {
+                    key = conf.toggle_key;
                 }
+            } catch (e) {
+                console.error('rooterm: toggle_key: ' + e);
             }
             self.panelTooltipLabel.text = key + ' / click — hide/show · right-click for Quit';
             var pos = self.indicator.get_transformed_position();
@@ -203,7 +218,6 @@ export default class RooTermExtension extends Extension {
             this.indicator.destroy();
             this.indicator = null;
         }
-        this.settings = null;
     }
 
     onDBusFinished(method, conn, result) {
@@ -266,20 +280,36 @@ export default class RooTermExtension extends Extension {
         }
         var rect = win.get_frame_rect();
         var height = rect.height > 0 ? rect.height : Math.floor(monitor.height * 60 / 100);
+        var width = rect.width > 0 ? rect.width : monitor.width;
+        var placement = 'centre';
+        try {
+            var confPath = GLib.build_filenamev([GLib.get_home_dir(), '.config', 'rooterm', 'connections.json']);
+            var [, contents] = GLib.file_get_contents(confPath);
+            var conf = JSON.parse(new TextDecoder().decode(contents));
+            placement = conf.placement;
+        } catch (e) {
+            console.error('rooterm: layout config: ' + e);
+        }
+        var x = monitor.x
+            + (placement === 'centre' ? Math.floor((monitor.width - width) / 2)
+                : placement === 'right' ? monitor.width - width : 0);
         try {
             win.unmaximize(Meta.MaximizeFlags.HORIZONTAL | Meta.MaximizeFlags.VERTICAL);
         } catch (e) {
+            console.error('rooterm: unmaximize: ' + e);
         }
         try {
             win.make_above();
         } catch (e) {
+            console.error('rooterm: make_above: ' + e);
         }
         try {
             win.stick();
         } catch (e) {
+            console.error('rooterm: stick: ' + e);
         }
-        win.move_resize_frame(true, monitor.x,
+        win.move_resize_frame(true, x,
             monitor.y + Main.layoutManager.panelBox.get_height(),
-            monitor.width, height);
+            width, height);
     }
 }

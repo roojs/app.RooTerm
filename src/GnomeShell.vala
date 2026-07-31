@@ -19,6 +19,11 @@
 namespace RooTerm
 {
 	/**
+	 * Continue after {@link GnomeShell.ensure} finishes (and any dialog is closed).
+	 */
+	public delegate void GnomeShellDone();
+
+	/**
 	 * RooTerm GNOME Shell extension (``rooterm@roojs.com``).
 	 *
 	 * Compares the bundled ``metadata.json`` ``version`` to the installed
@@ -29,7 +34,7 @@ namespace RooTerm
 	 * == Example ==
 	 *
 	 * {{{
-	 * new GnomeShell(window).ensure();
+	 * new GnomeShell(window).ensure(() => { … });
 	 * }}}
 	 */
 	public class GnomeShell : GLib.Object
@@ -57,8 +62,12 @@ namespace RooTerm
 		 * newer, enable when Shell knows it, else explain session restart.
 		 * Also ensures a settings-daemon custom shortcut for global toggle
 		 * (same pattern as Guake — works without relying on Shell keybindings alone).
+		 *
+		 * Calls ``done`` when checks finish (after any hint dialog is dismissed).
+		 *
+		 * @param done Continue startup (e.g. show the drop-down)
 		 */
-		public void ensure()
+		public void ensure(owned GnomeShellDone done)
 		{
 			try {
 				this.ensure_toggle_binding(Config.load().toggle_key);
@@ -108,7 +117,7 @@ namespace RooTerm
 			var updated = false;
 			if (bundled > 0 && installed < bundled) {
 				try {
-					this.install(data_home, user_dir);
+					this.install(user_dir);
 					updated = true;
 				} catch (GLib.Error e) {
 					GLib.warning("Shell extension install failed: %s", e.message);
@@ -116,18 +125,22 @@ namespace RooTerm
 					var body = @"Could not install the RooTerm GNOME Shell extension:
 $(e.message)
 
-Global $(key) / panel icon will not work until this is fixed. You can still use this window, or run: rooterm --toggle";
+Global $(key) / panel icon will not work until this is fixed. You can still use RooTerm, or run: rooterm --toggle";
 					var alert = new Adw.AlertDialog("Shell extension install failed", body);
 					alert.add_response("ok", "OK");
 					alert.default_response = "ok";
 					alert.close_response = "ok";
-					alert.present(this.window);
+					alert.response.connect(() => {
+						done();
+					});
+					alert.present(null);
 					return;
 				}
 			}
 
 			if (!GLib.FileUtils.test(user_meta, GLib.FileTest.IS_REGULAR)
 					&& !GLib.FileUtils.test(system_meta, GLib.FileTest.IS_REGULAR)) {
+				done();
 				return;
 			}
 
@@ -157,23 +170,43 @@ Global $(key) / panel icon will not work until this is fixed. You can still use 
 				GLib.debug("Shell extension check failed: %s", e.message);
 			}
 
-			if (updated) {
-				if (!enabled) {
-					GLib.warning(
-						"Shell extension updated; reload Shell (Alt+F2, r) for the panel icon. F12 still works via rooterm --toggle."
-					);
-				}
+			var key = Config.load().toggle_key;
+			if (updated && !enabled) {
+				var body = @"The RooTerm Shell extension was installed or updated.
+
+Reload GNOME Shell (Alt+F2, then r, Enter — or log out on Wayland) for the panel icon.
+
+$(key) still works via rooterm --toggle.";
+				var alert = new Adw.AlertDialog("Shell extension needs a reload", body);
+				alert.add_response("ok", "OK");
+				alert.default_response = "ok";
+				alert.close_response = "ok";
+				alert.response.connect(() => {
+					done();
+				});
+				alert.present(null);
 				return;
 			}
 
 			if (enabled) {
+				done();
 				return;
 			}
 
 			if (!shell_knows) {
-				GLib.warning(
-					"Shell extension not loaded yet; reload Shell (Alt+F2, r) for the panel icon. F12 still works via rooterm --toggle."
-				);
+				var body = @"The RooTerm Shell extension is on disk but not loaded yet.
+
+Reload GNOME Shell (Alt+F2, then r, Enter — or log out on Wayland) for the panel icon.
+
+$(key) still works via rooterm --toggle.";
+				var alert = new Adw.AlertDialog("Shell extension not ready", body);
+				alert.add_response("ok", "OK");
+				alert.default_response = "ok";
+				alert.close_response = "ok";
+				alert.response.connect(() => {
+					done();
+				});
+				alert.present(null);
 				return;
 			}
 
@@ -195,11 +228,20 @@ Global $(key) / panel icon will not work until this is fixed. You can still use 
 				GLib.debug("Shell extension enable failed: %s", e.message);
 			}
 			if (enabled) {
+				done();
 				return;
 			}
-			GLib.warning(
-				"Could not enable Shell extension; panel icon unavailable. F12 still works via rooterm --toggle."
-			);
+			var body = @"Could not enable the RooTerm Shell extension. The panel icon will be unavailable.
+
+$(key) still works via rooterm --toggle.";
+			var alert = new Adw.AlertDialog("Shell extension not enabled", body);
+			alert.add_response("ok", "OK");
+			alert.default_response = "ok";
+			alert.close_response = "ok";
+			alert.response.connect(() => {
+				done();
+			});
+			alert.present(null);
 		}
 
 		/**
@@ -253,31 +295,21 @@ Global $(key) / panel icon will not work until this is fixed. You can still use 
 			slot.set_string("name", "RooTerm");
 			slot.set_string("command", "rooterm --toggle");
 			slot.set_string("binding", key);
-			// Extension schema: panel tooltip only (no wm grab).
-			try {
-				var ext = new GLib.Settings("org.gnome.shell.extensions.rooterm");
-				string[] keys = { key };
-				ext.set_strv("toggle", keys);
-			} catch (GLib.Error e) {
-				GLib.debug("extension toggle label: %s", e.message);
-			}
 		}
 
 		/**
-		 * Copy the bundled extension into the user extensions dir and compile schemas.
+		 * Copy the bundled extension into the user extensions dir.
 		 *
-		 * @param data_home XDG data home (e.g. ``~/.local/share``)
 		 * @param user_dir Destination ``…/extensions/rooterm@roojs.com``
-		 * @throws GLib.Error If a file copy or ``glib-compile-schemas`` fails
+		 * @throws GLib.Error If a file copy fails
 		 */
-		public void install(string data_home, string user_dir) throws GLib.Error
+		public void install(string user_dir) throws GLib.Error
 		{
-			GLib.DirUtils.create_with_parents(GLib.Path.build_filename(user_dir, "schemas"), 0755);
+			GLib.DirUtils.create_with_parents(user_dir, 0755);
 			string[] names = {
 				"metadata.json",
 				"extension.js",
-				"stylesheet.css",
-				"schemas/org.gnome.shell.extensions.rooterm.gschema.xml"
+				"stylesheet.css"
 			};
 			foreach (var name in names) {
 				var data = GLib.resources_lookup_data(
@@ -287,19 +319,6 @@ Global $(key) / panel icon will not work until this is fixed. You can still use 
 					data.get_data(), null, false, GLib.FileCreateFlags.REPLACE_DESTINATION, null
 				);
 			}
-			var ext_schemas = GLib.Path.build_filename(user_dir, "schemas");
-			GLib.Process.spawn_command_line_sync("glib-compile-schemas " + ext_schemas);
-			var glib_schemas = GLib.Path.build_filename(data_home, "glib-2.0", "schemas");
-			GLib.DirUtils.create_with_parents(glib_schemas, 0755);
-			GLib.File.new_for_path(
-				GLib.Path.build_filename(ext_schemas, "org.gnome.shell.extensions.rooterm.gschema.xml")
-			).copy(
-				GLib.File.new_for_path(
-					GLib.Path.build_filename(glib_schemas, "org.gnome.shell.extensions.rooterm.gschema.xml")
-				),
-				GLib.FileCopyFlags.OVERWRITE
-			);
-			GLib.Process.spawn_command_line_sync("glib-compile-schemas " + glib_schemas);
 		}
 	}
 }

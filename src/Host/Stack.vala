@@ -16,28 +16,26 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-namespace RooTerm
+namespace RooTerm.Host
 {
 	/**
-	 * Background mark for an open terminal tab in the host tree.
-	 * Active emphasis is {@link Terminal.tree_active}, not a stored state.
-	 *
-	 * == Example ==
-	 *
-	 * {{{
-	 * if (term.state == SessionState.READY) {
-	 *     // unread output while unfocused
-	 * }
-	 * }}}
+	 * Outer stack of {@link Page}s keyed by connection uuid.
 	 */
-	public enum SessionState
+	public class Stack : Gtk.Box
 	{
-		IDLE,
-		BUSY,
-		READY,
+		public Gtk.Stack pages;
+
 		/**
-		 * Child process has exited (SSH); tab may still be open for reconnect / close.
+		 * Empty stack; pages are added by {@link Session.Controller}.
 		 */
-		EXITED
+		public Stack()
+		{
+			Object(orientation: Gtk.Orientation.VERTICAL, spacing: 0, hexpand: true, vexpand: true);
+			this.pages = new Gtk.Stack() {
+				hexpand = true,
+				vexpand = true
+			};
+			this.append(this.pages);
+		}
 	}
 }

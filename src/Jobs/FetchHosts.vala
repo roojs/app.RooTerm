@@ -24,7 +24,7 @@ namespace RooTerm
 	public class FetchHosts : SudoLogin
 	{
 		/**
-		 * Parsed ``lxc-ls`` names (ConnDialog stages / applies them).
+		 * Parsed ``lxc-ls`` names (Dialog.Connection stages / applies them).
 		 */
 		public string[] container_names = {};
 
@@ -32,7 +32,7 @@ namespace RooTerm
 		 * @param window Main window
 		 * @param connection Host the job acts on
 		 */
-		public FetchHosts(MainWindow window, Connection connection)
+		public FetchHosts(MainWindow window, Host.Connection connection)
 		{
 			base(window, connection);
 		}

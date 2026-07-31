@@ -16,18 +16,18 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-namespace RooTerm
+namespace RooTerm.Host
 {
 	/**
 	 * Ásbrú host/group tree (single-click selects; double-click reserved for open).
 	 * One terminal icon per open tab; active tab icon is green and clickable.
 	 */
-	public class HostTree : Gtk.Box
+	public class Tree : Gtk.Box
 	{
 		private Gtk.ListView list_view;
 		public Gtk.SingleSelection selection;
 		private Gtk.TreeListModel tree_model;
-		private HostTreeMenu menu;
+		private TreeMenu menu;
 
 		/**
 		 * Emitted on double-click / activate of a non-group connection.
@@ -66,11 +66,11 @@ namespace RooTerm
 		}
 
 		/**
-		 * Build tree UI bound to ``config.tree`` (live root {@link HostTreeNodes}).
+		 * Build tree UI bound to ``config.tree`` (live root {@link TreeNodes}).
 		 *
-		 * @param window Main window (passed to {@link HostTreeMenu})
+		 * @param window Main window (passed to {@link TreeMenu})
 		 */
-		public HostTree(MainWindow window)
+		public Tree(MainWindow window)
 		{
 			Object(
 				orientation: Gtk.Orientation.VERTICAL,
@@ -172,7 +172,7 @@ namespace RooTerm
 					mark_box.remove(mark_box.get_first_child());
 				}
 				for (var i = 0; i < conn.sessions.get_n_items(); i++) {
-					this.append_session_mark(mark_box, conn, (Terminal) conn.sessions.get_item(i), i);
+					this.append_session_mark(mark_box, conn, (Terminal.Base) conn.sessions.get_item(i), i);
 				}
 				mark_box.set_data<GLib.ListStore>("sessions", conn.sessions);
 				mark_box.set_data<ulong>("sessions-sid", conn.sessions.items_changed.connect((p, r, a) => {
@@ -180,7 +180,7 @@ namespace RooTerm
 						mark_box.remove(mark_box.get_first_child());
 					}
 					for (var i = 0; i < conn.sessions.get_n_items(); i++) {
-						this.append_session_mark(mark_box, conn, (Terminal) conn.sessions.get_item(i), i);
+						this.append_session_mark(mark_box, conn, (Terminal.Base) conn.sessions.get_item(i), i);
 					}
 				}));
 			});
@@ -200,7 +200,7 @@ namespace RooTerm
 				hexpand = true,
 				vexpand = true
 			};
-			this.menu = new HostTreeMenu(window, this);
+			this.menu = new TreeMenu(window, this);
 			this.menu.set_parent(this.list_view);
 			var menu_click = new Gtk.GestureClick() {
 				button = Gdk.BUTTON_SECONDARY
@@ -243,7 +243,7 @@ namespace RooTerm
 		/**
 		 * One tree session-mark button for ``term`` (state / label live on the terminal).
 		 */
-		private void append_session_mark(Gtk.Box mark_box, Connection conn, Terminal term, int index)
+		private void append_session_mark(Gtk.Box mark_box, Connection conn, Terminal.Base term, int index)
 		{
 			var btn = new Gtk.Button() {
 				has_frame = false,
@@ -253,7 +253,7 @@ namespace RooTerm
 			btn.add_css_class("flat");
 			btn.add_css_class("session-icon");
 			btn.add_css_class(term.session_css);
-			if (!term.tree_active && term.state == SessionState.BUSY) {
+			if (!term.tree_active && term.state == Session.State.BUSY) {
 				btn.child = new Gtk.Spinner() {
 					spinning = true,
 					width_request = 16,
@@ -273,7 +273,7 @@ namespace RooTerm
 				btn.remove_css_class("session-dead");
 				btn.remove_css_class("session-exited");
 				btn.add_css_class(term.session_css);
-				if (!term.tree_active && term.state == SessionState.BUSY) {
+				if (!term.tree_active && term.state == Session.State.BUSY) {
 					btn.child = new Gtk.Spinner() {
 						spinning = true,
 						width_request = 16,

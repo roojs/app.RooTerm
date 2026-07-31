@@ -27,7 +27,7 @@ namespace RooTerm
 		 * @param window Main window
 		 * @param connection Host the job acts on
 		 */
-		public SshLogin(MainWindow window, Connection connection)
+		public SshLogin(MainWindow window, Host.Connection connection)
 		{
 			base(window, connection);
 		}

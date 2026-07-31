@@ -16,22 +16,22 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-namespace RooTerm
+namespace RooTerm.Asbru
 {
 	/**
-	 * Loads Ásbrú ``asbru.yml`` into a {@link Connection} tree (libyaml).
+	 * Loads Ásbrú ``asbru.yml`` into a {@link Host.Connection} tree (libyaml).
 	 */
-	public class AsbruConfig
+	public class Config
 	{
-		public Gee.HashMap<string, Connection> by_uuid {
+		public Gee.HashMap<string, Host.Connection> by_uuid {
 			get;
 			set;
-			default = new Gee.HashMap<string, Connection>();
+			default = new Gee.HashMap<string, Host.Connection>();
 		}
-		public Gee.ArrayList<Connection> roots {
+		public Gee.ArrayList<Host.Connection> roots {
 			get;
 			set;
-			default = new Gee.ArrayList<Connection>();
+			default = new Gee.ArrayList<Host.Connection>();
 		}
 		public string path = "";
 		/**
@@ -144,7 +144,7 @@ namespace RooTerm
 						if (fields.has_key("port") && fields.get("port").length > 0) {
 							port = int.parse(fields.get("port"));
 						}
-						var conn = new Connection() {
+						var conn = new Host.Connection() {
 							uuid = uuid,
 							name = fields.has_key("name") ? fields.get("name").strip() : "",
 							parent_uuid = fields.has_key("parent") ? fields.get("parent").strip() : "",
@@ -154,12 +154,12 @@ namespace RooTerm
 							auth = fields.has_key("auth type") ? fields.get("auth type").strip() : "",
 							public_key = fields.has_key("public key") ? fields.get("public key").strip() : "",
 							options = fields.has_key("options") ? fields.get("options").strip() : "",
-							kind = (group == "1" || group.down() == "true") ? ConnectionKind.GROUP : ConnectionKind.HOST,
+							kind = (group == "1" || group.down() == "true") ? Host.ConnectionKind.GROUP : Host.ConnectionKind.HOST,
 							port = port,
-							pass = AsbruCipher.decrypt_hex(fields.has_key("pass") ? fields.get("pass") : ""),
-							passphrase = AsbruCipher.decrypt_hex(fields.has_key("passphrase") ? fields.get("passphrase") : "")
+							pass = Cipher.decrypt_hex(fields.has_key("pass") ? fields.get("pass") : ""),
+							passphrase = Cipher.decrypt_hex(fields.has_key("passphrase") ? fields.get("passphrase") : "")
 						};
-						if (conn.kind != ConnectionKind.GROUP && conn.method != "SSH" && conn.method.length > 0) {
+						if (conn.kind != Host.ConnectionKind.GROUP && conn.method != "SSH" && conn.method.length > 0) {
 							GLib.debug("skip non-ssh method=%s name=%s", conn.method, conn.name);
 							in_connection = false;
 							want_key = true;
@@ -222,17 +222,17 @@ namespace RooTerm
 		}
 
 		/**
-		 * Build a RooTerm {@link Config} from this loaded tree.
+		 * Build a RooTerm {@link RooTerm.Config} from this loaded tree.
 		 *
-		 * Passwords are queued on {@link Config.pending_secrets} for async
+		 * Passwords are queued on {@link RooTerm.Config.pending_secrets} for async
 		 * libsecret store after the UI main loop is running (sync store deadlocks
 		 * on the keyring ACL prompt).
 		 *
 		 * @return New RooTerm config ready to save
 		 */
-		public Config to_config()
+		public RooTerm.Config to_config()
 		{
-			var config = new Config();
+			var config = new RooTerm.Config();
 			config.terminal_font = this.terminal_font;
 			foreach (var conn in this.by_uuid.values) {
 				if (conn.auth == "publickey") {
@@ -247,12 +247,12 @@ namespace RooTerm
 				}
 				conn.passphrase = "";
 				this.take_forwards(conn);
-				conn.children = new HostTreeNodes();
+				conn.children = new Host.TreeNodes();
 				config.by_uuid.set(conn.uuid, conn);
 				config.connections.add(conn);
 			}
 			foreach (var conn in this.by_uuid.values) {
-				Connection? parent = null;
+				Host.Connection? parent = null;
 				if (conn.parent_uuid.length > 0 && conn.parent_uuid != "__PAC__ROOT__"
 					&& config.by_uuid.has_key(conn.parent_uuid)) {
 					parent = config.by_uuid.get(conn.parent_uuid);
@@ -263,12 +263,12 @@ namespace RooTerm
 		}
 
 		/**
-		 * Peel Ásbrú ``-L`` / ``-Lspec`` tokens out of ``conn.options`` into {@link Connection.forwards}.
+		 * Peel Ásbrú ``-L`` / ``-Lspec`` tokens out of ``conn.options`` into {@link Host.Connection.forwards}.
 		 * Import-only; RooTerm JSON already stores forwards separately.
 		 *
-		 * @param conn Connection whose Ásbrú options may contain forwards
+		 * @param conn Host.Connection whose Ásbrú options may contain forwards
 		 */
-		private void take_forwards(Connection conn)
+		private void take_forwards(Host.Connection conn)
 		{
 			if (conn.options.index_of("-L") < 0) {
 				return;
@@ -295,7 +295,7 @@ namespace RooTerm
 					parts = spec.split("/");
 				}
 				if (parts.length == 3) {
-					conn.forwards.add(new Forward() {
+					conn.forwards.add(new Host.Forward() {
 						local_host = "127.0.0.1",
 						local_port = int.parse(parts[0]),
 						remote_host = parts[1],
@@ -304,7 +304,7 @@ namespace RooTerm
 					continue;
 				}
 				if (parts.length >= 4) {
-					conn.forwards.add(new Forward() {
+					conn.forwards.add(new Host.Forward() {
 						local_host = parts[0],
 						local_port = int.parse(parts[1]),
 						remote_host = parts[2],

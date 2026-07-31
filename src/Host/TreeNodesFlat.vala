@@ -16,14 +16,14 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-namespace RooTerm
+namespace RooTerm.Host
 {
 	/**
 	 * Flat {@link GLib.ListModel} of openable {@link Connection}s for search.
 	 *
-	 * Written only by root {@link HostTreeNodes.append} / {@link HostTreeNodes.remove}.
+	 * Written only by root {@link TreeNodes.append} / {@link TreeNodes.remove}.
 	 */
-	public class HostTreeNodesFlat : GLib.Object, GLib.ListModel
+	public class TreeNodesFlat : GLib.Object, GLib.ListModel
 	{
 		private Gee.ArrayList<Connection> items {
 			get;

@@ -16,10 +16,10 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-namespace RooTerm
+namespace RooTerm.Host
 {
 	/**
-	 * Tree / config row role for a {@link Connection}.
+	 * Host.Tree / config row role for a {@link Connection}.
 	 *
 	 * Stored as an integer in ``connections.json``. **Order is permanent** —
 	 * never insert or reorder members (that remaps old rows). Always **append**
@@ -70,7 +70,7 @@ namespace RooTerm
 		public string auth { get; set; default = ""; }
 		public string public_key { get; set; default = ""; }
 		/**
-		 * Old private-key path still on the server; clear after {@link ConnDialog} remove step.
+		 * Old private-key path still on the server; clear after {@link Dialog.Connection} remove step.
 		 */
 		public string retire_key { get; set; default = ""; }
 		public string options { get; set; default = ""; }
@@ -93,19 +93,19 @@ namespace RooTerm
 			default = new Gee.ArrayList<Forward>();
 		}
 		/**
-		 * Open {@link Terminal} tabs for this host (tree session marks bind here).
+		 * Open {@link Terminal.Base} tabs for this host (tree session marks bind here).
 		 */
 		public GLib.ListStore sessions {
 			get;
 			set;
-			default = new GLib.ListStore(typeof(Terminal));
+			default = new GLib.ListStore(typeof(Terminal.Base));
 		}
-		private HostTreeNodes _children = new HostTreeNodes();
+		private Host.TreeNodes _children = new Host.TreeNodes();
 		private ulong children_sid = 0;
 		/**
 		 * Nested host / container rows.
 		 */
-		public HostTreeNodes children {
+		public Host.TreeNodes children {
 			get {
 				return this._children;
 			}

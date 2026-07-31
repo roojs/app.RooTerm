@@ -16,20 +16,20 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-namespace RooTerm
+namespace RooTerm.Terminal
 {
 	/**
-	 * Shared VTE tab chrome for {@link SshTerminal} and {@link LocalTerminal}.
+	 * Shared VTE tab chrome for {@link Ssh} and {@link Local}.
 	 * Host pages hold this type; subclasses own spawn / exit behaviour.
 	 */
-	public abstract class Terminal : Gtk.Box
+	public abstract class Base : Gtk.Box
 	{
-		public Connection connection;
+		public Host.Connection connection;
 		public Vte.Terminal terminal;
 		/**
 		 * VTE commit / contents / cwd watcher for this tab.
 		 */
-		public TerminalStream stream;
+		public Stream stream;
 		/**
 		 * Child pid from the last successful {@link spawn} (``-1`` if none).
 		 */
@@ -41,7 +41,7 @@ namespace RooTerm
 		/**
 		 * Mark for the host-tree session icon (active look is {@link tree_active}).
 		 */
-		public SessionState state {
+		public Session.State state {
 			get { return this._state; }
 			set {
 				if (this._state == value) {
@@ -53,7 +53,7 @@ namespace RooTerm
 				this.state_changed();
 			}
 		}
-		private SessionState _state = SessionState.IDLE;
+		private Session.State _state = Session.State.IDLE;
 		/**
 		 * True when this tab is the selected one on its host (tree mark emphasis).
 		 */
@@ -78,13 +78,13 @@ namespace RooTerm
 					return "session-active";
 				}
 				switch (this.state) {
-					case SessionState.BUSY:
+					case Session.State.BUSY:
 						return "session-busy";
 
-					case SessionState.READY:
+					case Session.State.READY:
 						return "session-ready";
 
-					case SessionState.EXITED:
+					case Session.State.EXITED:
 						return "session-exited";
 
 					default:
@@ -127,12 +127,12 @@ namespace RooTerm
 
 		/**
 		 * Build scrolled VTE with copy/paste shortcuts and busy/ready marks.
-		 * Cwd / prompt watching is {@link TerminalStream} (created by subclasses).
+		 * Cwd / prompt watching is {@link Stream} (created by subclasses).
 		 *
 		 * @param connection Host or Localhost this tab belongs to
 		 * @param font Pango font string
 		 */
-		protected Terminal(Connection connection, string font = "Monospace 9")
+		protected Base(Host.Connection connection, string font = "Monospace 9")
 		{
 			Object(orientation: Gtk.Orientation.VERTICAL, spacing: 0, hexpand: true, vexpand: true);
 			this.connection = connection;
@@ -201,7 +201,7 @@ namespace RooTerm
 			leave_open.add_css_class("suggested-action");
 			leave_open.clicked.connect(() => {
 				this.cancel_close();
-				if (this.state != SessionState.EXITED) {
+				if (this.state != Session.State.EXITED) {
 					return;
 				}
 				this.terminal.feed("\r\n[Leave open - Enter to reconnect]\r\n".data);
@@ -266,22 +266,22 @@ namespace RooTerm
 			this.terminal.add_controller(zoom);
 
 			this.terminal.contents_changed.connect(() => {
-				if (this.selected || this.state == SessionState.EXITED) {
+				if (this.selected || this.state == Session.State.EXITED) {
 					return;
 				}
 				if (this.settle_timeout != 0) {
 					GLib.Source.remove(this.settle_timeout);
 					this.settle_timeout = 0;
 				}
-				if (this.state != SessionState.BUSY) {
-					this.state = SessionState.BUSY;
+				if (this.state != Session.State.BUSY) {
+					this.state = Session.State.BUSY;
 				}
 				this.settle_timeout = GLib.Timeout.add(1500, () => {
 					this.settle_timeout = 0;
-					if (this.selected || this.state != SessionState.BUSY) {
+					if (this.selected || this.state != Session.State.BUSY) {
 						return false;
 					}
-					this.state = SessionState.READY;
+					this.state = Session.State.READY;
 					return false;
 				});
 			});
@@ -302,10 +302,10 @@ namespace RooTerm
 				GLib.Source.remove(this.settle_timeout);
 				this.settle_timeout = 0;
 			}
-			if (this.state == SessionState.IDLE) {
+			if (this.state == Session.State.IDLE) {
 				return;
 			}
-			this.state = SessionState.IDLE;
+			this.state = Session.State.IDLE;
 		}
 
 		/**

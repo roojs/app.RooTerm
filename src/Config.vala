@@ -37,23 +37,31 @@ namespace RooTerm
 		 * Guake global toggle key (Shell extension / ``--toggle-key``).
 		 */
 		public string toggle_key { get; set; default = "F12"; }
-		public Gee.ArrayList<Connection> connections {
+		/**
+		 * Drop-down opacity percent (10–100).
+		 */
+		public int opacity { get; set; default = 100; }
+		/**
+		 * Horizontal placement on the monitor: ``left``, ``centre``, or ``right``.
+		 */
+		public string placement { get; set; default = "centre"; }
+		public Gee.ArrayList<Host.Connection> connections {
 			get;
 			set;
-			default = new Gee.ArrayList<Connection>();
+			default = new Gee.ArrayList<Host.Connection>();
 		}
-		public Gee.HashMap<string, Connection> by_uuid {
+		public Gee.HashMap<string, Host.Connection> by_uuid {
 			get;
 			set;
-			default = new Gee.HashMap<string, Connection>();
+			default = new Gee.HashMap<string, Host.Connection>();
 		}
 		/**
 		 * Nested host tree + flat search list (not JSON).
 		 */
-		public HostTreeNodes tree {
+		public Host.TreeNodes tree {
 			get;
 			set;
-			default = new HostTreeNodes();
+			default = new Host.TreeNodes();
 		}
 		public string path { get; set; default = ""; }
 		/**
@@ -112,7 +120,7 @@ namespace RooTerm
 					if (property_node.get_node_type() == Json.NodeType.ARRAY) {
 						var json_array = property_node.get_array();
 						for (var i = 0; i < json_array.get_length(); i++) {
-							var conn = Json.gobject_deserialize(typeof(Connection), json_array.get_element(i)) as Connection;
+							var conn = Json.gobject_deserialize(typeof(Host.Connection), json_array.get_element(i)) as Host.Connection;
 							if (conn == null) {
 								continue;
 							}
@@ -142,7 +150,7 @@ namespace RooTerm
 			var path = GLib.Path.build_filename(dir, "connections.json");
 
 			if (!GLib.FileUtils.test(path, GLib.FileTest.IS_REGULAR)) {
-				var asbru = new AsbruConfig();
+				var asbru = new Asbru.Config();
 				asbru.load();
 				var config = asbru.to_config();
 				config.path = path;
@@ -160,14 +168,14 @@ namespace RooTerm
 				if (conn.uuid.length == 0) {
 					continue;
 				}
-				conn.children = new HostTreeNodes();
+				conn.children = new Host.TreeNodes();
 				config.by_uuid.set(conn.uuid, conn);
 			}
 			foreach (var conn in config.by_uuid.values) {
 				if (conn.deleted) {
 					continue;
 				}
-				Connection? parent = null;
+				Host.Connection? parent = null;
 				if (conn.parent_uuid.length > 0 && conn.parent_uuid != "__PAC__ROOT__"
 					&& config.by_uuid.has_key(conn.parent_uuid)) {
 					parent = config.by_uuid.get(conn.parent_uuid);
@@ -220,7 +228,7 @@ namespace RooTerm
 			}
 			this.pending_secrets.unset(uuid);
 			var schema = new Secret.Schema(
-				"org.roojs.rooterm.Connection", Secret.SchemaFlags.NONE,
+				"org.roojs.rooterm.Host.Connection", Secret.SchemaFlags.NONE,
 				"uuid", Secret.SchemaAttributeType.STRING
 			);
 			var store_uuid = uuid;
@@ -251,7 +259,7 @@ namespace RooTerm
 		public void save() throws GLib.Error
 		{
 			this.connections.clear();
-			var ordered = new Gee.ArrayList<Connection>();
+			var ordered = new Gee.ArrayList<Host.Connection>();
 			foreach (var conn in this.by_uuid.values) {
 				ordered.add(conn);
 			}

@@ -16,7 +16,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-namespace RooTerm
+namespace RooTerm.Host
 {
 	/**
 	 * Nested collection of {@link Connection} rows for the host tree.
@@ -27,7 +27,7 @@ namespace RooTerm
 	 * The root list (``Config.tree``) also owns {@link flat}; use
 	 * {@link append} / {@link remove} for nest + flat updates.
 	 */
-	public class HostTreeNodes : GLib.Object, GLib.ListModel
+	public class TreeNodes : GLib.Object, GLib.ListModel
 	{
 		private Gee.ArrayList<Connection> items {
 			get;
@@ -37,10 +37,10 @@ namespace RooTerm
 		/**
 		 * Openable hosts for search (used on the root list only).
 		 */
-		public HostTreeNodesFlat flat {
+		public TreeNodesFlat flat {
 			get;
 			set;
-			default = new HostTreeNodesFlat();
+			default = new TreeNodesFlat();
 		}
 
 		/**

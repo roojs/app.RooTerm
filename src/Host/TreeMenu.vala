@@ -16,25 +16,25 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-namespace RooTerm
+namespace RooTerm.Host
 {
 	/**
-	 * Context menu for {@link HostTree} rows. Built once; items are shown or
+	 * Context menu for {@link Tree} rows. Built once; items are shown or
 	 * hidden per {@link Connection.kind} when {@link popup_for} runs. Owns
 	 * add / edit / delete / local / refresh using {@link window} and {@link tree}.
 	 *
 	 * == Example ==
 	 *
 	 * {{{
-	 * var menu = new HostTreeMenu(window, tree);
+	 * var menu = new TreeMenu(window, tree);
 	 * menu.set_parent(list_view);
 	 * menu.popup_for(conn, x, y);
 	 * }}}
 	 */
-	public class HostTreeMenu : Gtk.Popover
+	public class TreeMenu : Gtk.Popover
 	{
 		private weak MainWindow window;
-		private weak HostTree tree;
+		private weak Tree tree;
 		private Connection? target;
 		private Gtk.Button new_terminal;
 		private Gtk.Button new_terminal_here;
@@ -50,7 +50,7 @@ namespace RooTerm
 		 * @param window Main window (dialogs / sessions / config)
 		 * @param tree Host tree that owns this menu
 		 */
-		public HostTreeMenu(MainWindow window, HostTree tree)
+		public TreeMenu(MainWindow window, Tree tree)
 		{
 			this.window = window;
 			this.tree = tree;
@@ -75,7 +75,7 @@ namespace RooTerm
 			this.new_terminal_here.clicked.connect(() => {
 				this.popdown();
 				if (this.target != null && this.target.parent != null) {
-					var path_term = (Terminal) this.target.sessions.get_item(0);
+					var path_term = (Terminal.Base) this.target.sessions.get_item(0);
 					this.window.sessions.open_local(this.target.parent, path_term.cwd);
 				}
 			});
@@ -90,10 +90,10 @@ namespace RooTerm
 				if (this.target == null) {
 					return;
 				}
-				var term = (Terminal) this.target.sessions.get_item(0);
+				var term = (Terminal.Base) this.target.sessions.get_item(0);
 				var page = this.window.host_stack.pages.get_child_by_name(
 					this.target.parent.uuid
-				) as HostPage;
+				) as Page;
 				if (page == null) {
 					return;
 				}
@@ -112,7 +112,7 @@ namespace RooTerm
 					return;
 				}
 				var group = this.target;
-				var dlg = new ConnDialog(this.window);
+				var dlg = new Dialog.Connection(this.window);
 				dlg.fill(null, group);
 				dlg.saved.connect((conn) => {
 					this.window.config.by_uuid.set(conn.uuid, conn);
@@ -136,7 +136,7 @@ namespace RooTerm
 				if (this.target == null || this.target.kind == ConnectionKind.LXC) {
 					return;
 				}
-				var dlg = new ConnDialog(this.window);
+				var dlg = new Dialog.Connection(this.window);
 				dlg.fill(this.target, null);
 				dlg.saved.connect((conn) => {
 					try {

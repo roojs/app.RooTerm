@@ -16,33 +16,33 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-namespace RooTerm
+namespace RooTerm.Terminal
 {
 	/**
-	 * VTE ``commit`` / ``contents_changed`` / cwd handlers for one {@link Terminal}.
+	 * VTE ``commit`` / ``contents_changed`` / cwd handlers for one {@link Base}.
 	 *
-	 * Construct with a {@link Terminal} to wire handlers, or with neither for a
-	 * flags bag; {@link SshTerminal} then calls {@link attach}.
+	 * Construct with a {@link Base} to wire handlers, or with neither for a
+	 * flags bag; {@link Ssh} then calls {@link attach}.
 	 *
-	 * Local tabs: ``/proc`` cwd → session {@link Terminal.cwd}. SSH tabs: prompt
+	 * Local tabs: ``/proc`` cwd → session {@link Base.cwd}. SSH tabs: prompt
 	 * scrape for labels, session log, ``ssh-copy-id`` watch. OSC 7 also lands here.
 	 * Login / sudo / passphrase / ``lxc-console`` feeds live in Jobs.
 	 *
 	 * == Example ==
 	 *
 	 * {{{
-	 * var stream = new TerminalStream(term);
+	 * var stream = new Stream(term);
 	 * stream.label_changed.connect(() => { ... });
 	 * }}}
 	 */
-	public class TerminalStream : Object
+	public class Stream : Object
 	{
 		/**
-		 * Owning tab (pid / pty / {@link Terminal.cwd}).
+		 * Owning tab (pid / pty / {@link Base.cwd}).
 		 */
-		public weak Terminal session;
+		public weak Base session;
 		public Vte.Terminal terminal;
-		public Connection connection;
+		public Host.Connection connection;
 		/**
 		 * Last shell/mysql-style prompt line scraped from the screen.
 		 */
@@ -83,7 +83,7 @@ namespace RooTerm
 		 * @param session Tab to watch, or null for a flags bag
 		 * @param connection Host credentials / auth (defaults to ``session.connection``)
 		 */
-		public TerminalStream(Terminal? session = null, Connection? connection = null)
+		public Stream(Base? session = null, Host.Connection? connection = null)
 		{
 			if (session == null) {
 				return;
@@ -97,7 +97,7 @@ namespace RooTerm
 		 * @param session Tab to watch
 		 * @param connection Host credentials / auth (defaults to ``session.connection``)
 		 */
-		public void attach(Terminal session, Connection? connection = null)
+		public void attach(Base session, Host.Connection? connection = null)
 		{
 			if (this.terminal != null) {
 				return;
@@ -124,7 +124,7 @@ namespace RooTerm
 		}
 
 		/**
-		 * OSC 7 → session {@link Terminal.cwd}.
+		 * OSC 7 → session {@link Base.cwd}.
 		 *
 		 * @param prop Termprop name from VTE
 		 */
@@ -158,7 +158,7 @@ namespace RooTerm
 		 */
 		private void on_cwd()
 		{
-			var local = this.session as LocalTerminal;
+			var local = this.session as Local;
 			if (local == null) {
 				return;
 			}
@@ -295,7 +295,7 @@ namespace RooTerm
 				GLib.debug("prompt_hint name=%s hint=%s", this.connection.name, last);
 				this.prompt_hint = last;
 				// Local tabs use ``/proc`` cwd; prompt path is often ``~`` and would clobber it.
-				if (!(this.session is LocalTerminal)) {
+				if (!(this.session is Local)) {
 					try {
 						var re = new GLib.Regex("^[^\\s@]+@[^\\s:]+:(.+)[#$]\\s*$");
 						MatchInfo info;

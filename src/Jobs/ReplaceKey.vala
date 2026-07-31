@@ -21,12 +21,12 @@ namespace RooTerm
 	/**
 	 * Replace-with-passphrased-key: same terminal flow as {@link SetupKey}.
 	 *
-	 * Sets ``install_identity`` in the ctor; set {@link old_identity} for ConnDialog.
+	 * Sets ``install_identity`` in the ctor; set {@link old_identity} for Dialog.Connection.
 	 */
 	public class ReplaceKey : SetupKey
 	{
 		/**
-		 * Previous identity to retire later (ConnDialog stores on success).
+		 * Previous identity to retire later (Dialog.Connection stores on success).
 		 */
 		public string old_identity = "";
 
@@ -35,7 +35,7 @@ namespace RooTerm
 		 * @param connection Host the job acts on
 		 * @param install_identity Private key path for ``ssh-copy-id``
 		 */
-		public ReplaceKey(MainWindow window, Connection connection, string install_identity)
+		public ReplaceKey(MainWindow window, Host.Connection connection, string install_identity)
 		{
 			base(window, connection);
 			this.stream.install_identity = install_identity;

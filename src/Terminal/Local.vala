@@ -16,14 +16,14 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-namespace RooTerm
+namespace RooTerm.Terminal
 {
 	/**
-	 * Local PTY terminal ({@link Terminal} subclass).
+	 * Local PTY terminal ({@link Base} subclass).
 	 * Spawns ``$SHELL`` in a working directory; exit closes the tab immediately.
-	 * Path labels follow {@link TerminalStream} cwd updates via {@link label_changed}.
+	 * Path labels follow {@link Stream} cwd updates via {@link label_changed}.
 	 */
-	public class LocalTerminal : Terminal
+	public class Local : Base
 	{
 		/**
 		 * Directory to spawn in (home when empty).
@@ -31,7 +31,7 @@ namespace RooTerm
 		public string start_cwd = "";
 		/**
 		 * Effective username of the foreground process (from ``/proc``).
-		 * Empty until {@link TerminalStream} has read it.
+		 * Empty until {@link Stream} has read it.
 		 */
 		public string peer_user = "";
 
@@ -42,12 +42,12 @@ namespace RooTerm
 		 * @param font Pango font string
 		 * @param cwd Working directory (home when empty)
 		 */
-		public LocalTerminal(Connection connection, string font = "Monospace 9", string cwd = "")
+		public Local(Host.Connection connection, string font = "Monospace 9", string cwd = "")
 		{
 			base(connection, font);
 			this.start_cwd = cwd;
 			this.cwd = cwd;
-			this.stream = new TerminalStream(this);
+			this.stream = new Stream(this);
 			this.terminal.child_exited.connect((status) => {
 				GLib.debug("local shell exited status=%d", status);
 				if (this.settle_timeout != 0) {

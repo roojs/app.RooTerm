@@ -8,6 +8,5 @@
     <file alias="extension/metadata.json">extension/rooterm@roojs.com/metadata.json</file>
     <file alias="extension/extension.js">extension/rooterm@roojs.com/extension.js</file>
     <file alias="extension/stylesheet.css">extension/rooterm@roojs.com/stylesheet.css</file>
-    <file alias="extension/schemas/org.gnome.shell.extensions.rooterm.gschema.xml">extension/rooterm@roojs.com/schemas/org.gnome.shell.extensions.rooterm.gschema.xml</file>
   </gresource>
 </gresources>

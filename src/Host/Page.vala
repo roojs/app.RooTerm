@@ -16,29 +16,29 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-namespace RooTerm
+namespace RooTerm.Host
 {
 	/**
-	 * One host: {@link Adw.TabView} of {@link Terminal}s with an {@link Adw.TabBar}
+	 * One host: {@link Adw.TabView} of {@link Terminal.Base}s with an {@link Adw.TabBar}
 	 * at the bottom (always shown). Localhost children are {@link ConnectionKind.LOCAL_PATH}
-	 * rows owned by each local tab’s {@link Terminal.connection}.
+	 * rows owned by each local tab’s {@link Terminal.Base.connection}.
 	 * Tab-strip ``+`` runs ``win.new-terminal`` (same as Ctrl+Shift+T).
 	 * Open terminals live on {@link Connection.sessions} for the host tree.
 	 */
-	public class HostPage : Gtk.Box
+	public class Page : Gtk.Box
 	{
 		public Connection connection;
-		public HostTreeNodes tree;
+		public TreeNodes tree;
 		public Adw.TabView tab_view;
 		public Adw.TabBar tab_bar;
 		/**
 		 * Selected terminal on this page (null when no tabs).
 		 */
-		public Terminal current;
+		public Terminal.Base current;
 		/**
 		 * Terminals on this page, parallel to tab order.
 		 */
-		public Gee.ArrayList<Terminal> terminals = new Gee.ArrayList<Terminal>();
+		public Gee.ArrayList<Terminal.Base> terminals = new Gee.ArrayList<Terminal.Base>();
 		private bool on_screen = false;
 
 		/**
@@ -57,7 +57,7 @@ namespace RooTerm
 		 * @param connection Host this page belongs to
 		 * @param tree Root host tree (gateway for Localhost path children)
 		 */
-		public HostPage(Connection connection, HostTreeNodes tree)
+		public Page(Connection connection, TreeNodes tree)
 		{
 			Object(
 				orientation: Gtk.Orientation.VERTICAL,
@@ -91,7 +91,7 @@ namespace RooTerm
 				this.changed();
 			});
 			this.tab_view.close_page.connect((page) => {
-				var term = (Terminal) page.child;
+				var term = (Terminal.Base) page.child;
 				if (!term.close_confirmed) {
 					term.close_in(5);
 					this.tab_view.close_page_finish(page, false);
@@ -118,10 +118,10 @@ namespace RooTerm
 		/**
 		 * Add ``term`` as a new tab and return its {@link Adw.TabPage}.
 		 *
-		 * @param term Terminal to show
+		 * @param term Terminal.Base to show
 		 * @return Tab page for title / close wiring
 		 */
-		public Adw.TabPage add(Terminal term)
+		public Adw.TabPage add(Terminal.Base term)
 		{
 			this.terminals.add(term);
 			this.connection.sessions.append(term);
@@ -181,7 +181,7 @@ namespace RooTerm
 				}
 				return;
 			}
-			var next = (Terminal) this.tab_view.selected_page.child;
+			var next = (Terminal.Base) this.tab_view.selected_page.child;
 			if (this.current != null && this.current != next) {
 				this.current.tree_active = false;
 				this.current.select(false);

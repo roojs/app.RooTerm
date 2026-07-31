@@ -16,12 +16,12 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-namespace RooTerm
+namespace RooTerm.Terminal
 {
 	/**
-	 * VTE terminal for one SSH session on a {@link Connection}.
+	 * VTE terminal for one SSH session on a {@link Host.Connection}.
 	 */
-	public class SshTerminal : Terminal
+	public class Ssh : Base
 	{
 		private string window_title = "";
 
@@ -37,7 +37,7 @@ namespace RooTerm
 		 * @param font Pango font string (Ásbrú ``terminal font``)
 		 * @param in_stream Optional stream to adopt (flags bag or pre-wired); otherwise a new stream
 		 */
-		public SshTerminal(Connection connection, string font = "Monospace 9", TerminalStream? in_stream = null)
+		public Ssh(Host.Connection connection, string font = "Monospace 9", Stream? in_stream = null)
 		{
 			base(connection, font);
 
@@ -45,7 +45,7 @@ namespace RooTerm
 				this.stream = in_stream;
 				this.stream.attach(this, this.connection);
 			} else {
-				this.stream = new TerminalStream(this, this.connection);
+				this.stream = new Stream(this, this.connection);
 			}
 			this.stream.label_changed.connect(() => {
 				this.label_changed();
@@ -55,7 +55,7 @@ namespace RooTerm
 				propagation_phase = Gtk.PropagationPhase.CAPTURE
 			};
 			keys.key_pressed.connect((keyval, keycode, mods) => {
-				if (this.state != SessionState.EXITED) {
+				if (this.state != Session.State.EXITED) {
 					return false;
 				}
 				if (keyval != Gdk.Key.Return && keyval != Gdk.Key.KP_Enter) {
@@ -78,8 +78,8 @@ namespace RooTerm
 					GLib.Source.remove(this.settle_timeout);
 					this.settle_timeout = 0;
 				}
-				if (this.state != SessionState.EXITED) {
-					this.state = SessionState.EXITED;
+				if (this.state != Session.State.EXITED) {
+					this.state = Session.State.EXITED;
 				}
 				var hint = this.selected
 					? "\r\n[ssh exited: " + exit_code.to_string()
@@ -113,7 +113,7 @@ namespace RooTerm
 		 */
 		public override void select(bool on)
 		{
-			if (this.state == SessionState.EXITED) {
+			if (this.state == Session.State.EXITED) {
 				if (this.selected == on) {
 					return;
 				}
@@ -131,14 +131,14 @@ namespace RooTerm
 		 */
 		public void reconnect()
 		{
-			if (this.state != SessionState.EXITED) {
+			if (this.state != Session.State.EXITED) {
 				return;
 			}
 			this.cancel_close();
 			this.stream.hide_input = false;
 			this.stream.log_line = -1;
 			this.stream.prompt_hint = "";
-			this.state = SessionState.IDLE;
+			this.state = Session.State.IDLE;
 			this.spawn();
 		}
 
@@ -172,7 +172,7 @@ namespace RooTerm
 
 		/**
 		 * Spawn ``ssh`` for this connection; password / passphrase fed on prompt.
-		 * When {@link TerminalStream.install_key} is set, runs ``ssh-copy-id`` instead.
+		 * When {@link Stream.install_key} is set, runs ``ssh-copy-id`` instead.
 		 */
 		public override void spawn()
 		{
@@ -183,13 +183,13 @@ namespace RooTerm
 						|| this.connection.sudo_after_login
 						|| this.stream.install_key)) {
 				var secret_uuid = this.connection.uuid;
-				if (this.connection.kind == ConnectionKind.LXC && this.connection.parent_uuid.length > 0) {
+				if (this.connection.kind == Host.ConnectionKind.LXC && this.connection.parent_uuid.length > 0) {
 					secret_uuid = this.connection.parent_uuid;
 				}
 				try {
 					var pass = Secret.password_lookup_sync(
 						new Secret.Schema(
-							"org.roojs.rooterm.Connection", Secret.SchemaFlags.NONE,
+							"org.roojs.rooterm.Host.Connection", Secret.SchemaFlags.NONE,
 							"uuid", Secret.SchemaAttributeType.STRING
 						),
 						null,

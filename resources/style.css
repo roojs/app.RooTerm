@@ -2,7 +2,7 @@
 
 /*
  * Window / chrome stay fully opaque (theme colours).
- * Only VTE uses alpha (set in Terminal.vala) — parents here stay clear so it can
+ * Only VTE uses alpha (set in Terminal/Base.vala) — parents here stay clear so it can
  * composite against the desktop.
  */
 window.drop-down {
@@ -46,7 +46,7 @@ entry.suggestion {
 	padding-right: 4px;
 }
 
-/* Bottom tab strip: shorter than Adw defaults; grow with title up to 400px. */
+/* Bottom tab strip: shorter than Adw defaults. (GTK CSS has no max-width.) */
 tabbar.thin-tabbar {
 	min-height: 28px;
 }
@@ -61,7 +61,6 @@ tabbar.thin-tabbar tabbox > tab {
 	min-height: 24px;
 	padding-top: 0;
 	padding-bottom: 0;
-	max-width: 400px;
 }
 
 tabbar.thin-tabbar button {

@@ -16,18 +16,18 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-namespace RooTerm
+namespace RooTerm.Dialog
 {
 	/**
 	 * Add / edit a host {@link Connection}: Basic + Port forwarding tabs.
 	 * Save applies in memory (JSON / keyring persist is Phase 9).
 	 */
-	public class ConnDialog : Adw.Dialog
+	public class Connection : Adw.Dialog
 	{
 		private delegate void KeyNext();
 
-		private Connection target;
-		private Connection? parent_group;
+		private Host.Connection target;
+		private Host.Connection? parent_group;
 		private bool is_new;
 		private Gtk.Entry name_entry;
 		private Gtk.Entry host_entry;
@@ -65,17 +65,17 @@ namespace RooTerm
 		 *
 		 * @param connection The connection that was saved
 		 */
-		public signal void saved(Connection connection);
+		public signal void saved(Host.Connection connection);
 
 		/**
 		 * Build the dialog UI (call {@link fill} before presenting).
 		 *
 		 * @param window Main window (sessions / config for SSH key setup)
 		 */
-		public ConnDialog(MainWindow window)
+		public Connection(MainWindow window)
 		{
 			this.window = window;
-			this.target = new Connection();
+			this.target = new Host.Connection();
 			this.content_width = 560;
 			this.content_height = 520;
 			this.title = "Connection";
@@ -198,7 +198,7 @@ namespace RooTerm
 					this.auth_key.visible = false;
 					this.setup_key_btn.visible = !this.is_new
 						&& this.target != null
-						&& this.target.kind != ConnectionKind.LXC;
+						&& this.target.kind != Host.ConnectionKind.LXC;
 				}
 			});
 			this.auth_key.toggled.connect(() => {
@@ -220,7 +220,7 @@ namespace RooTerm
 					this.auth_key.visible = false;
 					this.setup_key_btn.visible = !this.is_new
 						&& this.target != null
-						&& this.target.kind != ConnectionKind.LXC;
+						&& this.target.kind != Host.ConnectionKind.LXC;
 				}
 			});
 			this.sudo_check.toggled.connect(() => {
@@ -238,7 +238,7 @@ namespace RooTerm
 			});
 			this.pass_box.visible = true;
 
-			this.forward_store = new GLib.ListStore(typeof(Forward));
+			this.forward_store = new GLib.ListStore(typeof(Host.Forward));
 
 			this.forward_view = new Gtk.ColumnView(null) {
 				hexpand = true,
@@ -256,18 +256,18 @@ namespace RooTerm
 			local_host_factory.bind.connect((obj) => {
 				var list_item = (Gtk.ListItem) obj;
 				var label = list_item.child as Gtk.Label;
-				var fwd = list_item.item as Forward;
+				var fwd = list_item.item as Host.Forward;
 				if (label == null || fwd == null) {
 					return;
 				}
 				label.label = fwd.local_host;
 			});
-			var local_host_col = new Gtk.ColumnViewColumn("Local address", local_host_factory) {
+			var local_host_col = new Gtk.ColumnViewColumn("Terminal.Local address", local_host_factory) {
 				expand = true,
 				resizable = true
 			};
 			local_host_col.sorter = new Gtk.StringSorter(
-				new Gtk.PropertyExpression(typeof(Forward), null, "local-host")
+				new Gtk.PropertyExpression(typeof(Host.Forward), null, "local-host")
 			);
 			this.forward_view.append_column(local_host_col);
 
@@ -278,18 +278,18 @@ namespace RooTerm
 			local_port_factory.bind.connect((obj) => {
 				var list_item = (Gtk.ListItem) obj;
 				var label = list_item.child as Gtk.Label;
-				var fwd = list_item.item as Forward;
+				var fwd = list_item.item as Host.Forward;
 				if (label == null || fwd == null) {
 					return;
 				}
 				label.label = fwd.local_port.to_string();
 			});
-			var local_port_col = new Gtk.ColumnViewColumn("Local port", local_port_factory) {
+			var local_port_col = new Gtk.ColumnViewColumn("Terminal.Local port", local_port_factory) {
 				expand = true,
 				resizable = true
 			};
 			local_port_col.sorter = new Gtk.NumericSorter(
-				new Gtk.PropertyExpression(typeof(Forward), null, "local-port")
+				new Gtk.PropertyExpression(typeof(Host.Forward), null, "local-port")
 			);
 			this.forward_view.append_column(local_port_col);
 
@@ -300,7 +300,7 @@ namespace RooTerm
 			remote_host_factory.bind.connect((obj) => {
 				var list_item = (Gtk.ListItem) obj;
 				var label = list_item.child as Gtk.Label;
-				var fwd = list_item.item as Forward;
+				var fwd = list_item.item as Host.Forward;
 				if (label == null || fwd == null) {
 					return;
 				}
@@ -311,7 +311,7 @@ namespace RooTerm
 				resizable = true
 			};
 			remote_host_col.sorter = new Gtk.StringSorter(
-				new Gtk.PropertyExpression(typeof(Forward), null, "remote-host")
+				new Gtk.PropertyExpression(typeof(Host.Forward), null, "remote-host")
 			);
 			this.forward_view.append_column(remote_host_col);
 
@@ -322,7 +322,7 @@ namespace RooTerm
 			remote_port_factory.bind.connect((obj) => {
 				var list_item = (Gtk.ListItem) obj;
 				var label = list_item.child as Gtk.Label;
-				var fwd = list_item.item as Forward;
+				var fwd = list_item.item as Host.Forward;
 				if (label == null || fwd == null) {
 					return;
 				}
@@ -333,7 +333,7 @@ namespace RooTerm
 				resizable = true
 			};
 			remote_port_col.sorter = new Gtk.NumericSorter(
-				new Gtk.PropertyExpression(typeof(Forward), null, "remote-port")
+				new Gtk.PropertyExpression(typeof(Host.Forward), null, "remote-port")
 			);
 			this.forward_view.append_column(remote_port_col);
 
@@ -353,11 +353,11 @@ namespace RooTerm
 				del_btn.sensitive = has;
 			});
 			add_btn.clicked.connect(() => {
-				var draft = new Forward();
-				var dlg = new ForwardDialog(draft, "Add forward");
+				var draft = new Host.Forward();
+				var dlg = new Forward(draft, "Add forward");
 				dlg.applied.connect((fwd) => {
 					for (var i = 0; i < this.forward_store.get_n_items(); i++) {
-						var other = this.forward_store.get_item(i) as Forward;
+						var other = this.forward_store.get_item(i) as Host.Forward;
 						if (other == null) {
 							continue;
 						}
@@ -370,17 +370,17 @@ namespace RooTerm
 				dlg.present(this);
 			});
 			this.edit_forward_btn.clicked.connect(() => {
-				var fwd = this.forward_selection.selected_item as Forward;
+				var fwd = this.forward_selection.selected_item as Host.Forward;
 				if (fwd == null) {
 					return;
 				}
-				var copy = new Forward() {
+				var copy = new Host.Forward() {
 					local_host = fwd.local_host,
 					local_port = fwd.local_port,
 					remote_host = fwd.remote_host,
 					remote_port = fwd.remote_port
 				};
-				var dlg = new ForwardDialog(copy, "Edit forward");
+				var dlg = new Forward(copy, "Edit forward");
 				dlg.applied.connect((edited) => {
 					uint pos;
 					if (!this.forward_store.find(fwd, out pos)) {
@@ -390,7 +390,7 @@ namespace RooTerm
 						if (i == (int) pos) {
 							continue;
 						}
-						var other = this.forward_store.get_item(i) as Forward;
+						var other = this.forward_store.get_item(i) as Host.Forward;
 						if (other == null) {
 							continue;
 						}
@@ -407,7 +407,7 @@ namespace RooTerm
 				dlg.present(this);
 			});
 			del_btn.clicked.connect(() => {
-				var fwd = this.forward_selection.selected_item as Forward;
+				var fwd = this.forward_selection.selected_item as Host.Forward;
 				if (fwd == null) {
 					return;
 				}
@@ -504,7 +504,7 @@ namespace RooTerm
 				next();
 				return;
 			}
-			var dlg = new KeyDialog(shared, true);
+			var dlg = new Key(shared, true);
 			dlg.created.connect((identity, passphrase) => {
 				this.target.passphrase = passphrase;
 				this.target.public_key = identity;
@@ -639,7 +639,7 @@ namespace RooTerm
 					GLib.warning("shared key secret load failed: %s", e.message);
 				}
 			}
-			var dlg = new KeyDialog(shared, true);
+			var dlg = new Key(shared, true);
 			dlg.created.connect((identity, passphrase) => {
 				this.target.passphrase = passphrase;
 				try {
@@ -874,9 +874,9 @@ namespace RooTerm
 				GLib.warning("secret save failed uuid=%s: %s", this.target.uuid, e.message);
 			}
 
-			this.target.forwards = new Gee.ArrayList<Forward>();
+			this.target.forwards = new Gee.ArrayList<Host.Forward>();
 			for (var i = 0; i < this.forward_store.get_n_items(); i++) {
-				var item = this.forward_store.get_item(i) as Forward;
+				var item = this.forward_store.get_item(i) as Host.Forward;
 				if (item == null) {
 					continue;
 				}
@@ -960,7 +960,7 @@ steps so you can verify the new key works first."""
 		 * @param edit Existing host to edit, or ``null`` to add
 		 * @param parent_group Group for a new host (ignored when editing)
 		 */
-		public void fill(Connection? edit, Connection? parent_group)
+		public void fill(Host.Connection? edit, Host.Connection? parent_group)
 		{
 			this.parent_group = parent_group;
 			this.is_new = edit == null;
@@ -971,9 +971,9 @@ steps so you can verify the new key works first."""
 				this.target = edit;
 				this.title = "Edit connection";
 			} else {
-				this.target = new Connection() {
+				this.target = new Host.Connection() {
 					uuid = GLib.Uuid.string_random(),
-					kind = ConnectionKind.HOST,
+					kind = Host.ConnectionKind.HOST,
 					parent_uuid = parent_group != null ? parent_group.uuid : "",
 					port = 22,
 					auth = "password",
@@ -1009,7 +1009,7 @@ steps so you can verify the new key works first."""
 
 			var using_key = this.target.auth == "ssh_key"
 				|| this.target.auth == "publickey";
-			this.setup_key_btn.visible = !this.is_new && this.target.kind != ConnectionKind.LXC && !using_key;
+			this.setup_key_btn.visible = !this.is_new && this.target.kind != Host.ConnectionKind.LXC && !using_key;
 			this.auth_key.visible = using_key;
 			if (using_key) {
 				this.auth_key.active = true;
@@ -1019,14 +1019,14 @@ steps so you can verify the new key works first."""
 				this.auth_password.active = true;
 			}
 			this.sudo_check.active = this.target.sudo_after_login;
-			this.sudo_check.visible = this.target.kind != ConnectionKind.LXC;
+			this.sudo_check.visible = this.target.kind != Host.ConnectionKind.LXC;
 			this.lxc_host_check.active = this.target.lxc_host && this.target.sudo_after_login;
 			this.lxc_host_check.sensitive = this.sudo_check.active;
-			this.lxc_host_check.visible = this.target.kind != ConnectionKind.LXC;
+			this.lxc_host_check.visible = this.target.kind != Host.ConnectionKind.LXC;
 			this.fetch_hosts_btn.visible = this.lxc_host_check.active && !this.is_new;
 			this.retire_key_btn.visible = using_key && this.target.retire_key.length > 0;
 			this.upgrade_key_btn.visible = using_key && this.target.retire_key.length == 0
-				&& this.key_open() && !this.is_new && this.target.kind != ConnectionKind.LXC;
+				&& this.key_open() && !this.is_new && this.target.kind != Host.ConnectionKind.LXC;
 			this.pending_key_identity = "";
 			this.pass_box.visible = this.auth_password.active || this.sudo_check.active;
 			this.pass_label.label =
@@ -1037,7 +1037,7 @@ steps so you can verify the new key works first."""
 
 			this.forward_store.remove_all();
 			foreach (var fwd in this.target.forwards) {
-				this.forward_store.append(new Forward() {
+				this.forward_store.append(new Host.Forward() {
 					local_host = fwd.local_host,
 					local_port = fwd.local_port,
 					remote_host = fwd.remote_host,

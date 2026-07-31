@@ -16,20 +16,20 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-namespace RooTerm
+namespace RooTerm.Host
 {
 	/**
 	 * Host search pulldown, adapted from OLLMchat ``SearchableDropdown`` /
 	 * ``SearchablePulldown`` (entry + popover + filtered list).
 	 * Up/Down highlight in the popover only; Enter/click opens or focuses the host.
 	 */
-	public class HostSearchPulldown : Gtk.Widget
+	public class SearchPulldown : Gtk.Widget
 	{
 		public Gtk.Entry entry;
 		protected Gtk.Image? arrow;
 		public Gtk.Popover popup { get; private set; }
 		protected Gtk.ListView list;
-		protected HostTreeNodesFlat item_store;
+		protected TreeNodesFlat item_store;
 		protected Gtk.FilterListModel filtered_items;
 		protected Gtk.StringFilter string_filter;
 		protected Gtk.SingleSelection selection;
@@ -53,7 +53,7 @@ namespace RooTerm
 		/**
 		 * @param config Loaded RooTerm config (SSH hosts become list rows)
 		 */
-		public HostSearchPulldown(Config config)
+		public SearchPulldown(Config config)
 		{
 			Object();
 

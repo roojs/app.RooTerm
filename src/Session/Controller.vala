@@ -16,16 +16,16 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-namespace RooTerm
+namespace RooTerm.Session
 {
 	/**
 	 * Opens / closes / focuses host terminal pages; owns the display string
 	 * for window title and search placeholder.
 	 */
-	public class SessionController : GLib.Object
+	public class Controller : GLib.Object
 	{
-		public HostStack stack;
-		public HostTreeNodes tree;
+		public Host.Stack stack;
+		public Host.TreeNodes tree;
 		public string display = "Roo Term";
 		/**
 		 * VTE font from Ásbrú defaults (``Monospace 9`` etc.).
@@ -34,7 +34,7 @@ namespace RooTerm
 		/**
 		 * Open host pages by connection uuid (same key as {@link Gtk.Stack} names).
 		 */
-		private Gee.HashMap<string, HostPage> by_uuid = new Gee.HashMap<string, HostPage>();
+		private Gee.HashMap<string, Host.Page> by_uuid = new Gee.HashMap<string, Host.Page>();
 		/**
 		 * Uuid of the currently visible host page (empty when none).
 		 */
@@ -50,18 +50,18 @@ namespace RooTerm
 		 *
 		 * @param connection Host whose sudo password failed
 		 */
-		public signal void sudo_password_failed(Connection connection);
+		public signal void sudo_password_failed(Host.Connection connection);
 
 		/**
 		 * @param stack Outer host stack to manage
 		 * @param tree Root host tree (gateway; Localhost path children)
 		 */
-		public SessionController(HostStack stack, HostTreeNodes tree)
+		public Controller(Host.Stack stack, Host.TreeNodes tree)
 		{
 			this.stack = stack;
 			this.tree = tree;
 			this.stack.pages.notify["visible-child"].connect(() => {
-				var next = this.stack.pages.visible_child as HostPage;
+				var next = this.stack.pages.visible_child as Host.Page;
 				var next_uuid = next != null ? next.connection.uuid : "";
 				if (this.shown_uuid.length > 0 && this.shown_uuid != next_uuid
 						&& this.by_uuid.has_key(this.shown_uuid)) {
@@ -78,20 +78,20 @@ namespace RooTerm
 		/**
 		 * Create an SSH terminal tab for ``connection`` without spawning (host page if needed).
 		 *
-		 * Caller sets stream flags if needed, then {@link SshTerminal.spawn} and
+		 * Caller sets stream flags if needed, then {@link Terminal.Ssh.spawn} and
 		 * ``terminal.grab_focus()`` when ready.
 		 *
 		 * @param connection Host to open
 		 * @param stream Optional stream to adopt (``install_key`` / signals)
 		 * @return The new terminal tab contents (not yet spawned)
 		 */
-		public SshTerminal create(Connection connection, TerminalStream? stream = null)
+		public Terminal.Ssh create(Host.Connection connection, Terminal.Stream? stream = null)
 		{
-			HostPage page;
+			Host.Page page;
 			if (this.by_uuid.has_key(connection.uuid)) {
 				page = this.by_uuid.get(connection.uuid);
 			} else {
-				page = new HostPage(connection, this.tree);
+				page = new Host.Page(connection, this.tree);
 				page.empty.connect(() => {
 					this.close(page);
 				});
@@ -102,7 +102,7 @@ namespace RooTerm
 				this.stack.pages.add_named(page, connection.uuid);
 			}
 
-			var term = new SshTerminal(connection, this.terminal_font, stream);
+			var term = new Terminal.Ssh(connection, this.terminal_font, stream);
 			var tab = page.add(term);
 			term.close_tab.connect(() => {
 				page.tab_view.close_page(tab);
@@ -121,7 +121,7 @@ namespace RooTerm
 		 * @param localhost Localhost connection for local / empty fallback
 		 * @param window Main window (for {@link OpenSession})
 		 */
-		public void open_new(Connection localhost, MainWindow window)
+		public void open_new(Host.Connection localhost, MainWindow window)
 		{
 			if (this.shown_uuid.length == 0 || !this.by_uuid.has_key(this.shown_uuid)) {
 				this.open_local(localhost);
@@ -133,7 +133,7 @@ namespace RooTerm
 				this.open_local(localhost);
 				return;
 			}
-			if (term is SshTerminal) {
+			if (term is Terminal.Ssh) {
 				var job = new OpenSession(window, term.connection);
 				GLib.Idle.add(() => {
 					window.present();
@@ -150,7 +150,7 @@ namespace RooTerm
 				});
 				return;
 			}
-			var local = term as LocalTerminal;
+			var local = term as Terminal.Local;
 			if (local != null) {
 				var dir = local.cwd.length > 0 ? local.cwd : local.start_cwd;
 				this.open_local(localhost, dir);
@@ -166,13 +166,13 @@ namespace RooTerm
 		 * @param cwd Working directory (home when empty)
 		 * @return The new local terminal
 		 */
-		public LocalTerminal open_local(Connection connection, string cwd = "")
+		public Terminal.Local open_local(Host.Connection connection, string cwd = "")
 		{
-			HostPage page;
+			Host.Page page;
 			if (this.by_uuid.has_key(connection.uuid)) {
 				page = this.by_uuid.get(connection.uuid);
 			} else {
-				page = new HostPage(connection, this.tree);
+				page = new Host.Page(connection, this.tree);
 				page.empty.connect(() => {
 					this.close(page);
 				});
@@ -183,7 +183,7 @@ namespace RooTerm
 				this.stack.pages.add_named(page, connection.uuid);
 			}
 
-			var term = new LocalTerminal(connection, this.terminal_font, cwd);
+			var term = new Terminal.Local(connection, this.terminal_font, cwd);
 			var tab = page.add(term);
 			term.close_tab.connect(() => {
 				page.tab_view.close_page(tab);
@@ -199,9 +199,9 @@ namespace RooTerm
 		/**
 		 * Remove an empty host page from the stack; show another open host if any.
 		 *
-		 * @param page Page to remove
+		 * @param page Host.Page to remove
 		 */
-		public void close(HostPage page)
+		public void close(Host.Page page)
 		{
 			page.connection.sessions.remove_all();
 			this.by_uuid.unset(page.connection.uuid);
@@ -209,12 +209,12 @@ namespace RooTerm
 				this.shown_uuid = "";
 			}
 			this.stack.pages.remove(page);
-			var visible = this.stack.pages.visible_child as HostPage;
+			var visible = this.stack.pages.visible_child as Host.Page;
 			if (visible != null && visible.current != null) {
 				this.focus();
 				return;
 			}
-			var other = this.stack.pages.get_first_child() as HostPage;
+			var other = this.stack.pages.get_first_child() as Host.Page;
 			if (other != null) {
 				this.stack.pages.visible_child = other;
 			}

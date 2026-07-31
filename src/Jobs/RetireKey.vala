@@ -35,7 +35,7 @@ namespace RooTerm
 		 * @param window Main window
 		 * @param connection Host the job acts on
 		 */
-		public RetireKey(MainWindow window, Connection connection)
+		public RetireKey(MainWindow window, Host.Connection connection)
 		{
 			base(window, connection);
 		}

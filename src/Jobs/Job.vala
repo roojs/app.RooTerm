@@ -29,15 +29,15 @@ namespace RooTerm
 	}
 
 	/**
-	 * Base for ConnDialog terminal jobs.
+	 * Base for Dialog.Connection terminal jobs.
 	 *
 	 * Ctor takes {@link window} + {@link connection}, creates the helper tab via
-	 * {@link SessionController.create} (no spawn), and exposes the live
+	 * {@link Session.Controller.create} (no spawn), and exposes the live
 	 * {@link stream} so subclass ctors can set flags / connect signals.
-	 * Subclass {@link run} calls {@link Terminal.spawn} then the yield flow.
-	 * One-shot callers finish with {@link Terminal.close_in} — ``0`` on success,
+	 * Subclass {@link run} calls {@link Terminal.Base.spawn} then the yield flow.
+	 * One-shot callers finish with {@link Terminal.Base.close_in} — ``0`` on success,
 	 * ``30`` on failure so helper output stays visible. Interactive
-	 * {@link OpenSession} arms close on {@link SshTerminal.exited} when focused.
+	 * {@link OpenSession} arms close on {@link Terminal.Ssh.exited} when focused.
 	 */
 	public abstract class Job : Object
 	{
@@ -79,19 +79,19 @@ namespace RooTerm
 		/**
 		 * Host the job acts on.
 		 */
-		public Connection connection { get; construct; }
+		public Host.Connection connection { get; construct; }
 
 		/**
 		 * SSH stream for the helper tab — set in the ctor after
-		 * {@link SessionController.create}. Subclass ctors set flags / connect
+		 * {@link Session.Controller.create}. Subclass ctors set flags / connect
 		 * signals; {@link run} spawns.
 		 */
-		public TerminalStream stream;
+		public Terminal.Stream stream;
 
 		/**
 		 * Helper tab — VTE is ``terminal.terminal``.
 		 */
-		public Terminal terminal;
+		public Terminal.Base terminal;
 
 		/**
 		 * What the current {@link expect} is hoping to see.
@@ -112,11 +112,11 @@ namespace RooTerm
 		 * @param window Main window
 		 * @param connection Host the job acts on
 		 */
-		protected Job(MainWindow window, Connection connection)
+		protected Job(MainWindow window, Host.Connection connection)
 		{
 			Object(window: window, connection: connection);
 			this.terminal = this.window.sessions.create(this.connection);
-			var ssh = this.terminal as SshTerminal;
+			var ssh = this.terminal as Terminal.Ssh;
 			this.stream = ssh.stream;
 			ssh.exited.connect(() => {
 				if (this.current_state != State.CANCELLED && this.current_state != State.DONE) {

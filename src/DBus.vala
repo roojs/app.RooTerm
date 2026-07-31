@@ -22,7 +22,7 @@ namespace RooTerm
 	 * Session-bus API for Guake toggle / quit (Shell extension + CLI).
 	 *
 	 * Owns ``org.roojs.RooTerm.DBus`` at ``/org/roojs/RooTerm/DBus``.
-	 * Methods export as ``Toggle`` / ``Quit`` / ``About`` on the bus. Constructed from
+	 * Methods export as ``Toggle`` / ``Quit`` / ``About`` / ``Preferences`` on the bus. Constructed from
 	 * {@link Application.startup}; the Shell extension (15b) calls it for global F12.
 	 *
 	 * == Example ==
@@ -103,6 +103,26 @@ namespace RooTerm
 		public void quit()
 		{
 			this.application.quit();
+		}
+
+		/**
+		 * Present {@link Dialog.Preferences} (Shell panel menu / ``Ctrl+,``).
+		 */
+		public void preferences()
+		{
+			if (this.application.window == null) {
+				this.application.activate();
+			}
+			var window = this.application.window;
+			if (window == null) {
+				return;
+			}
+			if (!window.visible) {
+				window.visible = true;
+				window.present();
+				this.shown();
+			}
+			new Dialog.Preferences(window).present(window);
 		}
 
 		/**

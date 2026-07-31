@@ -42,7 +42,7 @@ namespace RooTerm
 		 * @param window Main window
 		 * @param connection Host the job acts on
 		 */
-		public SudoLogin(MainWindow window, Connection connection)
+		public SudoLogin(MainWindow window, Host.Connection connection)
 		{
 			base(window, connection);
 		}

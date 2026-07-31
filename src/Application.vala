@@ -152,10 +152,33 @@ namespace RooTerm
 					);
 					return;
 				}
-				this.window = new MainWindow(this);
-				this.add_window(this.window);
-				this.window.present();
-				new GnomeShell(this.window).ensure();
+				// Hidden host for Shell checks; splash Dialog is centered (Wayland
+				// will not honour move() on a normal ApplicationWindow).
+				var app = this;
+				var host = new Gtk.ApplicationWindow(app) {
+					title = "RooTerm",
+					default_width = 1,
+					default_height = 1,
+					decorated = false
+				};
+				app.add_window(host);
+				var splash = new Adw.Dialog() {
+					title = "RooTerm",
+					content_width = 420
+				};
+				splash.set_child(new Adw.StatusPage() {
+					icon_name = "org.roojs.rooterm",
+					title = "Starting RooTerm…",
+					description = "Checking the GNOME Shell extension…"
+				});
+				splash.present(null);
+				new GnomeShell(host).ensure(() => {
+					splash.close();
+					host.close();
+					app.window = new MainWindow(app);
+					app.add_window(app.window);
+					app.window.present();
+				});
 			});
 		}
 

@@ -26,12 +26,12 @@ namespace RooTerm
 	 */
 	public class MainWindow : Gtk.ApplicationWindow
 	{
-		public HostSearchPulldown host_search;
-		public HostTree host_tree;
-		public HostStack host_stack;
-		public SessionController sessions;
+		public Host.SearchPulldown host_search;
+		public Host.Tree host_tree;
+		public Host.Stack host_stack;
+		public Session.Controller sessions;
 		public Config config;
-		public Connection localhost;
+		public Host.Connection localhost;
 		/**
 		 * Primary monitor geometry (Shell docks; size percents use this).
 		 */
@@ -81,17 +81,18 @@ namespace RooTerm
 			);
 
 			this.config = config;
-			this.localhost = new Connection() {
+			this.opacity = config.opacity / 100.0;
+			this.localhost = new Host.Connection() {
 				uuid = "localhost",
 				name = "Localhost",
-				kind = ConnectionKind.LOCAL
+				kind = Host.ConnectionKind.LOCAL
 			};
 			this.config.tree.append(null, this.localhost);
 			this.config.tree.sort((a, b) => {
-				if (a.kind == ConnectionKind.LOCAL) {
+				if (a.kind == Host.ConnectionKind.LOCAL) {
 					return -1;
 				}
-				if (b.kind == ConnectionKind.LOCAL) {
+				if (b.kind == Host.ConnectionKind.LOCAL) {
 					return 1;
 				}
 				return a.name.collate(b.name);
@@ -101,7 +102,7 @@ namespace RooTerm
 				return false;
 			});
 
-			this.host_search = new HostSearchPulldown(this.config) {
+			this.host_search = new Host.SearchPulldown(this.config) {
 				halign = Gtk.Align.FILL,
 				hexpand = true,
 				vexpand = false,
@@ -112,8 +113,8 @@ namespace RooTerm
 				placeholder_text = "Ctrl+Shift+O — search hosts"
 			};
 
-			this.host_stack = new HostStack();
-			this.sessions = new SessionController(this.host_stack, this.config.tree);
+			this.host_stack = new Host.Stack();
+			this.sessions = new Session.Controller(this.host_stack, this.config.tree);
 			this.sessions.terminal_font = this.config.terminal_font;
 			this.sessions.display_changed.connect(() => {
 				this.title = this.sessions.display;
@@ -131,7 +132,7 @@ namespace RooTerm
 					if (response != "edit") {
 						return;
 					}
-					var dlg = new ConnDialog(this);
+					var dlg = new Dialog.Connection(this);
 					dlg.fill(conn, null);
 					dlg.saved.connect((c) => {
 						try {
@@ -145,14 +146,14 @@ namespace RooTerm
 				alert.present(this);
 			});
 
-			this.host_tree = new HostTree(this);
+			this.host_tree = new Host.Tree(this);
 			this.host_tree.connection_activated.connect((conn) => {
-				if (conn.kind == ConnectionKind.LOCAL) {
+				if (conn.kind == Host.ConnectionKind.LOCAL) {
 					this.sessions.open_local(conn);
 					return;
 				}
-				if (conn.kind == ConnectionKind.LOCAL_PATH) {
-					var path_term = (Terminal) conn.sessions.get_item(0);
+				if (conn.kind == Host.ConnectionKind.LOCAL_PATH) {
+					var path_term = (Terminal.Base) conn.sessions.get_item(0);
 					this.sessions.open_local(conn.parent, path_term.cwd);
 					return;
 				}
@@ -171,9 +172,9 @@ namespace RooTerm
 				});
 			});
 			this.host_tree.connection_highlighted.connect((conn) => {
-				if (conn.kind == ConnectionKind.LOCAL_PATH) {
-					var term = (Terminal) conn.sessions.get_item(0);
-					var local_page = this.host_stack.pages.get_child_by_name(conn.parent.uuid) as HostPage;
+				if (conn.kind == Host.ConnectionKind.LOCAL_PATH) {
+					var term = (Terminal.Base) conn.sessions.get_item(0);
+					var local_page = this.host_stack.pages.get_child_by_name(conn.parent.uuid) as Host.Page;
 					if (local_page == null) {
 						return;
 					}
@@ -182,7 +183,7 @@ namespace RooTerm
 					this.sessions.focus();
 					return;
 				}
-				var page = this.host_stack.pages.get_child_by_name(conn.uuid) as HostPage;
+				var page = this.host_stack.pages.get_child_by_name(conn.uuid) as Host.Page;
 				if (page == null) {
 					return;
 				}
@@ -190,9 +191,9 @@ namespace RooTerm
 				this.sessions.focus();
 			});
 			this.host_tree.terminal_selected.connect((conn, index) => {
-				if (conn.kind == ConnectionKind.LOCAL_PATH) {
-					var term = (Terminal) conn.sessions.get_item(0);
-					var local_page = this.host_stack.pages.get_child_by_name(conn.parent.uuid) as HostPage;
+				if (conn.kind == Host.ConnectionKind.LOCAL_PATH) {
+					var term = (Terminal.Base) conn.sessions.get_item(0);
+					var local_page = this.host_stack.pages.get_child_by_name(conn.parent.uuid) as Host.Page;
 					if (local_page == null) {
 						return;
 					}
@@ -202,7 +203,7 @@ namespace RooTerm
 					this.sessions.focus();
 					return;
 				}
-				var page = this.host_stack.pages.get_child_by_name(conn.uuid) as HostPage;
+				var page = this.host_stack.pages.get_child_by_name(conn.uuid) as Host.Page;
 				if (page == null || index < 0 || index >= page.tab_view.n_pages) {
 					return;
 				}
@@ -213,9 +214,9 @@ namespace RooTerm
 			});
 			this.host_search.connection_selected.connect((conn) => {
 				this.host_tree.select(conn);
-				if (conn.kind == ConnectionKind.LOCAL_PATH) {
-					var term = (Terminal) conn.sessions.get_item(0);
-					var local_page = this.host_stack.pages.get_child_by_name(conn.parent.uuid) as HostPage;
+				if (conn.kind == Host.ConnectionKind.LOCAL_PATH) {
+					var term = (Terminal.Base) conn.sessions.get_item(0);
+					var local_page = this.host_stack.pages.get_child_by_name(conn.parent.uuid) as Host.Page;
 					if (local_page == null) {
 						return;
 					}
@@ -225,9 +226,9 @@ namespace RooTerm
 					term.terminal.grab_focus();
 					return;
 				}
-				var page = this.host_stack.pages.get_child_by_name(conn.uuid) as HostPage;
+				var page = this.host_stack.pages.get_child_by_name(conn.uuid) as Host.Page;
 				if (page == null || page.tab_view.n_pages == 0) {
-					if (conn.kind == ConnectionKind.LOCAL) {
+					if (conn.kind == Host.ConnectionKind.LOCAL) {
 						this.sessions.open_local(conn);
 						return;
 					}
@@ -250,7 +251,7 @@ namespace RooTerm
 				this.host_stack.pages.visible_child = page;
 				page.tab_view.selected_page = page.tab_view.get_nth_page(0);
 				this.sessions.focus();
-				((Terminal) page.tab_view.selected_page.child).terminal.grab_focus();
+				((Terminal.Base) page.tab_view.selected_page.child).terminal.grab_focus();
 			});
 
 			var search_action = new GLib.SimpleAction("search", null);
@@ -304,12 +305,19 @@ namespace RooTerm
 			// Shell / media-keys own the global binding; this covers in-app when focused.
 			app.set_accels_for_action("win.toggle", { this.config.toggle_key });
 
-			var tree_width = int.max(180, this.default_width * 18 / 100);
+			var prefs_action = new GLib.SimpleAction("preferences", null);
+			prefs_action.activate.connect(() => {
+				new Dialog.Preferences(this).present(this);
+			});
+			this.add_action(prefs_action);
+			app.set_accels_for_action("win.preferences", { "<Control>comma" });
+
+			var tree_width = 300;
 			this.host_tree.add_css_class("host-tree");
 			this.host_tree.vexpand = true;
 			this.host_tree.hexpand = true;
 
-			// Left: tree scrolls; search pinned under it. Right: VTE + tabs (HostPage).
+			// Left: tree scrolls; search pinned under it. Right: VTE + tabs (Host.Page).
 			var left = new Gtk.Box(Gtk.Orientation.VERTICAL, 0) {
 				hexpand = false,
 				vexpand = true,

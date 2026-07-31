@@ -16,14 +16,14 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-namespace RooTerm
+namespace RooTerm.Dialog
 {
 	/**
 	 * Create a passphrased private key (passphrase entered twice).
 	 * Create mode writes ``~/.ssh/id_ed25519``; replace mode writes the shared
 	 * ``identity`` path (``id_ed25519_rooterm``) — reused across hosts when it already exists.
 	 */
-	public class KeyDialog : Adw.Dialog
+	public class Key : Adw.Dialog
 	{
 		private Gtk.PasswordEntry pass_entry;
 		private Gtk.PasswordEntry confirm_entry;
@@ -44,7 +44,7 @@ namespace RooTerm
 		 * @param identity Private key path to create (empty → ``~/.ssh/id_ed25519``)
 		 * @param replace When true, explain install-then-remove-old as two steps
 		 */
-		public KeyDialog(string identity = "", bool replace = false)
+		public Key(string identity = "", bool replace = false)
 		{
 			this.identity_path = identity;
 			this.replace = replace;

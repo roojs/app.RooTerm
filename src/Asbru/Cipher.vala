@@ -16,12 +16,12 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-namespace RooTerm
+namespace RooTerm.Asbru
 {
 	/**
 	 * Ásbrú CM Blowfish/CBC password decrypt (Crypt::CBC opensslv1) via libgcrypt.
 	 */
-	public class AsbruCipher
+	public class Cipher
 	{
 		private static bool gcrypt_ready = false;
 
@@ -36,14 +36,14 @@ namespace RooTerm
 			if (hex.length == 0) {
 				return "";
 			}
-			if (!AsbruCipher.gcrypt_ready) {
+			if (!Cipher.gcrypt_ready) {
 				if (GCrypt.Library.check_version(null) == null) {
 					GLib.warning("asbru decrypt: gcrypt init failed");
 					return "";
 				}
 				GCrypt.Library.control(GCrypt.ControlCmd.DISABLE_SECMEM, 0);
 				GCrypt.Library.control(GCrypt.ControlCmd.INITIALIZATION_FINISHED, 0);
-				AsbruCipher.gcrypt_ready = true;
+				Cipher.gcrypt_ready = true;
 			}
 
 			if ((hex.length % 2) != 0) {

@@ -16,33 +16,33 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-namespace RooTerm
+namespace RooTerm.Dialog
 {
 	/**
-	 * Add / edit one {@link Forward} (local and remote host + port).
+	 * Add / edit one {@link Host.Forward} (local and remote host + port).
 	 */
-	public class ForwardDialog : Adw.Dialog
+	public class Forward : Adw.Dialog
 	{
 		private Gtk.Entry local_host;
 		private Gtk.Entry local_port;
 		private Gtk.Entry remote_host;
 		private Gtk.Entry remote_port;
-		private Forward draft;
+		private Host.Forward draft;
 
 		/**
 		 * Emitted when Apply succeeds with the edited draft.
 		 *
 		 * @param forward The forward to keep (same instance as constructed)
 		 */
-		public signal void applied(Forward forward);
+		public signal void applied(Host.Forward forward);
 
 		/**
 		 * Build an add/edit dialog for ``forward`` (caller owns the object).
 		 *
-		 * @param forward Forward to edit in place on apply
+		 * @param forward Model forward to edit in place on apply
 		 * @param title Dialog title (``Add forward`` / ``Edit forward``)
 		 */
-		public ForwardDialog(Forward forward, string title = "Edit forward")
+		public Forward(Host.Forward forward, string title = "Edit forward")
 		{
 			this.draft = forward;
 			this.content_width = 420;
@@ -75,9 +75,9 @@ namespace RooTerm
 				margin_start = 16,
 				margin_end = 16
 			};
-			grid.attach(new Gtk.Label("Local address") { xalign = 0 }, 0, 0, 1, 1);
+			grid.attach(new Gtk.Label("Terminal.Local address") { xalign = 0 }, 0, 0, 1, 1);
 			grid.attach(this.local_host, 1, 0, 1, 1);
-			grid.attach(new Gtk.Label("Local port") { xalign = 0 }, 0, 1, 1, 1);
+			grid.attach(new Gtk.Label("Terminal.Local port") { xalign = 0 }, 0, 1, 1, 1);
 			grid.attach(this.local_port, 1, 1, 1, 1);
 			grid.attach(new Gtk.Label("Remote address") { xalign = 0 }, 0, 2, 1, 1);
 			grid.attach(this.remote_host, 1, 2, 1, 1);

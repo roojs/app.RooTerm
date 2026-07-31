@@ -21,13 +21,13 @@ namespace RooTerm
 	/**
 	 * ``ssh-copy-id``: password → {@link State.KEY_INSTALLED}.
 	 *
-	 * Sets ``install_key`` on {@link Job.stream} in the ctor. {@link KeyDialog} stays outside.
+	 * Sets ``install_key`` on {@link Job.stream} in the ctor. {@link Dialog.Key} stays outside.
 	 * May see host-key confirm (manual yes), then passphrase and/or host password.
 	 */
 	public class SetupKey : SshLogin
 	{
 		/**
-		 * Identity from ``ssh-copy-id`` success (ConnDialog stages it).
+		 * Identity from ``ssh-copy-id`` success (Dialog.Connection stages it).
 		 */
 		public string installed_identity = "";
 
@@ -37,7 +37,7 @@ namespace RooTerm
 		 * @param window Main window
 		 * @param connection Host the job acts on
 		 */
-		public SetupKey(MainWindow window, Connection connection)
+		public SetupKey(MainWindow window, Host.Connection connection)
 		{
 			base(window, connection);
 			this.stream.install_key = true;
