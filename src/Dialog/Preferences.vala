@@ -83,7 +83,7 @@ namespace RooTerm.Dialog
 			};
 			var opacity_row = new Adw.ActionRow() {
 				title = "Opacity",
-				subtitle = "Percent (100 = solid)"
+				subtitle = "Terminal background (100 = solid)"
 			};
 			opacity_row.add_suffix(this.opacity_spin);
 			opacity_row.set_activatable_widget(this.opacity_spin);
@@ -168,7 +168,6 @@ namespace RooTerm.Dialog
 			} catch (GLib.Error e) {
 				GLib.warning("config save failed: %s", e.message);
 			}
-			this.window.opacity = config.opacity / 100.0;
 			this.window.set_default_size(
 				this.window.monitor_geo.width * config.width / 100,
 				this.window.monitor_geo.height * config.height / 100

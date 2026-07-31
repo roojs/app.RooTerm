@@ -35,11 +35,12 @@ namespace RooTerm.Terminal
 		 *
 		 * @param connection Host to open
 		 * @param font Pango font string (Ásbrú ``terminal font``)
+		 * @param config App config (VTE opacity)
 		 * @param in_stream Optional stream to adopt (flags bag or pre-wired); otherwise a new stream
 		 */
-		public Ssh(Host.Connection connection, string font = "Monospace 9", Stream? in_stream = null)
+		public Ssh(Host.Connection connection, string font, Config config, Stream? in_stream = null)
 		{
-			base(connection, font);
+			base(connection, font, config);
 
 			if (in_stream != null) {
 				this.stream = in_stream;

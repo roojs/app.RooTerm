@@ -26,6 +26,7 @@ namespace RooTerm.Session
 	{
 		public Host.Stack stack;
 		public Host.TreeNodes tree;
+		public Config config;
 		public string display = "Roo Term";
 		/**
 		 * VTE font from Ásbrú defaults (``Monospace 9`` etc.).
@@ -55,11 +56,13 @@ namespace RooTerm.Session
 		/**
 		 * @param stack Outer host stack to manage
 		 * @param tree Root host tree (gateway; Localhost path children)
+		 * @param config App config (passed into new terminals for opacity)
 		 */
-		public Controller(Host.Stack stack, Host.TreeNodes tree)
+		public Controller(Host.Stack stack, Host.TreeNodes tree, Config config)
 		{
 			this.stack = stack;
 			this.tree = tree;
+			this.config = config;
 			this.stack.pages.notify["visible-child"].connect(() => {
 				var next = this.stack.pages.visible_child as Host.Page;
 				var next_uuid = next != null ? next.connection.uuid : "";
@@ -102,7 +105,7 @@ namespace RooTerm.Session
 				this.stack.pages.add_named(page, connection.uuid);
 			}
 
-			var term = new Terminal.Ssh(connection, this.terminal_font, stream);
+			var term = new Terminal.Ssh(connection, this.terminal_font, this.config, stream);
 			var tab = page.add(term);
 			term.close_tab.connect(() => {
 				page.tab_view.close_page(tab);
@@ -183,7 +186,7 @@ namespace RooTerm.Session
 				this.stack.pages.add_named(page, connection.uuid);
 			}
 
-			var term = new Terminal.Local(connection, this.terminal_font, cwd);
+			var term = new Terminal.Local(connection, this.terminal_font, this.config, cwd);
 			var tab = page.add(term);
 			term.close_tab.connect(() => {
 				page.tab_view.close_page(tab);

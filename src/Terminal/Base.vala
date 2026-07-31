@@ -31,6 +31,12 @@ namespace RooTerm.Terminal
 		 */
 		public Stream stream;
 		/**
+		 * Last theme colours (``config.opacity`` updates ``theme_bg.alpha``).
+		 */
+		public Gdk.RGBA theme_fg;
+		public Gdk.RGBA theme_bg;
+		public Gdk.RGBA[] theme_palette;
+		/**
 		 * Child pid from the last successful {@link spawn} (``-1`` if none).
 		 */
 		public int child_pid = -1;
@@ -131,8 +137,9 @@ namespace RooTerm.Terminal
 		 *
 		 * @param connection Host or Localhost this tab belongs to
 		 * @param font Pango font string
+		 * @param config App config (binds VTE background to {@link Config.opacity})
 		 */
-		protected Base(Host.Connection connection, string font = "Monospace 9")
+		protected Base(Host.Connection connection, string font, Config config)
 		{
 			Object(orientation: Gtk.Orientation.VERTICAL, spacing: 0, hexpand: true, vexpand: true);
 			this.connection = connection;
@@ -153,21 +160,24 @@ namespace RooTerm.Terminal
 				var parser = new Json.Parser();
 				parser.load_from_data((string) bytes.get_data(), (ssize_t) bytes.get_size());
 				var root = parser.get_root().get_object();
-				var fg = Gdk.RGBA();
-				var bg = Gdk.RGBA();
-				fg.parse(root.get_string_member("foreground"));
-				bg.parse(root.get_string_member("background"));
-				// See desktop through the terminal (chrome stays theme-opaque).
-				bg.alpha = 0.85f;
+				this.theme_fg = Gdk.RGBA();
+				this.theme_bg = Gdk.RGBA();
+				this.theme_fg.parse(root.get_string_member("foreground"));
+				this.theme_bg.parse(root.get_string_member("background"));
+				this.theme_bg.alpha = config.opacity / 100.0f;
 				var arr = root.get_array_member("palette");
-				var palette = new Gdk.RGBA[arr.get_length()];
+				this.theme_palette = new Gdk.RGBA[arr.get_length()];
 				for (var i = 0; i < arr.get_length(); i++) {
-					palette[i].parse(arr.get_string_element(i));
+					this.theme_palette[i].parse(arr.get_string_element(i));
 				}
-				this.terminal.set_colors(fg, bg, palette);
+				this.terminal.set_colors(this.theme_fg, this.theme_bg, this.theme_palette);
 			} catch (GLib.Error e) {
 				GLib.warning("terminal theme: %s", e.message);
 			}
+			config.notify["opacity"].connect(() => {
+				this.theme_bg.alpha = config.opacity / 100.0f;
+				this.terminal.set_colors(this.theme_fg, this.theme_bg, this.theme_palette);
+			});
 			var vte_frame = new Gtk.Box(Gtk.Orientation.VERTICAL, 0) {
 				hexpand = true,
 				vexpand = true

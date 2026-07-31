@@ -81,7 +81,6 @@ namespace RooTerm
 			);
 
 			this.config = config;
-			this.opacity = config.opacity / 100.0;
 			this.localhost = new Host.Connection() {
 				uuid = "localhost",
 				name = "Localhost",
@@ -114,7 +113,7 @@ namespace RooTerm
 			};
 
 			this.host_stack = new Host.Stack();
-			this.sessions = new Session.Controller(this.host_stack, this.config.tree);
+			this.sessions = new Session.Controller(this.host_stack, this.config.tree, this.config);
 			this.sessions.terminal_font = this.config.terminal_font;
 			this.sessions.display_changed.connect(() => {
 				this.title = this.sessions.display;

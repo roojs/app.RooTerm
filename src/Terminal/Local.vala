@@ -40,11 +40,12 @@ namespace RooTerm.Terminal
 		 *
 		 * @param connection Localhost connection
 		 * @param font Pango font string
+		 * @param config App config (VTE opacity)
 		 * @param cwd Working directory (home when empty)
 		 */
-		public Local(Host.Connection connection, string font = "Monospace 9", string cwd = "")
+		public Local(Host.Connection connection, string font, Config config, string cwd = "")
 		{
-			base(connection, font);
+			base(connection, font, config);
 			this.start_cwd = cwd;
 			this.cwd = cwd;
 			this.stream = new Stream(this);

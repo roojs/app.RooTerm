@@ -38,7 +38,7 @@ namespace RooTerm
 		 */
 		public string toggle_key { get; set; default = "F12"; }
 		/**
-		 * Drop-down opacity percent (10–100).
+		 * VTE background opacity percent (10–100). Host chrome stays opaque.
 		 */
 		public int opacity { get; set; default = 100; }
 		/**
