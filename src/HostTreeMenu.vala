@@ -75,7 +75,8 @@ namespace RooTerm
 			this.new_terminal_here.clicked.connect(() => {
 				this.popdown();
 				if (this.target != null && this.target.parent != null) {
-					this.window.sessions.open_local(this.target.parent, this.target.name);
+					var path_term = (Terminal) this.target.sessions.get_item(0);
+					this.window.sessions.open_local(this.target.parent, path_term.cwd);
 				}
 			});
 			box.append(this.new_terminal_here);

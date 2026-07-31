@@ -152,7 +152,8 @@ namespace RooTerm
 					return;
 				}
 				if (conn.kind == ConnectionKind.LOCAL_PATH) {
-					this.sessions.open_local(conn.parent, conn.name);
+					var path_term = (Terminal) conn.sessions.get_item(0);
+					this.sessions.open_local(conn.parent, path_term.cwd);
 					return;
 				}
 				var job = new OpenSession(this, conn);

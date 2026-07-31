@@ -158,7 +158,8 @@ namespace RooTerm
 		 */
 		private void on_cwd()
 		{
-			if (this.session.connection.kind != ConnectionKind.LOCAL_PATH) {
+			var local = this.session as LocalTerminal;
+			if (local == null) {
 				return;
 			}
 			if (this.cwd_timeout != 0) {
@@ -189,7 +190,6 @@ namespace RooTerm
 							user = pw.pw_name;
 						}
 					}
-					var local = (LocalTerminal) this.session;
 					if (link == this.session.cwd && user == local.peer_user) {
 						return false;
 					}
@@ -295,7 +295,7 @@ namespace RooTerm
 				GLib.debug("prompt_hint name=%s hint=%s", this.connection.name, last);
 				this.prompt_hint = last;
 				// Local tabs use ``/proc`` cwd; prompt path is often ``~`` and would clobber it.
-				if (this.session.connection.kind != ConnectionKind.LOCAL_PATH) {
+				if (!(this.session is LocalTerminal)) {
 					try {
 						var re = new GLib.Regex("^[^\\s@]+@[^\\s:]+:(.+)[#$]\\s*$");
 						MatchInfo info;

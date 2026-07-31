@@ -61,7 +61,7 @@ namespace RooTerm
 
 		/**
 		 * {@inheritDoc}
-		 * Own home → ``~`` / ``~/…``; other user → ``user:~`` / ``user:path``.
+		 * Own home → absolute path; under home → ``~/…``; other user → ``user:~`` / ``user:path``.
 		 */
 		public override string label()
 		{
@@ -69,27 +69,26 @@ namespace RooTerm
 			if (path.length == 0) {
 				path = this.start_cwd;
 			}
-			if (path.length == 0) {
-				path = GLib.Environment.get_home_dir();
+			var home = GLib.Environment.get_home_dir();
+			if (path.length == 0 || path == "~") {
+				path = home;
+			} else if (path.has_prefix("~/")) {
+				path = home + path.substring(1);
 			}
 			var me = GLib.Environment.get_user_name();
 			if (this.peer_user.length == 0 || this.peer_user == me) {
-				var home = GLib.Environment.get_home_dir();
-				if (path == home || path == "~") {
-					return "~";
-				}
 				if (path.has_prefix(home + "/")) {
 					return "~" + path.substring(home.length);
 				}
 				return path;
 			}
 			unowned Posix.Passwd? pw = Posix.getpwnam(this.peer_user);
-			var home = pw != null ? pw.pw_dir : "";
+			var peer_home = pw != null ? pw.pw_dir : "";
 			var show = path;
-			if (home.length > 0 && (path == home || path == "~")) {
+			if (peer_home.length > 0 && path == peer_home) {
 				show = "~";
-			} else if (home.length > 0 && path.has_prefix(home + "/")) {
-				show = "~" + path.substring(home.length);
+			} else if (peer_home.length > 0 && path.has_prefix(peer_home + "/")) {
+				show = "~" + path.substring(peer_home.length);
 			}
 			return this.peer_user + ":" + show;
 		}
@@ -103,9 +102,12 @@ namespace RooTerm
 			if (shell == null || shell.length == 0) {
 				shell = "/bin/bash";
 			}
+			var home = GLib.Environment.get_home_dir();
 			var dir = this.start_cwd;
-			if (dir.length == 0) {
-				dir = GLib.Environment.get_home_dir();
+			if (dir.length == 0 || dir == "~") {
+				dir = home;
+			} else if (dir.has_prefix("~/")) {
+				dir = home + dir.substring(1);
 			}
 			if (dir != this.cwd) {
 				this.cwd = dir;
