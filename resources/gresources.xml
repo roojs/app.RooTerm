@@ -1,12 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <gresources>
   <gresource prefix="/">
-    <file alias="style.css">resources/style.css</file>
-    <file alias="solarized-dark.json">resources/solarized-dark.json</file>
+    <file>style.css</file>
+    <file>solarized-dark.json</file>
   </gresource>
-  <gresource prefix="/rooterm">
-    <file alias="extension/metadata.json">extension/rooterm@roojs.com/metadata.json</file>
-    <file alias="extension/extension.js">extension/rooterm@roojs.com/extension.js</file>
-    <file alias="extension/stylesheet.css">extension/rooterm@roojs.com/stylesheet.css</file>
+  <gresource prefix="/extension">
+    <file>metadata.json</file>
+    <file>extension.js</file>
+    <file>stylesheet.css</file>
+  </gresource>
+  <gresource prefix="/extension/schemas">
+    <file>org.gnome.shell.extensions.rooterm.gschema.xml</file>
   </gresource>
 </gresources>

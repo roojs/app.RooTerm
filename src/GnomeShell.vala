@@ -66,7 +66,7 @@ namespace RooTerm
 			var bundled = 0;
 			try {
 				var bundled_data = GLib.resources_lookup_data(
-					"/rooterm/extension/metadata.json", GLib.ResourceLookupFlags.NONE
+					"/extension/metadata.json", GLib.ResourceLookupFlags.NONE
 				);
 				var bundled_parser = new Json.Parser();
 				bundled_parser.load_from_data(
@@ -151,7 +151,7 @@ namespace RooTerm
 			var bundled = 0;
 			try {
 				var bundled_data = GLib.resources_lookup_data(
-					"/rooterm/extension/metadata.json", GLib.ResourceLookupFlags.NONE
+					"/extension/metadata.json", GLib.ResourceLookupFlags.NONE
 				);
 				var bundled_parser = new Json.Parser();
 				bundled_parser.load_from_data(
@@ -402,7 +402,7 @@ After that, $(key) and the panel icon will work. You can still use this window."
 			};
 			foreach (var name in names) {
 				var data = GLib.resources_lookup_data(
-					"/rooterm/extension/" + name, GLib.ResourceLookupFlags.NONE
+					"/extension/" + name, GLib.ResourceLookupFlags.NONE
 				);
 				GLib.File.new_for_path(GLib.Path.build_filename(user_dir, name)).replace_contents(
 					data.get_data(), null, false, GLib.FileCreateFlags.REPLACE_DESTINATION, null

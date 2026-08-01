@@ -19,10 +19,16 @@ yaml_dep = dependency('yaml-0.1')
 json_dep = dependency('json-glib-1.0')
 secret_dep = dependency('libsecret-1')
 
+# OLLMchat pattern: one gresource prefix per directory, bare <file> names,
+# matching --sourcedir entries (see OLLMchat/libollmchat/meson.build).
 rooterm_resources = gnome.compile_resources(
   'rooterm-resources',
   'resources/gresources.xml',
-  source_dir: meson.project_source_root(),
+  source_dir: [
+    meson.project_source_root() / 'resources',
+    meson.project_source_root() / 'resources' / 'extension',
+    meson.project_source_root() / 'resources' / 'extension' / 'schemas',
+  ],
   c_name: 'rooterm_resources',
 )
 
@@ -79,8 +85,9 @@ install_data(
 )
 
 install_subdir(
-  'extension/rooterm@roojs.com',
-  install_dir: get_option('datadir') / 'gnome-shell' / 'extensions',
+  'resources/extension',
+  install_dir: get_option('datadir') / 'gnome-shell' / 'extensions' / 'rooterm@roojs.com',
+  strip_directory: true,
 )
 
 desktop_conf = configuration_data()

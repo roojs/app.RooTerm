@@ -50,25 +50,14 @@ extension under `/usr/share/gnome-shell/extensions/rooterm@roojs.com/`.
 
 **Do not** install the app binary to `~/.local` — use `/usr` only.
 
-### Shell extension (dev / user install)
+### Shell extension
 
-For a checkout without `sudo meson install`, copy into the user extensions dir
-and enable:
+Bundled under `resources/extension/` and installed by the app
+(`GnomeShell.ensure` → user extensions dir + enable). System package installs
+also place a copy under `/usr/share/gnome-shell/extensions/` via meson.
 
-```bash
-chmod +x extension/install.sh
-./extension/install.sh
-```
-
-On GNOME Wayland, a **new** extension often needs a session restart once before
-Shell loads `extension.js`. After that, `rooterm` calls
-`org.gnome.Shell.Extensions.EnableExtension` at startup so re-enable is automatic.
-
-```bash
-gnome-extensions enable rooterm@roojs.com
-```
-
-**Do not** install to `~/.local` — use `/usr` only.
+On GNOME Wayland, a **new** or **upgraded** extension often needs a session
+restart once before Shell runs the new `extension.js`.
 
 ## Notes
 

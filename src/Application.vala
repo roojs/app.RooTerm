@@ -148,10 +148,13 @@ namespace RooTerm
 					this.add_window(this.window);
 					this.window.present();
 					new GnomeShell(this.window).ensure(() => {
-						if (this.window.is_docked || !new GnomeShell(this.window).is_ready) {
+						if (!new GnomeShell(this.window).is_ready) {
 							return;
 						}
-						this.window.show_docked();
+						// Already-docked first present also needs Shown — Shell docks on that cue.
+						if (!this.window.is_docked) {
+							this.window.show_docked();
+						}
 						this.dbus.shown();
 					});
 					return;
