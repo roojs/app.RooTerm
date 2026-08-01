@@ -228,7 +228,7 @@ namespace RooTerm
 			}
 			this.pending_secrets.unset(uuid);
 			var schema = new Secret.Schema(
-				"org.roojs.rooterm.Host.Connection", Secret.SchemaFlags.NONE,
+				"org.roojs.rooterm.Connection", Secret.SchemaFlags.NONE,
 				"uuid", Secret.SchemaAttributeType.STRING
 			);
 			var store_uuid = uuid;

@@ -61,6 +61,11 @@ namespace RooTerm
 				},
 				() => {
 					GLib.debug("D-Bus name acquired");
+					var window = this.application.window;
+					if (window != null && window.is_docked && window.visible) {
+						GLib.debug("shown after name acquired dock_mode=%d", (int) this.dock_mode);
+						this.shown();
+					}
 				},
 				() => {
 					GLib.warning("D-Bus name lost");
@@ -138,14 +143,7 @@ namespace RooTerm
 			if (window == null) {
 				return;
 			}
-			if (!window.visible) {
-				window.visible = true;
-				window.present();
-				if (window.is_docked) {
-					this.shown();
-				}
-			}
-			new Dialog.Preferences(window).present(window);
+			new Dialog.Preferences(window).present();
 		}
 
 		/**

@@ -155,6 +155,7 @@ namespace RooTerm
 						if (!this.window.is_docked) {
 							this.window.show_docked();
 						}
+						GLib.debug("shown after ensure dock_mode=%d", (int) this.dbus.dock_mode);
 						this.dbus.shown();
 					});
 					return;
@@ -170,6 +171,7 @@ namespace RooTerm
 						if (!this.window.is_docked) {
 							this.window.show_docked();
 						}
+						GLib.debug("shown after remorph dock_mode=%d", (int) this.dbus.dock_mode);
 						this.dbus.shown();
 					});
 					return;
@@ -178,6 +180,7 @@ namespace RooTerm
 					this.window.monitor_geo.width * this.window.config.width / 100,
 					this.window.monitor_geo.height * this.window.config.height / 100
 				);
+				GLib.debug("shown activate docked dock_mode=%d", (int) this.dbus.dock_mode);
 				this.dbus.shown();
 			});
 		}

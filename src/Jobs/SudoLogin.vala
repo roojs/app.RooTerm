@@ -16,7 +16,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-namespace RooTerm
+namespace RooTerm.Jobs
 {
 	/**
 	 * Mock SSH + sudo: {@link SshLogin.login}, then {@link sudo} to root.
@@ -41,16 +41,17 @@ namespace RooTerm
 		/**
 		 * @param window Main window
 		 * @param connection Host the job acts on
+		 * @param existing Adopt this tab instead of creating one
 		 */
-		public SudoLogin(MainWindow window, Host.Connection connection)
+		public SudoLogin(MainWindow window, Host.Connection connection, Terminal.Base? existing = null)
 		{
-			base(window, connection);
+			base(window, connection, existing);
 		}
 
 		/**
 		 * {@link login}, {@link sudo}, then {@link State.DONE}.
 		 */
-		public override async void run() throws JobError
+		public override async void run() throws Error
 		{
 			this.terminal.spawn();
 			yield this.login();
@@ -63,14 +64,14 @@ namespace RooTerm
 		 *
 		 * Does not set {@link State.DONE} — subclasses finish after this.
 		 */
-		protected async void sudo() throws JobError
+		protected async void sudo() throws Error
 		{
 			this.sudo_password_fed = false;
 			this.sudo_fail_armed = false;
 			this.sudo_done = false;
 			this.terminal.terminal.feed_child("sudo -i\n".data);
 			if (!yield this.expect(State.WAIT_SUDO_PASSWORD, 15000)) {
-				throw new JobError.TIMEOUT("sudo password timeout name=%s".printf(
+				throw new Error.TIMEOUT("sudo password timeout name=%s".printf(
 					this.connection.name));
 			}
 			this.terminal.terminal.feed_child((this.connection.pass + "\n").data);
@@ -82,7 +83,7 @@ namespace RooTerm
 				return false;
 			});
 			if (!yield this.expect(State.WAIT_ROOT_PROMPT, 15000)) {
-				throw new JobError.TIMEOUT("sudo root timeout name=%s".printf(
+				throw new Error.TIMEOUT("sudo root timeout name=%s".printf(
 					this.connection.name));
 			}
 			this.sudo_done = true;

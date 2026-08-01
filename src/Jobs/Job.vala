@@ -16,12 +16,12 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-namespace RooTerm
+namespace RooTerm.Jobs
 {
 	/**
 	 * Stop conditions for {@link Job.expect} / {@link Job.run}.
 	 */
-	public errordomain JobError
+	public errordomain Error
 	{
 		TIMEOUT,
 		CANCEL,
@@ -45,7 +45,7 @@ namespace RooTerm
 		 * Job / terminal situation. {@link want} and {@link current_state} share this enum.
 		 *
 		 * Waits = prompts / UI we may park on. Conclusions = outcomes already reached
-		 * (success or error). Error conclusions make {@link expect} throw {@link JobError}.
+		 * (success or error). Error conclusions make {@link expect} throw {@link Error}.
 		 */
 		public enum State
 		{
@@ -111,11 +111,16 @@ namespace RooTerm
 		/**
 		 * @param window Main window
 		 * @param connection Host the job acts on
+		 * @param existing Adopt this tab instead of {@link Session.Controller.create}
 		 */
-		protected Job(MainWindow window, Host.Connection connection)
+		protected Job(MainWindow window, Host.Connection connection, Terminal.Base? existing = null)
 		{
 			Object(window: window, connection: connection);
-			this.terminal = this.window.sessions.create(this.connection);
+			if (existing != null) {
+				this.terminal = existing;
+			} else {
+				this.terminal = this.window.sessions.create(this.connection);
+			}
 			var ssh = this.terminal as Terminal.Ssh;
 			this.stream = ssh.stream;
 			ssh.exited.connect(() => {
@@ -173,7 +178,7 @@ namespace RooTerm
 		/**
 		 * Subclass yield flow.
 		 */
-		public abstract async void run() throws JobError;
+		public abstract async void run() throws Error;
 
 		/**
 		 * Classify the cursor line → {@link current_state}. Override in the job that
@@ -192,9 +197,9 @@ namespace RooTerm
 		 * @param timeout_ms Deadline — does not overwrite {@link current_state}
 		 * @return ``true`` if ``want_state`` was reached; ``false`` on timeout
 		 *         or another classified state (caller inspects {@link current_state}).
-		 *         {@link JobError} on cancel / fail only.
+		 *         {@link Error} on cancel / fail only.
 		 */
-		protected async bool expect(State want_state, uint timeout_ms) throws JobError
+		protected async bool expect(State want_state, uint timeout_ms) throws Error
 		{
 			this.want = want_state;
 			GLib.debug("job expect name=%s want=%d timeout_ms=%u current_state=%d",
@@ -204,9 +209,9 @@ namespace RooTerm
 			}
 			switch (this.current_state) {
 				case State.CANCELLED:
-					throw new JobError.CANCEL("job cancelled name=%s".printf(this.connection.name));
+					throw new Error.CANCEL("job cancelled name=%s".printf(this.connection.name));
 				case State.FAILED:
-					throw new JobError.FAIL("terminal failure name=%s want=%d".printf(
+					throw new Error.FAIL("terminal failure name=%s want=%d".printf(
 						this.connection.name, (int) want_state));
 			}
 
@@ -257,9 +262,9 @@ namespace RooTerm
 			}
 			switch (this.current_state) {
 				case State.CANCELLED:
-					throw new JobError.CANCEL("job cancelled name=%s".printf(this.connection.name));
+					throw new Error.CANCEL("job cancelled name=%s".printf(this.connection.name));
 				case State.FAILED:
-					throw new JobError.FAIL("terminal failure name=%s want=%d".printf(
+					throw new Error.FAIL("terminal failure name=%s want=%d".printf(
 						this.connection.name, (int) want_state));
 			}
 			return false;

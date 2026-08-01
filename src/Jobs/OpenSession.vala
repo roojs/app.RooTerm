@@ -16,7 +16,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-namespace RooTerm
+namespace RooTerm.Jobs
 {
 	/**
 	 * Open-ended SSH session: login (password, passphrase, or already at shell),
@@ -31,10 +31,11 @@ namespace RooTerm
 		/**
 		 * @param window Main window
 		 * @param connection Host the job acts on
+		 * @param existing Adopt this tab (Enter reconnect) instead of creating one
 		 */
-		public OpenSession(MainWindow window, Host.Connection connection)
+		public OpenSession(MainWindow window, Host.Connection connection, Terminal.Base? existing = null)
 		{
-			base(window, connection);
+			base(window, connection, existing);
 			var ssh = (Terminal.Ssh) this.terminal;
 			ssh.exited.connect(() => {
 				if (ssh.selected) {
@@ -47,7 +48,7 @@ namespace RooTerm
 		 * Password / passphrase prompt, or already at a shell — then shell.
 		 * Same ``expect`` false handling as {@link SshLogin.login}; feeds passphrase when set.
 		 */
-		protected override async void login() throws JobError
+		protected override async void login() throws Error
 		{
 			while (!yield this.expect(State.WAIT_SSH_PASSWORD, 30000)) {
 				switch (this.current_state) {
@@ -59,7 +60,7 @@ namespace RooTerm
 					case State.WAIT_VERIFICATION_CODE:
 						continue;
 					default:
-						throw new JobError.TIMEOUT("login password timeout name=%s".printf(
+						throw new Error.TIMEOUT("login password timeout name=%s".printf(
 							this.connection.name));
 				}
 			}
@@ -78,7 +79,7 @@ namespace RooTerm
 					case State.WAIT_VERIFICATION_CODE:
 						continue;
 					default:
-						throw new JobError.TIMEOUT("login shell timeout name=%s".printf(
+						throw new Error.TIMEOUT("login shell timeout name=%s".printf(
 							this.connection.name));
 				}
 			}
@@ -89,7 +90,7 @@ namespace RooTerm
 		/**
 		 * Spawn → {@link login} → optional {@link SudoLogin.sudo} → optional ``lxc-console`` → DONE.
 		 */
-		public override async void run() throws JobError
+		public override async void run() throws Error
 		{
 			this.terminal.spawn();
 			yield this.login();
@@ -102,7 +103,7 @@ namespace RooTerm
 					("lxc-console -n " + this.connection.lxc_name + "\n").data
 				);
 				if (!yield this.expect(State.WAIT_SHELL_PROMPT, 30000)) {
-					throw new JobError.TIMEOUT("lxc console timeout name=%s".printf(
+					throw new Error.TIMEOUT("lxc console timeout name=%s".printf(
 						this.connection.name));
 				}
 			}

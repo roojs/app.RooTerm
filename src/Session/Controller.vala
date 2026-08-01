@@ -117,12 +117,12 @@ namespace RooTerm.Session
 		}
 
 		/**
-		 * Open another tab like the focused one: SSH clone via {@link OpenSession},
+		 * Open another tab like the focused one: SSH clone via {@link Jobs.OpenSession},
 		 * or local shell in the same cwd. Falls back to a new local shell in home
 		 * when nothing is focused.
 		 *
 		 * @param localhost Localhost connection for local / empty fallback
-		 * @param window Main window (for {@link OpenSession})
+		 * @param window Main window (for {@link Jobs.OpenSession})
 		 */
 		public void open_new(Host.Connection localhost, MainWindow window)
 		{
@@ -137,7 +137,7 @@ namespace RooTerm.Session
 				return;
 			}
 			if (term is Terminal.Ssh) {
-				var job = new OpenSession(window, term.connection);
+				var job = new Jobs.OpenSession(window, term.connection);
 				GLib.Idle.add(() => {
 					window.present();
 					job.terminal.terminal.grab_focus();
@@ -146,7 +146,7 @@ namespace RooTerm.Session
 				job.run.begin((obj, res) => {
 					try {
 						job.run.end(res);
-					} catch (JobError e) {
+					} catch (Jobs.Error e) {
 						GLib.warning("open session failed name=%s: %s",
 							term.connection.name, e.message);
 					}

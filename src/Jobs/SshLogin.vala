@@ -16,7 +16,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-namespace RooTerm
+namespace RooTerm.Jobs
 {
 	/**
 	 * Plain SSH login. Subclasses call {@link login} then add steps.
@@ -26,16 +26,17 @@ namespace RooTerm
 		/**
 		 * @param window Main window
 		 * @param connection Host the job acts on
+		 * @param existing Adopt this tab instead of creating one
 		 */
-		public SshLogin(MainWindow window, Host.Connection connection)
+		public SshLogin(MainWindow window, Host.Connection connection, Terminal.Base? existing = null)
 		{
-			base(window, connection);
+			base(window, connection, existing);
 		}
 
 		/**
 		 * {@link login}, then {@link State.DONE}.
 		 */
-		public override async void run() throws JobError
+		public override async void run() throws Error
 		{
 			this.terminal.spawn();
 			yield this.login();
@@ -49,7 +50,7 @@ namespace RooTerm
 		 * Does not set {@link State.DONE} — subclasses finish after this.
 		 * {@link OpenSession} overrides for passphrase.
 		 */
-		protected virtual async void login() throws JobError
+		protected virtual async void login() throws Error
 		{
 			while (!yield this.expect(State.WAIT_SSH_PASSWORD, 30000)) {
 				switch (this.current_state) {
@@ -59,7 +60,7 @@ namespace RooTerm
 					case State.WAIT_VERIFICATION_CODE:
 						continue;
 					default:
-						throw new JobError.TIMEOUT("login password timeout name=%s".printf(
+						throw new Error.TIMEOUT("login password timeout name=%s".printf(
 							this.connection.name));
 				}
 			}
@@ -72,7 +73,7 @@ namespace RooTerm
 					case State.WAIT_VERIFICATION_CODE:
 						continue;
 					default:
-						throw new JobError.TIMEOUT("login shell timeout name=%s".printf(
+						throw new Error.TIMEOUT("login shell timeout name=%s".printf(
 							this.connection.name));
 				}
 			}

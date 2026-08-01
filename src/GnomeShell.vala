@@ -115,6 +115,10 @@ namespace RooTerm
 				info.lookup("state", "d", out state_d);
 				info.lookup("version", "d", out version_d);
 				this.is_ready = ((int) state_d == 1) && ((int) version_d >= bundled);
+				GLib.debug(
+					"Shell extension ctor ready=%d state=%d version=%d bundled=%d",
+					(int) this.is_ready, (int) state_d, (int) version_d, bundled
+				);
 			} catch (GLib.Error e) {
 				GLib.debug("Shell extension check failed: %s", e.message);
 			}
@@ -227,6 +231,10 @@ $(e.message)",
 				GLib.debug("Shell extension check failed: %s", e.message);
 			}
 			this.is_ready = enabled && bundled > 0 && shell_version >= bundled;
+			GLib.debug(
+				"Shell extension ensure ready=%d enabled=%d shell_ver=%d bundled=%d knows=%d",
+				(int) this.is_ready, (int) enabled, shell_version, bundled, (int) shell_knows
+			);
 
 			// On-disk update does not reload Shell — running version stays old until restart.
 			if (shell_knows && bundled > 0 && shell_version < bundled) {
@@ -245,23 +253,9 @@ $(e.message)",
 			}
 
 			if (!shell_knows) {
-				// After install or session start, Shell may not have indexed us yet.
-				var know_retries = this.get_data<int>("ensure-know-retries");
-				if (know_retries < 6) {
-					this.set_data("ensure-know-retries", know_retries + 1);
-					GLib.debug("Shell extension not known yet — retry %d", know_retries + 1);
-					GLib.Timeout.add(500, () => {
-						this.ensure((owned) done);
-						return false;
-					});
-					return;
-				}
-				this.set_data("ensure-know-retries", 0);
-				GLib.debug("Shell extension still unknown after retries — needs reload");
 				this.alert("Shell extension needs a session restart", "", (owned) done);
 				return;
 			}
-			this.set_data("ensure-know-retries", 0);
 
 			var enable_error = "";
 			try {
@@ -420,6 +414,19 @@ After reload, click OK to switch this window to the drop-down. Then $(key) and t
 			slot.set_string("name", "RooTerm");
 			slot.set_string("command", "rooterm --toggle");
 			slot.set_string("binding", key);
+			// Same accelerator on another custom slot (e.g. leftover Guake) shadows us.
+			foreach (var path in paths) {
+				if (path == ours) {
+					continue;
+				}
+				var other = new GLib.Settings.with_path(
+					"org.gnome.settings-daemon.plugins.media-keys.custom-keybinding", path
+				);
+				if (other.get_string("binding") == key) {
+					other.set_string("binding", "");
+					GLib.debug("cleared conflicting binding path=%s key=%s", path, key);
+				}
+			}
 			// Extension schema: panel tooltip only (no wm grab).
 			try {
 				var ext = new GLib.Settings("org.gnome.shell.extensions.rooterm");

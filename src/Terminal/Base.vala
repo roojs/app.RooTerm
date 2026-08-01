@@ -37,6 +37,14 @@ namespace RooTerm.Terminal
 		public Gdk.RGBA theme_bg;
 		public Gdk.RGBA[] theme_palette;
 		/**
+		 * Extra display CSS provider for live ``.vte-frame`` opacity (not the main
+		 * ``style.css`` provider in {@link MainWindow}). Gresource CSS cannot take
+		 * runtime {@link Config.opacity}; this shared provider is reloaded with an
+		 * ``rgba(...)`` rule when opacity changes. Static so every tab shares one.
+		 */
+		private static Gtk.CssProvider frame_css = new Gtk.CssProvider();
+		private static bool frame_css_added = false;
+		/**
 		 * Child pid from the last successful {@link spawn} (``-1`` if none).
 		 */
 		public int child_pid = -1;
@@ -174,20 +182,54 @@ namespace RooTerm.Terminal
 			} catch (GLib.Error e) {
 				GLib.warning("terminal theme: %s", e.message);
 			}
+			/*
+			 * VTE does not composite background alpha to the desktop. Below 100%
+			 * leave VTE unfilled and paint the dimmed colour on ``.vte-frame``.
+			 */
+			if (!frame_css_added) {
+				Gtk.StyleContext.add_provider_for_display(
+					Gdk.Display.get_default(),
+					frame_css,
+					Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+				);
+				frame_css_added = true;
+			}
+			this.terminal.set_clear_background(config.opacity >= 100);
+			if (config.opacity >= 100) {
+				frame_css.load_from_string(".vte-frame { background-color: transparent; }");
+			} else {
+				frame_css.load_from_string(
+					".vte-frame { background-color: rgba(%u,%u,%u,%.3f); }".printf(
+						(uint) (this.theme_bg.red * 255.0f + 0.5f),
+						(uint) (this.theme_bg.green * 255.0f + 0.5f),
+						(uint) (this.theme_bg.blue * 255.0f + 0.5f),
+						config.opacity / 100.0
+					)
+				);
+			}
 			config.notify["opacity"].connect(() => {
 				this.theme_bg.alpha = config.opacity / 100.0f;
 				this.terminal.set_colors(this.theme_fg, this.theme_bg, this.theme_palette);
+				this.terminal.set_clear_background(config.opacity >= 100);
+				if (config.opacity >= 100) {
+					frame_css.load_from_string(".vte-frame { background-color: transparent; }");
+				} else {
+					frame_css.load_from_string(
+						".vte-frame { background-color: rgba(%u,%u,%u,%.3f); }".printf(
+							(uint) (this.theme_bg.red * 255.0f + 0.5f),
+							(uint) (this.theme_bg.green * 255.0f + 0.5f),
+							(uint) (this.theme_bg.blue * 255.0f + 0.5f),
+							config.opacity / 100.0
+						)
+					);
+				}
 			});
 			var vte_frame = new Gtk.Box(Gtk.Orientation.VERTICAL, 0) {
 				hexpand = true,
 				vexpand = true
 			};
 			vte_frame.add_css_class("vte-frame");
-			vte_frame.append(new Gtk.ScrolledWindow() {
-				child = this.terminal,
-				hexpand = true,
-				vexpand = true
-			});
+			vte_frame.append(this.terminal);
 			this.append(vte_frame);
 
 			this.close_progress = new Gtk.ProgressBar() {
@@ -217,11 +259,7 @@ namespace RooTerm.Terminal
 				this.terminal.feed("\r\n[Leave open - Enter to reconnect]\r\n".data);
 			});
 			this.close_bar = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 8) {
-				visible = false,
-				margin_start = 8,
-				margin_end = 8,
-				margin_top = 4,
-				margin_bottom = 6
+				visible = false
 			};
 			this.close_bar.add_css_class("close-bar");
 			this.close_bar.append(close_now);
@@ -320,7 +358,7 @@ namespace RooTerm.Terminal
 
 		/**
 		 * Close this tab after ``seconds`` (``0`` = immediately). Callers own the
-		 * policy; shared 1s countdown — subclasses refresh chrome via
+		 * policy; shared 250ms countdown ticks — subclasses refresh chrome via
 		 * {@link close_countdown}.
 		 *
 		 * @param seconds Delay before {@link close_tab}; ``0`` closes now
@@ -343,18 +381,18 @@ namespace RooTerm.Terminal
 				return;
 			}
 			this.close_armed = true;
-			this.close_left = seconds;
-			this.close_total = seconds;
+			this.close_left = seconds * 1000;
+			this.close_total = seconds * 1000;
 			this.close_countdown(this.close_left, this.close_total);
 			if (this.close_tick != 0) {
 				GLib.Source.remove(this.close_tick);
 			}
-			this.close_tick = GLib.Timeout.add_seconds(1, () => {
+			this.close_tick = GLib.Timeout.add(250, () => {
 				if (this.close_paused) {
 					this.close_tick = 0;
 					return false;
 				}
-				this.close_left--;
+				this.close_left -= 250;
 				if (this.close_left <= 0) {
 					this.close_tick = 0;
 					this.close_countdown(0, this.close_total);
@@ -389,10 +427,10 @@ namespace RooTerm.Terminal
 		}
 
 		/**
-		 * Update close chrome each second. ``left == 0`` means hide / done.
+		 * Update close chrome each tick. ``left == 0`` means hide / done.
 		 *
-		 * @param left Seconds remaining
-		 * @param total Original delay from {@link close_in}
+		 * @param left Milliseconds remaining
+		 * @param total Original delay from {@link close_in} in milliseconds
 		 */
 		protected virtual void close_countdown(int left, int total)
 		{
@@ -407,7 +445,8 @@ namespace RooTerm.Terminal
 			if (this.close_paused) {
 				return;
 			}
-			this.close_progress.text = "Closing in " + left.to_string() + " seconds…";
+			var secs = (left + 999) / 1000;
+			this.close_progress.text = "Closing in " + secs.to_string() + " seconds…";
 			this.close_progress.fraction = (double) left / (double) total;
 		}
 

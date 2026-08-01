@@ -16,7 +16,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-namespace RooTerm
+namespace RooTerm.Jobs
 {
 	/**
 	 * ``ssh-copy-id``: password → {@link State.KEY_INSTALLED}.
@@ -67,7 +67,7 @@ namespace RooTerm
 		 * Same expect → feed_child → expect shape as {@link SshLogin.login}.
 		 * Passphrase once if set, then host password on later prompts.
 		 */
-		public override async void run() throws JobError
+		public override async void run() throws Error
 		{
 			this.terminal.spawn();
 			var fed_phrase = false;
@@ -80,7 +80,7 @@ namespace RooTerm
 							|| this.current_state == State.WAIT_VERIFICATION_CODE) {
 						continue;
 					}
-					throw new JobError.TIMEOUT("setup key password timeout name=%s".printf(
+					throw new Error.TIMEOUT("setup key password timeout name=%s".printf(
 						this.connection.name));
 				}
 				if (this.connection.passphrase.length > 0 && !fed_phrase) {
@@ -100,7 +100,7 @@ namespace RooTerm
 				if (this.current_state == State.KEY_INSTALLED) {
 					break;
 				}
-				throw new JobError.TIMEOUT("setup key install timeout name=%s".printf(
+				throw new Error.TIMEOUT("setup key install timeout name=%s".printf(
 					this.connection.name));
 			}
 			this.current_state = State.DONE;

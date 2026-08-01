@@ -16,7 +16,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-namespace RooTerm
+namespace RooTerm.Jobs
 {
 	/**
 	 * Fetch LXC hosts: login + sudo → ``lxc-ls`` → parse into {@link container_names}.
@@ -41,7 +41,7 @@ namespace RooTerm
 		 * {@link SshLogin.login}, {@link SudoLogin.sudo}, ``lxc-ls``, parse names,
 		 * {@link State.CONTAINERS_FOUND} → {@link State.DONE}.
 		 */
-		public override async void run() throws JobError
+		public override async void run() throws Error
 		{
 			this.terminal.spawn();
 			yield this.login();
@@ -49,7 +49,7 @@ namespace RooTerm
 			this.current_state = State.UNKNOWN;
 			this.terminal.terminal.feed_child("lxc-ls -f -F name,state\n".data);
 			if (!yield this.expect(State.WAIT_ROOT_PROMPT, 60000)) {
-				throw new JobError.TIMEOUT("fetch hosts timeout name=%s".printf(
+				throw new Error.TIMEOUT("fetch hosts timeout name=%s".printf(
 					this.connection.name));
 			}
 			long end_col, end_row;

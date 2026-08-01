@@ -128,7 +128,7 @@ namespace RooTerm.Terminal
 		}
 
 		/**
-		 * Re-spawn SSH in this tab after an exited session (Enter).
+		 * Re-open this tab after exit: {@link Jobs.OpenSession} (spawn + login) on Enter.
 		 */
 		public void reconnect()
 		{
@@ -140,7 +140,19 @@ namespace RooTerm.Terminal
 			this.stream.log_line = -1;
 			this.stream.prompt_hint = "";
 			this.state = Session.State.IDLE;
-			this.spawn();
+			var window = this.get_root() as MainWindow;
+			if (window == null) {
+				this.spawn();
+				return;
+			}
+			var job = new Jobs.OpenSession(window, this.connection, this);
+			job.run.begin((obj, res) => {
+				try {
+					job.run.end(res);
+				} catch (Jobs.Error e) {
+					GLib.warning("reconnect failed name=%s: %s", this.connection.name, e.message);
+				}
+			});
 		}
 
 		/**
@@ -152,7 +164,7 @@ namespace RooTerm.Terminal
 			if (detail.length == 0) {
 				return this.connection.name;
 			}
-			return this.connection.name + "  " + detail;
+			return detail;
 		}
 
 		/**
@@ -190,7 +202,7 @@ namespace RooTerm.Terminal
 				try {
 					var pass = Secret.password_lookup_sync(
 						new Secret.Schema(
-							"org.roojs.rooterm.Host.Connection", Secret.SchemaFlags.NONE,
+							"org.roojs.rooterm.Connection", Secret.SchemaFlags.NONE,
 							"uuid", Secret.SchemaAttributeType.STRING
 						),
 						null,
@@ -295,11 +307,17 @@ namespace RooTerm.Terminal
 					argv += "-i";
 					argv += this.connection.public_key;
 				}
-				foreach (var opt in this.connection.options.strip().split_set(" \t")) {
-					if (opt.length == 0) {
-						continue;
+				if (this.connection.options.strip().length > 0) {
+					string[] opts;
+					try {
+						GLib.Shell.parse_argv(this.connection.options, out opts);
+						foreach (var opt in opts) {
+							argv += opt;
+						}
+					} catch (GLib.ShellError e) {
+						GLib.warning("ssh options parse failed name=%s: %s",
+							this.connection.name, e.message);
 					}
-					argv += opt;
 				}
 				argv += this.connection.user + "@" + this.connection.host;
 				this.terminal.feed(("Connecting to " + target + " …\r\n").data);

@@ -16,7 +16,7 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-namespace RooTerm
+namespace RooTerm.Jobs
 {
 	/**
 	 * Remove-old-key: user shell → strip line from ``authorized_keys``.
@@ -43,7 +43,7 @@ namespace RooTerm
 		/**
 		 * {@link SshLogin.login}, feed retire script, confirm echo → {@link State.KEY_RETIRED}.
 		 */
-		public override async void run() throws JobError
+		public override async void run() throws Error
 		{
 			this.terminal.spawn();
 			yield this.login();
@@ -56,7 +56,7 @@ chmod 600 "$f"
 echo RooTerm: old key removed
 """).data);
 			if (!yield this.expect(State.WAIT_SHELL_PROMPT, 60000)) {
-				throw new JobError.TIMEOUT("retire key timeout name=%s".printf(
+				throw new Error.TIMEOUT("retire key timeout name=%s".printf(
 					this.connection.name));
 			}
 			long end_col, end_row;
@@ -67,7 +67,7 @@ echo RooTerm: old key removed
 			);
 			if (full == null || full.index_of("RooTerm: old key removed") < 0) {
 				this.current_state = State.FAILED;
-				throw new JobError.FAIL("retire key echo missing name=%s".printf(this.connection.name));
+				throw new Error.FAIL("retire key echo missing name=%s".printf(this.connection.name));
 			}
 			this.current_state = State.KEY_RETIRED;
 			this.current_state = State.DONE;

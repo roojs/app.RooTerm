@@ -19,10 +19,12 @@
 namespace RooTerm.Dialog
 {
 	/**
-	 * Add / edit a host {@link Connection}: Basic + Port forwarding tabs.
-	 * Save applies in memory (JSON / keyring persist is Phase 9).
+	 * Add / edit a host {@link Host.Connection}: Basic + Port forwarding.
+	 * Standalone {@link Adw.Window} (not a sheet of the drop-down) so hide/show
+	 * of the main window does not bury or strand the editor — same pattern as
+	 * {@link Preferences}.
 	 */
-	public class Connection : Adw.Dialog
+	public class Connection : Adw.Window
 	{
 		private delegate void KeyNext();
 
@@ -68,17 +70,20 @@ namespace RooTerm.Dialog
 		public signal void saved(Host.Connection connection);
 
 		/**
-		 * Build the dialog UI (call {@link fill} before presenting).
+		 * Build the window UI (call {@link fill} before presenting).
 		 *
 		 * @param window Main window (sessions / config for SSH key setup)
 		 */
 		public Connection(MainWindow window)
 		{
+			Object(
+				application: window.application,
+				title: "Connection",
+				default_width: 560,
+				default_height: 520
+			);
 			this.window = window;
 			this.target = new Host.Connection();
-			this.content_width = 560;
-			this.content_height = 520;
-			this.title = "Connection";
 
 			this.name_entry = new Gtk.Entry() { hexpand = true };
 			this.host_entry = new Gtk.Entry() { hexpand = true };
@@ -156,10 +161,10 @@ namespace RooTerm.Dialog
 						this.pending_lxc_names = this.target.refresh_containers.end(res);
 						this.pending_lxc_sync = true;
 						GLib.debug("fetch hosts staged count=%d", this.pending_lxc_names.length);
-					} catch (JobError e) {
+					} catch (Jobs.Error e) {
 						GLib.warning("fetch hosts failed name=%s: %s", this.target.name, e.message);
 					}
-					this.present(this.window);
+					this.present();
 				});
 			});
 			this.setup_key_btn.clicked.connect(() => {
@@ -463,16 +468,14 @@ namespace RooTerm.Dialog
 			});
 
 			var header = new Adw.HeaderBar() {
-				title_widget = switcher,
-				show_start_title_buttons = false,
-				show_end_title_buttons = false
+				title_widget = switcher
 			};
 			header.pack_start(cancel);
 			header.pack_end(save);
 			var toolbar = new Adw.ToolbarView();
 			toolbar.add_top_bar(header);
 			toolbar.content = stack;
-			this.child = toolbar;
+			this.content = toolbar;
 		}
 
 		/**
@@ -529,7 +532,7 @@ namespace RooTerm.Dialog
 		}
 
 		/**
-		 * Install the shared passphrased identity via {@link SetupKey}, then re-present.
+		 * Install the shared passphrased identity via {@link Jobs.SetupKey}, then re-present.
 		 */
 		private async void begin_setup_key()
 		{
@@ -549,19 +552,19 @@ namespace RooTerm.Dialog
 					GLib.Environment.get_home_dir(), ".ssh", "id_ed25519_rooterm"
 				);
 			}
-			var job = new SetupKey(this.window, this.target);
+			var job = new Jobs.SetupKey(this.window, this.target);
 			job.stream.install_identity = identity;
 			var ok = false;
 			try {
 				yield job.run();
 				ok = true;
-			} catch (JobError e) {
+			} catch (Jobs.Error e) {
 				GLib.warning("setup key failed name=%s: %s", this.target.name, e.message);
 			} finally {
 				job.terminal.close_in(ok ? 0 : 30);
 			}
 			if (!ok) {
-				this.present(this.window);
+				this.present();
 				return;
 			}
 			this.pending_key_identity = job.installed_identity.length > 0
@@ -582,7 +585,7 @@ namespace RooTerm.Dialog
 				: "Password";
 			GLib.debug("ssh key installed identity=%s name=%s",
 				this.target.public_key, this.target.name);
-			this.present(this.window);
+			this.present();
 		}
 
 		/**
@@ -673,27 +676,27 @@ namespace RooTerm.Dialog
 		}
 
 		/**
-		 * Run {@link ReplaceKey} after the new identity exists.
+		 * Run {@link Jobs.ReplaceKey} after the new identity exists.
 		 *
 		 * @param identity New private key path
 		 * @param old_identity Previous identity to retire later
 		 */
 		private async void run_key_upgrade(string identity, string old_identity)
 		{
-			var job = new ReplaceKey(this.window, this.target, identity) {
+			var job = new Jobs.ReplaceKey(this.window, this.target, identity) {
 				old_identity = old_identity
 			};
 			var ok = false;
 			try {
 				yield job.run();
 				ok = true;
-			} catch (JobError e) {
+			} catch (Jobs.Error e) {
 				GLib.warning("replace key failed name=%s: %s", this.target.name, e.message);
 			} finally {
 				job.terminal.close_in(ok ? 0 : 30);
 			}
 			if (!ok) {
-				this.present(this.window);
+				this.present();
 				return;
 			}
 			this.target.auth = "ssh_key";
@@ -721,7 +724,7 @@ namespace RooTerm.Dialog
 			done.default_response = "ok";
 			done.close_response = "ok";
 			done.response.connect(() => {
-				this.present(this.window);
+				this.present();
 			});
 			done.present(this.window);
 		}
@@ -760,26 +763,26 @@ namespace RooTerm.Dialog
 		}
 
 		/**
-		 * Run {@link RetireKey} with the old pubkey line.
+		 * Run {@link Jobs.RetireKey} with the old pubkey line.
 		 *
 		 * @param pub_line Line to strip from ``authorized_keys``
 		 */
 		private async void run_key_retire(string pub_line)
 		{
-			var job = new RetireKey(this.window, this.target) {
+			var job = new Jobs.RetireKey(this.window, this.target) {
 				remove_pub_line = pub_line
 			};
 			var ok = false;
 			try {
 				yield job.run();
 				ok = true;
-			} catch (JobError e) {
+			} catch (Jobs.Error e) {
 				GLib.warning("retire key failed name=%s: %s", this.target.name, e.message);
 			} finally {
 				job.terminal.close_in(ok ? 0 : 30);
 			}
 			if (!ok) {
-				this.present(this.window);
+				this.present();
 				return;
 			}
 			this.target.retire_key = "";
@@ -790,7 +793,7 @@ namespace RooTerm.Dialog
 				GLib.warning("config save failed: %s", e.message);
 			}
 			GLib.debug("retire_key cleared name=%s", this.target.name);
-			this.present(this.window);
+			this.present();
 		}
 
 		/**

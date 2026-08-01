@@ -3,7 +3,7 @@
 > Pointer: `docs/bug-fix-process.md` (emoji). Legend:
 > `docs/guide-to-writing-plans.md` — Discussion style (emoji prefixes).
 
-**Status:** ⏳ root cause confirmed; fix proposed — await apply approval
+**Status:** ✔️ fix applied — ⏳ await manual verify (exit SSH → Enter → password fed)
 
 **Started:** 2026-07-30
 
@@ -214,8 +214,8 @@ Adopt optional existing tab. Focused `close_in(30)` on EXITED belongs on {@link 
 
 ## Next
 
-- **🔷** `⏳` Approve proposed fix, then apply.
 - **🔷** `⏳` Manual: exit SSH → Enter → password fed / shell without typing the password.
+- **🔷** `⏳` When verified: rename `FIXED`, move to `docs/bugs/done/`.
 
 ---
 
@@ -223,3 +223,4 @@ Adopt optional existing tab. Focused `close_in(30)` on EXITED belongs on {@link 
 
 - **ℹ️** 2026-07-30: Diagnosis from code review (user report). No code applied yet.
 - **ℹ️** Briefly drafted as plan **0.6** §4 — moved here; stripped from that plan.
+- **✔️** 2026-08-01: Applied proposed fix — `Job`/`SshLogin`/`SudoLogin`/`OpenSession` optional `existing`; `Ssh.reconnect` runs `OpenSession` on the same tab.

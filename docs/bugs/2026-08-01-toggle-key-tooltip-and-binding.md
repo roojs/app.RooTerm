@@ -3,7 +3,7 @@
 > Pointer: `docs/bug-fix-process.md` (emoji). Legend:
 > `docs/guide-to-writing-plans.md` — Discussion style (emoji prefixes).
 
-**Status:** ✔️ tooltip fix applied (kebab-case + version 17); global key still ⏳ user verify
+**Status:** ✔️ tooltip + steal-key on `--toggle-key` applied; await user ✅ on F1
 
 **Started:** 2026-08-01
 
@@ -133,36 +133,46 @@ Possible causes (unranked until evidence):
 
 ### F1 / F12 do not toggle
 
-- **⏳** Unknown. Config save succeeded; binding/D-Bus still unproven. Separate from tooltip.
+- **✔️** Panel / `rooterm --toggle` works (D-Bus fine).
+- **✔️** Guake schema `show-hide` is `'disabled'`; Guake Shell extension absent.
+- **✔️** media-keys: **custom0** `guake` / `guake-toggle` / **`F1`** still present; **custom2** `RooTerm` / `rooterm --toggle` / **`F1`**. Same key → Guake slot wins / shadows RooTerm.
+- **ℹ️** User: Guake process killed; residual is the **custom keybinding**, not the Guake app schema.
 
 ---
 
 ## Proposed fix
 
-### 1. Tooltip — read the kebab-case key (`extension.js`)
+### Immediate (user)
 
-**Why:** Match what `Config.save` actually writes.
-
-**Where:** `resources/extension/extension.js` panel hover handler.
-
-**Depends on:** none. Extension file update may need Shell reload to pick up if not re-copied; user dir copy is what Shell runs — `GnomeShell.ensure` / install copies from GResource on version bump. For a JS-only fix in user extensions dir, either bump `metadata.json` version so ensure reinstalls, or edit the installed copy / reload after install.
-
-#### Remove
-```javascript
-                if (conf.toggle_key) {
-                    key = conf.toggle_key;
-                }
+```bash
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/ binding ''
 ```
 
-#### Replace with
-```javascript
-                if (conf['toggle-key']) {
-                    key = conf['toggle-key'];
-                }
+### 2. `ensure_toggle_binding` — clear the same key from other custom slots
+
+**Why:** `--toggle-key=F1` currently writes RooTerm’s slot but leaves Guake (or anything else) still bound to F1.
+
+**Where:** `src/GnomeShell.vala` `ensure_toggle_binding`, after resolving `ours`, before or after setting our binding.
+
+**Depends on:** user approval.
+
+#### Add (after `ours` is known, before writing our slot — or right after setting our binding)
+```vala
+			foreach (var path in paths) {
+				if (path == ours) {
+					continue;
+				}
+				var other = new GLib.Settings.with_path(
+					"org.gnome.settings-daemon.plugins.media-keys.custom-keybinding", path
+				);
+				if (other.get_string("binding") == key) {
+					other.set_string("binding", "");
+				}
+			}
 ```
 
-- **🔷** Also bump extension `metadata.json` `version` so `GnomeShell.ensure` reinstalls the fixed `extension.js` into `~/.local/share/gnome-shell/extensions/…` (otherwise Shell keeps the old file).
-- **⏳** Global key not working: after tooltip fix, please either run `rooterm --toggle` once and say if the window toggles, or paste the RooTerm custom-keybinding `binding` from Settings → Keyboard — no agent shell required.
+- **🔷** Tooltip fix already applied (kebab-case + version 17).
+- **⏳** Confirm F1 works after clearing custom0; then approve Add above if wanted.
 
 ---
 

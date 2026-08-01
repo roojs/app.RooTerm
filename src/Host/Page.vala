@@ -19,7 +19,7 @@
 namespace RooTerm.Host
 {
 	/**
-	 * One host: {@link Adw.TabView} of {@link Terminal.Base}s with an {@link Adw.TabBar}
+	 * One host: {@link Adw.TabView} of {@link Terminal.Base}s with a {@link TabBar}
 	 * at the bottom (always shown). Localhost children are {@link ConnectionKind.LOCAL_PATH}
 	 * rows owned by each local tab’s {@link Terminal.Base.connection}.
 	 * Tab-strip ``+`` runs ``win.new-terminal`` (same as Ctrl+Shift+T).
@@ -30,7 +30,7 @@ namespace RooTerm.Host
 		public Connection connection;
 		public TreeNodes tree;
 		public Adw.TabView tab_view;
-		public Adw.TabBar tab_bar;
+		public TabBar tab_bar;
 		/**
 		 * Selected terminal on this page (null when no tabs).
 		 */
@@ -67,23 +67,13 @@ namespace RooTerm.Host
 			);
 			this.connection = connection;
 			this.tree = tree;
+			this.add_css_class("vte-path");
 			this.tab_view = new Adw.TabView() {
 				hexpand = true,
 				vexpand = true
 			};
 			this.tab_view.add_css_class("vte-host");
-			this.tab_bar = new Adw.TabBar() {
-				view = this.tab_view,
-				autohide = false,
-				expand_tabs = false,
-				hexpand = true,
-				end_action_widget = new Gtk.Button.from_icon_name("list-add-symbolic") {
-					tooltip_text = "Ctrl+Shift+T",
-					has_frame = false,
-					action_name = "win.new-terminal"
-				}
-			};
-			this.tab_bar.add_css_class("thin-tabbar");
+			this.tab_bar = new TabBar(this.tab_view);
 			this.append(this.tab_view);
 			this.append(this.tab_bar);
 			this.tab_view.notify["selected-page"].connect(() => {
@@ -99,10 +89,11 @@ namespace RooTerm.Host
 				}
 				var at = this.terminals.index_of(term);
 				this.terminals.remove_at(at);
-				this.connection.sessions.remove(at);
 				if (term.connection.kind == ConnectionKind.LOCAL_PATH) {
 					term.connection.sessions.remove_all();
 					this.tree.remove(term.connection);
+				} else {
+					this.connection.sessions.remove(at);
 				}
 				this.tab_view.close_page_finish(page, true);
 				if (this.tab_view.n_pages > 0) {
@@ -124,12 +115,11 @@ namespace RooTerm.Host
 		public Adw.TabPage add(Terminal.Base term)
 		{
 			this.terminals.add(term);
-			this.connection.sessions.append(term);
 			term.label_changed.connect(() => {
 				var tab = this.tab_view.get_page(term);
 				var text = term.label();
-				tab.tooltip = text;
 				tab.title = text;
+				tab.tooltip = this.tab_tooltip(term, text);
 				if (term.connection.kind == ConnectionKind.LOCAL_PATH && term.connection.name != text) {
 					term.connection.name = text;
 				}
@@ -137,8 +127,8 @@ namespace RooTerm.Host
 			});
 			var tab = this.tab_view.append(term);
 			var text = term.label();
-			tab.tooltip = text;
 			tab.title = text;
+			tab.tooltip = this.tab_tooltip(term, text);
 			if (this.connection.kind == ConnectionKind.LOCAL) {
 				var row = new Connection() {
 					uuid = GLib.Uuid.string_random(),
@@ -148,6 +138,8 @@ namespace RooTerm.Host
 				term.connection = row;
 				row.sessions.append(term);
 				this.tree.append(this.connection, row);
+			} else {
+				this.connection.sessions.append(term);
 			}
 			return tab;
 		}
@@ -166,6 +158,21 @@ namespace RooTerm.Host
 			if (this.current != null) {
 				this.current.select(on);
 			}
+		}
+
+		/**
+		 * Tooltip for a tab: SSH keeps the host name when the title is path-only.
+		 *
+		 * @param term Tab terminal
+		 * @param text Current {@link Terminal.Base.label}
+		 * @return Tooltip string
+		 */
+		private string tab_tooltip(Terminal.Base term, string text)
+		{
+			if (term is Terminal.Ssh && text != this.connection.name) {
+				return this.connection.name + "  " + text;
+			}
+			return text;
 		}
 
 		/**

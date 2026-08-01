@@ -56,6 +56,11 @@ namespace RooTerm
 		{
 			this.is_docked = true;
 			((Application) this.application).dbus.dock_mode = true;
+			GLib.debug(
+				"show_docked size=%dx%d dock_mode=1",
+				this.monitor_geo.width * this.config.width / 100,
+				this.monitor_geo.height * this.config.height / 100
+			);
 			this.decorated = false;
 			this.resizable = false;
 			this.add_css_class("drop-down");
@@ -98,6 +103,32 @@ namespace RooTerm
 			);
 			this.monitor_geo = geo;
 			this.config = config;
+			this.config.notify["height"].connect(() => {
+				if (!this.is_docked) {
+					return;
+				}
+				this.set_default_size(
+					this.monitor_geo.width * this.config.width / 100,
+					this.monitor_geo.height * this.config.height / 100
+				);
+				((Application) this.application).dbus.shown();
+			});
+			this.config.notify["width"].connect(() => {
+				if (!this.is_docked) {
+					return;
+				}
+				this.set_default_size(
+					this.monitor_geo.width * this.config.width / 100,
+					this.monitor_geo.height * this.config.height / 100
+				);
+				((Application) this.application).dbus.shown();
+			});
+			this.config.notify["placement"].connect(() => {
+				if (!this.is_docked) {
+					return;
+				}
+				((Application) this.application).dbus.shown();
+			});
 			if (new GnomeShell(this).is_ready) {
 				this.show_docked();
 			}
@@ -144,6 +175,10 @@ namespace RooTerm
 			this.sessions.terminal_font = this.config.terminal_font;
 			this.sessions.display_changed.connect(() => {
 				this.title = this.sessions.display;
+				var page = this.host_stack.pages.visible_child as Host.Page;
+				if (page != null && page.current != null) {
+					this.host_tree.select(page.current.connection);
+				}
 			});
 			this.sessions.sudo_password_failed.connect((conn) => {
 				var alert = new Adw.AlertDialog(
@@ -167,7 +202,7 @@ namespace RooTerm
 							GLib.warning("config save failed: %s", e.message);
 						}
 					});
-					dlg.present(this);
+					dlg.present();
 				});
 				alert.present(this);
 			});
@@ -183,7 +218,7 @@ namespace RooTerm
 					this.sessions.open_local(conn.parent, path_term.cwd);
 					return;
 				}
-				var job = new OpenSession(this, conn);
+				var job = new Jobs.OpenSession(this, conn);
 				GLib.Idle.add(() => {
 					this.present();
 					job.terminal.terminal.grab_focus();
@@ -192,7 +227,7 @@ namespace RooTerm
 				job.run.begin((obj, res) => {
 					try {
 						job.run.end(res);
-					} catch (JobError e) {
+					} catch (Jobs.Error e) {
 						GLib.warning("open session failed name=%s: %s", conn.name, e.message);
 					}
 				});
@@ -258,7 +293,7 @@ namespace RooTerm
 						this.sessions.open_local(conn);
 						return;
 					}
-					var job = new OpenSession(this, conn);
+					var job = new Jobs.OpenSession(this, conn);
 					GLib.Idle.add(() => {
 						this.present();
 						job.terminal.terminal.grab_focus();
@@ -267,7 +302,7 @@ namespace RooTerm
 					job.run.begin((obj, res) => {
 						try {
 							job.run.end(res);
-						} catch (JobError e) {
+						} catch (Jobs.Error e) {
 							GLib.warning("open session failed name=%s: %s",
 								conn.name, e.message);
 						}
@@ -333,7 +368,7 @@ namespace RooTerm
 
 			var prefs_action = new GLib.SimpleAction("preferences", null);
 			prefs_action.activate.connect(() => {
-				new Dialog.Preferences(this).present(this);
+				new Dialog.Preferences(this).present();
 			});
 			this.add_action(prefs_action);
 			app.set_accels_for_action("win.preferences", { "<Control>comma" });
@@ -401,8 +436,9 @@ namespace RooTerm
 				return true;
 			});
 
-			this.sessions.open_local(this.localhost);
+			var term = this.sessions.open_local(this.localhost);
 			GLib.Idle.add(() => {
+				this.host_tree.select(term.connection);
 				this.sessions.focus();
 				return false;
 			});

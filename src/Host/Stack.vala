@@ -31,10 +31,12 @@ namespace RooTerm.Host
 		public Stack()
 		{
 			Object(orientation: Gtk.Orientation.VERTICAL, spacing: 0, hexpand: true, vexpand: true);
+			this.add_css_class("vte-path");
 			this.pages = new Gtk.Stack() {
 				hexpand = true,
 				vexpand = true
 			};
+			this.pages.add_css_class("vte-path");
 			this.append(this.pages);
 		}
 	}

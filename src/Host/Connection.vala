@@ -124,6 +124,7 @@ namespace RooTerm.Host
 		}
 		/**
 		 * Whether {@link children} has any rows.
+		 * Exposed for {@link Host.Tree} row bindings (notified with {@link hide_expander}).
 		 */
 		public bool has_children {
 			get {
@@ -131,7 +132,7 @@ namespace RooTerm.Host
 			}
 		}
 		/**
-		 * Inverse of {@link has_children} for {@link Gtk.TreeExpander.hide_expander}.
+		 * Inverse of {@link has_children}; bound to {@link Gtk.TreeExpander.hide_expander} in {@link Host.Tree}.
 		 */
 		public bool hide_expander {
 			get {
@@ -145,10 +146,10 @@ namespace RooTerm.Host
 			owned get {
 				switch (this.kind) {
 					case ConnectionKind.GROUP:
-					case ConnectionKind.LOCAL_PATH:
+					case ConnectionKind.LOCAL:
 						return "folder";
 
-					case ConnectionKind.LOCAL:
+					case ConnectionKind.LOCAL_PATH:
 						return "computer";
 
 					case ConnectionKind.LXC:
@@ -265,19 +266,19 @@ namespace RooTerm.Host
 		}
 
 		/**
-		 * Discover LXC containers via {@link FetchHosts}.
+		 * Discover LXC containers via {@link Jobs.FetchHosts}.
 		 *
 		 * @param window Window providing sessions / config
 		 * @return Parsed container names from ``lxc-ls``
 		 */
-		public async string[] refresh_containers(MainWindow window) throws JobError
+		public async string[] refresh_containers(MainWindow window) throws Jobs.Error
 		{
-			var job = new FetchHosts(window, this);
+			var job = new Jobs.FetchHosts(window, this);
 			try {
 				yield job.run();
 				job.terminal.close_in(0);
 				return job.container_names;
-			} catch (JobError e) {
+			} catch (Jobs.Error e) {
 				job.terminal.close_in(30);
 				throw e;
 			}

@@ -260,7 +260,9 @@ namespace RooTerm.Host
 					height_request = 16
 				};
 			} else {
-				btn.icon_name = "video-display";
+				btn.child = new Gtk.Image.from_icon_name("video-display") {
+					pixel_size = 16
+				};
 			}
 			var state_sid = term.notify.connect((o, pspec) => {
 				if (pspec.name != "session-css" && pspec.name != "state" && pspec.name != "tree-active") {
@@ -280,7 +282,9 @@ namespace RooTerm.Host
 						height_request = 16
 					};
 				} else {
-					btn.icon_name = "video-display";
+					btn.child = new Gtk.Image.from_icon_name("video-display") {
+						pixel_size = 16
+					};
 				}
 			});
 			var label_sid = term.label_changed.connect(() => {

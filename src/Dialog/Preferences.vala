@@ -20,55 +20,66 @@ namespace RooTerm.Dialog
 {
 	/**
 	 * Single-page preferences: Keyboard (toggle key) and Appearance
-	 * (opacity, height, width, placement). Adwaita ``PreferencesDialog`` with
-	 * full-width ``ActionRow`` key–value rows (OLLMchat-style).
+	 * (opacity, height, width, placement). Standalone {@link Adw.Window}
+	 * hosting an {@link Adw.PreferencesPage} (not a dialog of the drop-down).
+	 *
+	 * Sliders write {@link RooTerm.Config} live; geometry apply is owned by
+	 * {@link MainWindow} via config notify. JSON is saved on close (and when a
+	 * toggle key is captured).
 	 *
 	 * == Example ==
 	 *
 	 * {{{
-	 * var dlg = new Preferences(window);
-	 * dlg.present(window);
+	 * var prefs = new Preferences(window);
+	 * prefs.present();
 	 * }}}
 	 */
-	public class Preferences : Adw.PreferencesDialog
+	public class Preferences : Adw.Window
 	{
 		public MainWindow window;
-		private Gtk.Entry toggle_entry;
-		private Gtk.SpinButton opacity_spin;
-		private Gtk.SpinButton height_spin;
-		private Gtk.SpinButton width_spin;
+		private Gtk.Button toggle_btn;
+		private Gtk.Scale opacity_scale;
+		private Gtk.Scale height_scale;
+		private Gtk.Scale width_scale;
 		private Adw.ComboRow placement_row;
+		private bool capturing = false;
 
 		/**
-		 * Build the dialog bound to ``window``'s {@link RooTerm.Config}.
+		 * Build the window bound to ``window``'s {@link RooTerm.Config}.
 		 *
 		 * @param window Main window (config + live apply)
 		 */
 		public Preferences(MainWindow window)
 		{
+			Object(
+				application: window.application,
+				title: "Preferences",
+				default_width: 520,
+				default_height: 504
+			);
 			this.window = window;
-			this.title = "Preferences";
-			this.set_content_width(520);
-			this.set_content_height(420);
 
 			var page = new Adw.PreferencesPage();
-			this.add(page);
 
 			var keyboard = new Adw.PreferencesGroup() {
 				title = "Keyboard"
 			};
 			page.add(keyboard);
 
-			this.toggle_entry = new Gtk.Entry() {
-				text = window.config.toggle_key,
-				width_chars = 12,
+			this.toggle_btn = new Gtk.Button.with_label(window.config.toggle_key) {
 				valign = Gtk.Align.CENTER
 			};
+			this.toggle_btn.clicked.connect(() => {
+				this.capturing = true;
+				this.window.block_toggle = true;
+				this.toggle_btn.label = "Press a key…";
+			});
 			var toggle_row = new Adw.ActionRow() {
-				title = "Toggle key"
+				title = "Toggle key",
+				subtitle = "Click the button, then press the key"
 			};
-			toggle_row.add_suffix(this.toggle_entry);
-			toggle_row.set_activatable_widget(this.toggle_entry);
+			toggle_row.add_suffix(this.toggle_btn);
+			toggle_row.set_activatable_widget(this.toggle_btn);
 			keyboard.add(toggle_row);
 
 			var appearance = new Adw.PreferencesGroup() {
@@ -76,43 +87,58 @@ namespace RooTerm.Dialog
 			};
 			page.add(appearance);
 
-			this.opacity_spin = new Gtk.SpinButton.with_range(10, 100, 1) {
-				value = window.config.opacity,
-				valign = Gtk.Align.CENTER,
-				width_chars = 6
+			this.opacity_scale = new Gtk.Scale.with_range(Gtk.Orientation.HORIZONTAL, 10, 100, 1) {
+				draw_value = true,
+				digits = 0,
+				width_request = 180,
+				hexpand = true,
+				valign = Gtk.Align.CENTER
 			};
+			this.opacity_scale.set_value(window.config.opacity);
+			this.opacity_scale.value_changed.connect(() => {
+				this.window.config.opacity = (int) this.opacity_scale.get_value();
+			});
 			var opacity_row = new Adw.ActionRow() {
 				title = "Opacity",
 				subtitle = "Terminal background (100 = solid)"
 			};
-			opacity_row.add_suffix(this.opacity_spin);
-			opacity_row.set_activatable_widget(this.opacity_spin);
+			opacity_row.add_suffix(this.opacity_scale);
 			appearance.add(opacity_row);
 
-			this.height_spin = new Gtk.SpinButton.with_range(10, 100, 1) {
-				value = window.config.height,
-				valign = Gtk.Align.CENTER,
-				width_chars = 6
+			this.height_scale = new Gtk.Scale.with_range(Gtk.Orientation.HORIZONTAL, 10, 100, 1) {
+				draw_value = true,
+				digits = 0,
+				width_request = 180,
+				hexpand = true,
+				valign = Gtk.Align.CENTER
 			};
+			this.height_scale.set_value(window.config.height);
+			this.height_scale.value_changed.connect(() => {
+				this.window.config.height = (int) this.height_scale.get_value();
+			});
 			var height_row = new Adw.ActionRow() {
 				title = "Height",
 				subtitle = "Percent of monitor"
 			};
-			height_row.add_suffix(this.height_spin);
-			height_row.set_activatable_widget(this.height_spin);
+			height_row.add_suffix(this.height_scale);
 			appearance.add(height_row);
 
-			this.width_spin = new Gtk.SpinButton.with_range(10, 100, 1) {
-				value = window.config.width,
-				valign = Gtk.Align.CENTER,
-				width_chars = 6
+			this.width_scale = new Gtk.Scale.with_range(Gtk.Orientation.HORIZONTAL, 10, 100, 1) {
+				draw_value = true,
+				digits = 0,
+				width_request = 180,
+				hexpand = true,
+				valign = Gtk.Align.CENTER
 			};
+			this.width_scale.set_value(window.config.width);
+			this.width_scale.value_changed.connect(() => {
+				this.window.config.width = (int) this.width_scale.get_value();
+			});
 			var width_row = new Adw.ActionRow() {
 				title = "Width",
 				subtitle = "Percent of monitor"
 			};
-			width_row.add_suffix(this.width_spin);
-			width_row.set_activatable_widget(this.width_spin);
+			width_row.add_suffix(this.width_scale);
 			appearance.add(width_row);
 
 			var placement_model = new Gtk.StringList(null);
@@ -123,45 +149,126 @@ namespace RooTerm.Dialog
 				title = "Placement",
 				model = placement_model
 			};
-			var place = window.config.placement;
-			if (place == "left") {
-				this.placement_row.selected = 0;
-			} else if (place == "right") {
-				this.placement_row.selected = 2;
-			} else {
-				this.placement_row.selected = 1;
+			switch (window.config.placement) {
+				case "left":
+					this.placement_row.selected = 0;
+					break;
+
+				case "right":
+					this.placement_row.selected = 2;
+					break;
+
+				default:
+					this.placement_row.selected = 1;
+					break;
 			}
+			this.placement_row.notify["selected"].connect(() => {
+				switch (this.placement_row.selected) {
+					case 0:
+						this.window.config.placement = "left";
+						break;
+
+					case 2:
+						this.window.config.placement = "right";
+						break;
+
+					default:
+						this.window.config.placement = "centre";
+						break;
+				}
+			});
 			appearance.add(this.placement_row);
 
-			this.closed.connect(() => {
+			var header = new Adw.HeaderBar();
+			var toolbar = new Adw.ToolbarView();
+			toolbar.add_top_bar(header);
+			toolbar.content = page;
+			this.content = toolbar;
+
+			var keys = new Gtk.EventControllerKey() {
+				propagation_phase = Gtk.PropagationPhase.CAPTURE
+			};
+			keys.key_pressed.connect((keyval, keycode, state) => {
+				if (!this.capturing) {
+					return false;
+				}
+				if (keyval == Gdk.Key.Escape) {
+					this.capturing = false;
+					this.window.block_toggle = false;
+					this.toggle_btn.label = this.window.config.toggle_key;
+					return true;
+				}
+				if (keyval == Gdk.Key.Shift_L || keyval == Gdk.Key.Shift_R
+						|| keyval == Gdk.Key.Control_L || keyval == Gdk.Key.Control_R
+						|| keyval == Gdk.Key.Alt_L || keyval == Gdk.Key.Alt_R
+						|| keyval == Gdk.Key.Meta_L || keyval == Gdk.Key.Meta_R
+						|| keyval == Gdk.Key.Super_L || keyval == Gdk.Key.Super_R) {
+					return true;
+				}
+				var accel = Gtk.accelerator_name(
+					keyval,
+					state & Gtk.accelerator_get_default_mod_mask()
+				);
+				if (accel == null || accel.length == 0) {
+					return true;
+				}
+				this.capturing = false;
+				this.window.block_toggle = false;
+				this.window.config.toggle_key = accel;
+				this.toggle_btn.label = accel;
+				var app = this.window.application as Application;
+				if (app != null) {
+					app.set_accels_for_action("win.toggle", { accel });
+				}
+				try {
+					new GnomeShell(this.window).ensure_toggle_binding(accel);
+				} catch (GLib.Error e) {
+					GLib.warning("toggle binding: %s", e.message);
+				}
+				try {
+					this.window.config.save();
+				} catch (GLib.Error e) {
+					GLib.warning("config save failed: %s", e.message);
+				}
+				return true;
+			});
+			// Adw.Window's ShortcutManager.add_controller shadows Widget's.
+			((Gtk.Widget) this).add_controller(keys);
+
+			this.close_request.connect(() => {
+				if (this.capturing) {
+					this.capturing = false;
+					this.window.block_toggle = false;
+				}
 				this.save();
+				return false;
 			});
 		}
 
 		/**
-		 * Write fields to config, save, apply to the live window.
+		 * Persist config to disk and refresh the toggle binding.
 		 */
 		private void save()
 		{
 			var config = this.window.config;
-			var key = this.toggle_entry.text.strip();
-			if (key.length == 0) {
-				key = "F12";
-			}
-			config.toggle_key = key;
-			config.opacity = (int) this.opacity_spin.value;
-			config.height = (int) this.height_spin.value;
-			config.width = (int) this.width_spin.value;
+			config.opacity = (int) this.opacity_scale.get_value();
+			config.height = (int) this.height_scale.get_value();
+			config.width = (int) this.width_scale.get_value();
 			switch (this.placement_row.selected) {
 				case 0:
 					config.placement = "left";
 					break;
+
 				case 2:
 					config.placement = "right";
 					break;
+
 				default:
 					config.placement = "centre";
 					break;
+			}
+			if (this.toggle_btn.label != "Press a key…" && this.toggle_btn.label.length > 0) {
+				config.toggle_key = this.toggle_btn.label;
 			}
 			try {
 				config.save();
@@ -178,14 +285,6 @@ namespace RooTerm.Dialog
 			} catch (GLib.Error e) {
 				GLib.warning("toggle binding: %s", e.message);
 			}
-			if (!this.window.is_docked) {
-				return;
-			}
-			this.window.set_default_size(
-				this.window.monitor_geo.width * config.width / 100,
-				this.window.monitor_geo.height * config.height / 100
-			);
-			app.dbus.shown();
 		}
 	}
 }

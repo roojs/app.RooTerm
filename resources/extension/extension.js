@@ -28,16 +28,6 @@ class RooTermIndicator extends PanelMenu.Button {
         }));
 
         var self = this;
-        var aboutItem = new PopupMenu.PopupMenuItem('About');
-        aboutItem.connect('activate', function() {
-            Gio.DBus.session.call(
-                DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'About',
-                null, null, Gio.DBusCallFlags.NONE, 2000, null,
-                self.extension.onDBusFinished.bind(self.extension, 'About')
-            );
-        });
-        this.menu.addMenuItem(aboutItem);
-
         var prefsItem = new PopupMenu.PopupMenuItem('Preferences');
         prefsItem.connect('activate', function() {
             Gio.DBus.session.call(
@@ -47,6 +37,16 @@ class RooTermIndicator extends PanelMenu.Button {
             );
         });
         this.menu.addMenuItem(prefsItem);
+
+        var aboutItem = new PopupMenu.PopupMenuItem('About');
+        aboutItem.connect('activate', function() {
+            Gio.DBus.session.call(
+                DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'About',
+                null, null, Gio.DBusCallFlags.NONE, 2000, null,
+                self.extension.onDBusFinished.bind(self.extension, 'About')
+            );
+        });
+        this.menu.addMenuItem(aboutItem);
 
         var quitItem = new PopupMenu.PopupMenuItem('Quit');
         quitItem.connect('activate', function() {
@@ -147,6 +147,8 @@ export default class RooTermExtension extends Extension {
                 if (self.indicator) {
                     self.indicator.visible = true;
                 }
+                // Name can appear after first map/Shown — retry dock then.
+                self.scheduleDock();
             },
             function() {
                 if (self.panelTooltip) {
@@ -256,9 +258,32 @@ export default class RooTermExtension extends Extension {
     }
 
     dockAll() {
+        var prefs = null;
         var actors = global.get_window_actors();
         for (var i = 0; i < actors.length; i++) {
-            this.dockWindow(actors[i].meta_window);
+            var win = actors[i].meta_window;
+            this.dockWindow(win);
+            if (!win) {
+                continue;
+            }
+            var title = win.get_title() || '';
+            if ((win.decorated && win.get_gtk_application_id
+                    && win.get_gtk_application_id() === APP_ID)
+                    || title === 'Preferences'
+                    || title === 'Connection') {
+                prefs = win;
+            }
+        }
+        // Drop-down re-dock may have run last — keep Preferences / Connection on top.
+        if (!prefs) {
+            return;
+        }
+        prefs.make_above();
+        prefs.raise();
+        try {
+            Main.activateWindow(prefs);
+        } catch (e) {
+            prefs.activate(global.get_current_time());
         }
     }
 
@@ -286,17 +311,16 @@ export default class RooTermExtension extends Extension {
     }
 
     /**
-     * If ``win`` is RooTerm in dock mode, move it under the top panel and keep it above.
+     * Drop-down: move under the panel and keep above.
+     * Preferences / Connection (decorated): raise above; drop-down loses ``make_above``
+     * while that window is open so stacking can win.
      */
     dockWindow(win) {
         if (!win || win.minimized) {
             return;
         }
-        var match = false;
-        try {
-            match = win.get_gtk_application_id && win.get_gtk_application_id() === APP_ID;
-        } catch (e) {
-        }
+        var match = win.get_gtk_application_id
+            && win.get_gtk_application_id() === APP_ID;
         if (!match) {
             var cls = win.get_wm_class();
             var instance = win.get_wm_class_instance();
@@ -309,6 +333,64 @@ export default class RooTermExtension extends Extension {
         if (!this.isDockMode()) {
             return;
         }
+        var self = this;
+        var decorated = !!win.decorated;
+        var title = win.get_title() || '';
+        // Decorated = Preferences / Connection (drop-down is undecorated). Title helps on Wayland.
+        if (decorated || title === 'Preferences' || title === 'Connection') {
+            var actors = global.get_window_actors();
+            for (var i = 0; i < actors.length; i++) {
+                var other = actors[i].meta_window;
+                if (!other || other === win || other.minimized || other.decorated) {
+                    continue;
+                }
+                var otherMatch = other.get_gtk_application_id
+                    && other.get_gtk_application_id() === APP_ID;
+                if (!otherMatch) {
+                    var ocls = other.get_wm_class();
+                    var oinst = other.get_wm_class_instance();
+                    otherMatch = (ocls && ocls.toLowerCase().indexOf('rooterm') !== -1)
+                        || (oinst && oinst.toLowerCase().indexOf('rooterm') !== -1);
+                }
+                if (!otherMatch) {
+                    continue;
+                }
+                // Both were ``make_above`` — drop-down re-asserting above keeps covering prefs.
+                other.unmake_above();
+            }
+            // First map: centre on the work area (GTK parks new windows at the top).
+            if (!win.rootermCentered) {
+                var mon = win.get_monitor();
+                if (mon < 0) {
+                    mon = Main.layoutManager.primaryIndex;
+                }
+                var area = Main.layoutManager.getWorkAreaForMonitor(mon);
+                var frame = win.get_frame_rect();
+                if (area && frame.width >= 100 && frame.height >= 100) {
+                    win.rootermCentered = true;
+                    win.move_frame(
+                        true,
+                        area.x + Math.floor((area.width - frame.width) / 2),
+                        area.y + Math.floor((area.height - frame.height) / 2)
+                    );
+                }
+            }
+            win.make_above();
+            win.raise();
+            if (!win.rootermPrefsHooked) {
+                win.rootermPrefsHooked = true;
+                win.connect('unmanaged', function() {
+                    self.scheduleDock();
+                });
+            }
+            try {
+                Main.activateWindow(win);
+            } catch (e) {
+                win.activate(global.get_current_time());
+            }
+            return;
+        }
+
         var monitorIndex = win.get_monitor();
         if (monitorIndex < 0) {
             monitorIndex = Main.layoutManager.primaryIndex;
@@ -345,17 +427,9 @@ export default class RooTermExtension extends Extension {
                 return;
             }
             win.rootermDocking = true;
-            try {
-                win.unmaximize(Meta.MaximizeFlags.HORIZONTAL | Meta.MaximizeFlags.VERTICAL);
-            } catch (e) {
-                console.error('rooterm: unmaximize: ' + e);
-            }
-            try {
-                win.move_frame(false, x, y);
-                win.move_resize_frame(false, x, y, width, height);
-            } catch (e) {
-                console.error('rooterm: move: ' + e);
-            }
+            win.unmaximize(Meta.MaximizeFlags.HORIZONTAL | Meta.MaximizeFlags.VERTICAL);
+            win.move_frame(false, x, y);
+            win.move_resize_frame(false, x, y, width, height);
             var after = win.get_frame_rect();
             if (Math.abs(after.y - y) > 2) {
                 console.error('rooterm: dock wanted y=' + y
@@ -367,35 +441,38 @@ export default class RooTermExtension extends Extension {
                 return GLib.SOURCE_REMOVE;
             });
         }
-        try {
-            win.make_above();
-        } catch (e) {
-            console.error('rooterm: make_above: ' + e);
-        }
-        try {
-            win.stick();
-        } catch (e) {
-            console.error('rooterm: stick: ' + e);
-        }
-        // Shell can take focus; GTK present() often only gets DEMANDS_ATTENTION.
-        try {
-            Main.activateWindow(win);
-        } catch (e) {
-            try {
-                win.activate(global.get_current_time());
-            } catch (e2) {
-                console.error('rooterm: activate: ' + e2);
-            }
-        }
         if (!win.rootermDockHooked) {
             win.rootermDockHooked = true;
-            var self = this;
             win.connect('size-changed', function() {
                 self.dockWindow(win);
             });
             win.connect('position-changed', function() {
                 self.dockWindow(win);
             });
+        }
+        // Preferences / Connection open: keep drop-down visible but not ``above``.
+        var actors = global.get_window_actors();
+        for (var i = 0; i < actors.length; i++) {
+            var other = actors[i].meta_window;
+            if (!other || other.minimized) {
+                continue;
+            }
+            var otherTitle = other.get_title() || '';
+            if (!other.decorated
+                    && otherTitle !== 'Preferences'
+                    && otherTitle !== 'Connection') {
+                continue;
+            }
+            win.unmake_above();
+            win.stick();
+            return;
+        }
+        win.make_above();
+        win.stick();
+        try {
+            Main.activateWindow(win);
+        } catch (e) {
+            win.activate(global.get_current_time());
         }
     }
 }

@@ -123,7 +123,7 @@ namespace RooTerm.Host
 						GLib.warning("config save failed: %s", e.message);
 					}
 				});
-				dlg.present(this.window);
+				dlg.present();
 			});
 			box.append(this.add_connection_btn);
 			this.edit_connection_btn = new Gtk.Button.with_label("Edit connection") {
@@ -145,7 +145,7 @@ namespace RooTerm.Host
 						GLib.warning("config save failed: %s", e.message);
 					}
 				});
-				dlg.present(this.window);
+				dlg.present();
 			});
 			box.append(this.edit_connection_btn);
 			this.refresh_containers_btn = new Gtk.Button.with_label("Refresh containers") {
@@ -164,7 +164,7 @@ namespace RooTerm.Host
 						host.apply_containers(
 							host.refresh_containers.end(res), this.window
 						);
-					} catch (JobError e) {
+					} catch (Jobs.Error e) {
 						GLib.warning("fetch hosts failed name=%s: %s",
 							host.name, e.message);
 					}
