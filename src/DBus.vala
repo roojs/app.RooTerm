@@ -90,10 +90,12 @@ namespace RooTerm
 			}
 			window.visible = true;
 			window.present();
-			window.set_default_size(
-				window.monitor_geo.width * window.config.width / 100,
-				window.monitor_geo.height * window.config.height / 100
-			);
+			if (window.is_docked) {
+				window.set_default_size(
+					window.monitor_geo.width * window.config.width / 100,
+					window.monitor_geo.height * window.config.height / 100
+				);
+			}
 			this.shown();
 		}
 

@@ -45,16 +45,58 @@ namespace RooTerm
 		public string uuid = "rooterm@roojs.com";
 
 		/**
-		 * Parent window for install-failure / restart hint dialogs.
+		 * Parent for install-failure / restart {@link Adw.AlertDialog}s.
+		 * Null only for headless ``--toggle-key`` (settings write; no UI).
 		 */
-		public Gtk.Window window { get; construct; }
+		public Gtk.Window? window { get; construct; default = null; }
 
 		/**
-		 * @param window Parent for extension dialogs
+		 * True when the extension is on disk and Shell reports it enabled.
+		 * Set in the constructor (and refreshed by {@link ensure}).
 		 */
-		public GnomeShell(Gtk.Window window)
+		public bool is_ready = false;
+
+		/**
+		 * @param window Parent for extension dialogs, or null for settings-only
+		 */
+		public GnomeShell(Gtk.Window? window = null)
 		{
 			Object(window: window);
+
+			var data_home = GLib.Environment.get_variable("XDG_DATA_HOME");
+			if (data_home == null || data_home == "") {
+				data_home = GLib.Path.build_filename(GLib.Environment.get_home_dir(), ".local", "share");
+			}
+			var user_meta = GLib.Path.build_filename(
+				data_home, "gnome-shell", "extensions", this.uuid, "metadata.json"
+			);
+			var system_meta = GLib.Path.build_filename(
+				"/usr/share/gnome-shell/extensions", this.uuid, "metadata.json"
+			);
+			if (!GLib.FileUtils.test(user_meta, GLib.FileTest.IS_REGULAR)
+					&& !GLib.FileUtils.test(system_meta, GLib.FileTest.IS_REGULAR)) {
+				return;
+			}
+			try {
+				var bus = GLib.Bus.get_sync(GLib.BusType.SESSION);
+				var info_reply = bus.call_sync(
+					"org.gnome.Shell.Extensions", "/org/gnome/Shell/Extensions",
+					"org.gnome.Shell.Extensions", "GetExtensionInfo",
+					new GLib.Variant("(s)", this.uuid),
+					new GLib.VariantType("(a{sv})"),
+					GLib.DBusCallFlags.NONE,
+					-1,
+					null
+				);
+				var info = info_reply.get_child_value(0);
+				if (info.n_children() > 0) {
+					var state = (int32) 0;
+					info.lookup("state", "i", out state);
+					this.is_ready = (state == 1);
+				}
+			} catch (GLib.Error e) {
+				GLib.debug("Shell extension check failed: %s", e.message);
+			}
 		}
 
 		/**
@@ -65,7 +107,7 @@ namespace RooTerm
 		 *
 		 * Calls ``done`` when checks finish (after any hint dialog is dismissed).
 		 *
-		 * @param done Continue startup (e.g. show the drop-down)
+		 * @param done Continue startup (e.g. after dialogs)
 		 */
 		public void ensure(owned GnomeShellDone done)
 		{
@@ -117,23 +159,16 @@ namespace RooTerm
 			var updated = false;
 			if (bundled > 0 && installed < bundled) {
 				try {
-					this.install(user_dir);
+					this.install(data_home, user_dir);
 					updated = true;
 				} catch (GLib.Error e) {
 					GLib.warning("Shell extension install failed: %s", e.message);
-					var key = Config.load().toggle_key;
-					var body = @"Could not install the RooTerm GNOME Shell extension:
-$(e.message)
-
-Global $(key) / panel icon will not work until this is fixed. You can still use RooTerm, or run: rooterm --toggle";
-					var alert = new Adw.AlertDialog("Shell extension install failed", body);
-					alert.add_response("ok", "OK");
-					alert.default_response = "ok";
-					alert.close_response = "ok";
-					alert.response.connect(() => {
-						done();
-					});
-					alert.present(null);
+					this.alert(
+						"Shell extension install failed",
+						@"Could not install the RooTerm GNOME Shell extension:
+$(e.message)",
+						(owned) done
+					);
 					return;
 				}
 			}
@@ -149,10 +184,8 @@ Global $(key) / panel icon will not work until this is fixed. You can still use 
 			try {
 				var bus = GLib.Bus.get_sync(GLib.BusType.SESSION);
 				var info_reply = bus.call_sync(
-					"org.gnome.Shell.Extensions",
-					"/org/gnome/Shell/Extensions",
-					"org.gnome.Shell.Extensions",
-					"GetExtensionInfo",
+					"org.gnome.Shell.Extensions", "/org/gnome/Shell/Extensions",
+					"org.gnome.Shell.Extensions", "GetExtensionInfo",
 					new GLib.Variant("(s)", this.uuid),
 					new GLib.VariantType("(a{sv})"),
 					GLib.DBusCallFlags.NONE,
@@ -169,22 +202,14 @@ Global $(key) / panel icon will not work until this is fixed. You can still use 
 			} catch (GLib.Error e) {
 				GLib.debug("Shell extension check failed: %s", e.message);
 			}
+			this.is_ready = enabled;
 
-			var key = Config.load().toggle_key;
-			if (updated && !enabled) {
-				var body = @"The RooTerm Shell extension was installed or updated.
-
-Reload GNOME Shell (Alt+F2, then r, Enter — or log out on Wayland) for the panel icon.
-
-$(key) still works via rooterm --toggle.";
-				var alert = new Adw.AlertDialog("Shell extension needs a reload", body);
-				alert.add_response("ok", "OK");
-				alert.default_response = "ok";
-				alert.close_response = "ok";
-				alert.response.connect(() => {
+			if (updated) {
+				if (enabled) {
 					done();
-				});
-				alert.present(null);
+					return;
+				}
+				this.alert("Shell extension needs a session restart", "", (owned) done);
 				return;
 			}
 
@@ -194,29 +219,16 @@ $(key) still works via rooterm --toggle.";
 			}
 
 			if (!shell_knows) {
-				var body = @"The RooTerm Shell extension is on disk but not loaded yet.
-
-Reload GNOME Shell (Alt+F2, then r, Enter — or log out on Wayland) for the panel icon.
-
-$(key) still works via rooterm --toggle.";
-				var alert = new Adw.AlertDialog("Shell extension not ready", body);
-				alert.add_response("ok", "OK");
-				alert.default_response = "ok";
-				alert.close_response = "ok";
-				alert.response.connect(() => {
-					done();
-				});
-				alert.present(null);
+				this.alert("Shell extension needs a session restart", "", (owned) done);
 				return;
 			}
 
+			var enable_error = "";
 			try {
 				var bus = GLib.Bus.get_sync(GLib.BusType.SESSION);
 				var en_reply = bus.call_sync(
-					"org.gnome.Shell.Extensions",
-					"/org/gnome/Shell/Extensions",
-					"org.gnome.Shell.Extensions",
-					"EnableExtension",
+					"org.gnome.Shell.Extensions", "/org/gnome/Shell/Extensions",
+					"org.gnome.Shell.Extensions", "EnableExtension",
 					new GLib.Variant("(s)", this.uuid),
 					new GLib.VariantType("(b)"),
 					GLib.DBusCallFlags.NONE,
@@ -225,23 +237,61 @@ $(key) still works via rooterm --toggle.";
 				);
 				en_reply.get("(b)", out enabled);
 			} catch (GLib.Error e) {
+				enable_error = e.message;
 				GLib.debug("Shell extension enable failed: %s", e.message);
 			}
+			this.is_ready = enabled;
 			if (enabled) {
 				done();
 				return;
 			}
-			var body = @"Could not enable the RooTerm Shell extension. The panel icon will be unavailable.
+			this.alert(
+				"Shell extension not enabled",
+				@"Could not enable the extension automatically.
 
-$(key) still works via rooterm --toggle.";
-			var alert = new Adw.AlertDialog("Shell extension not enabled", body);
-			alert.add_response("ok", "OK");
-			alert.default_response = "ok";
-			alert.close_response = "ok";
-			alert.response.connect(() => {
+Open the Extensions app and turn on RooTerm, or run:
+gnome-extensions enable $(this.uuid)"
+					+ (enable_error == "" ? "" : @"
+
+($(enable_error))"),
+				(owned) done
+			);
+		}
+
+		/**
+		 * Present a one-button OK {@link Adw.AlertDialog} on {@link window}.
+		 *
+		 * Empty ``detail`` → session-restart body (Wayland logout vs Alt+F2 ``r``).
+		 * Otherwise ``detail`` plus the shared toggle-key / still-usable footer.
+		 * Calls ``done`` when the dialog is dismissed.
+		 *
+		 * @param title Dialog heading
+		 * @param detail Optional lead-in; empty means restart instructions
+		 * @param done Continue after OK
+		 */
+		public void alert(string title, string detail, owned GnomeShellDone done)
+		{
+			var key = Config.load().toggle_key;
+			var body = @"$(detail)
+
+Global $(key) / panel icon will not work until this is fixed. You can still use this window, or run: rooterm --toggle";
+			if (detail == "") {
+				var middle = "You are using Wayland, so unfortunately the only way is to log out and log in again.";
+				if (GLib.Environment.get_variable("XDG_SESSION_TYPE") != "wayland") {
+					middle = "Press Alt+F2, type r, and press Enter.";
+				}
+				body = @"$(middle)
+
+After that, $(key) and the panel icon will work. You can still use this window.";
+			}
+			var dialog = new Adw.AlertDialog(title, body);
+			dialog.add_response("ok", "OK");
+			dialog.default_response = "ok";
+			dialog.close_response = "ok";
+			dialog.response.connect(() => {
 				done();
 			});
-			alert.present(null);
+			dialog.present(this.window);
 		}
 
 		/**
@@ -295,21 +345,31 @@ $(key) still works via rooterm --toggle.";
 			slot.set_string("name", "RooTerm");
 			slot.set_string("command", "rooterm --toggle");
 			slot.set_string("binding", key);
+			// Extension schema: panel tooltip only (no wm grab).
+			try {
+				var ext = new GLib.Settings("org.gnome.shell.extensions.rooterm");
+				string[] keys = { key };
+				ext.set_strv("toggle", keys);
+			} catch (GLib.Error e) {
+				GLib.debug("extension toggle label: %s", e.message);
+			}
 		}
 
 		/**
-		 * Copy the bundled extension into the user extensions dir.
+		 * Copy the bundled extension into the user extensions dir and compile schemas.
 		 *
+		 * @param data_home XDG data home (e.g. ``~/.local/share``)
 		 * @param user_dir Destination ``…/extensions/rooterm@roojs.com``
-		 * @throws GLib.Error If a file copy fails
+		 * @throws GLib.Error If a file copy or ``glib-compile-schemas`` fails
 		 */
-		public void install(string user_dir) throws GLib.Error
+		public void install(string data_home, string user_dir) throws GLib.Error
 		{
-			GLib.DirUtils.create_with_parents(user_dir, 0755);
+			GLib.DirUtils.create_with_parents(GLib.Path.build_filename(user_dir, "schemas"), 0755);
 			string[] names = {
 				"metadata.json",
 				"extension.js",
-				"stylesheet.css"
+				"stylesheet.css",
+				"schemas/org.gnome.shell.extensions.rooterm.gschema.xml"
 			};
 			foreach (var name in names) {
 				var data = GLib.resources_lookup_data(
@@ -319,6 +379,19 @@ $(key) still works via rooterm --toggle.";
 					data.get_data(), null, false, GLib.FileCreateFlags.REPLACE_DESTINATION, null
 				);
 			}
+			var ext_schemas = GLib.Path.build_filename(user_dir, "schemas");
+			GLib.Process.spawn_command_line_sync("glib-compile-schemas " + ext_schemas);
+			var glib_schemas = GLib.Path.build_filename(data_home, "glib-2.0", "schemas");
+			GLib.DirUtils.create_with_parents(glib_schemas, 0755);
+			GLib.File.new_for_path(
+				GLib.Path.build_filename(ext_schemas, "org.gnome.shell.extensions.rooterm.gschema.xml")
+			).copy(
+				GLib.File.new_for_path(
+					GLib.Path.build_filename(glib_schemas, "org.gnome.shell.extensions.rooterm.gschema.xml")
+				),
+				GLib.FileCopyFlags.OVERWRITE
+			);
+			GLib.Process.spawn_command_line_sync("glib-compile-schemas " + glib_schemas);
 		}
 	}
 }

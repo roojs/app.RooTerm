@@ -19,10 +19,12 @@
 namespace RooTerm
 {
 	/**
-	 * Guake-style drop-down: undecorated Gtk window, host tree + search on the
-	 * left, terminal stack on the right. Shell extension docks it under the
-	 * top panel. Window close closes the current terminal (then shows another
-	 * if any); hide via toggle rather than quit.
+	 * Host tree + search on the left, terminal stack on the right.
+	 *
+	 * When {@link is_docked}: undecorated Guake-style drop-down; Shell docks
+	 * under the top panel. Otherwise: decorated 960×640 when the Shell
+	 * extension is not ready yet. Window close closes the current terminal
+	 * (then shows another if any); hide via toggle rather than quit.
 	 */
 	public class MainWindow : Gtk.ApplicationWindow
 	{
@@ -36,9 +38,15 @@ namespace RooTerm
 		 * Primary monitor geometry (Shell docks; size percents use this).
 		 */
 		public Gdk.Rectangle monitor_geo;
+		/**
+		 * True when undecorated drop-down (Shell extension enabled).
+		 * False when decorated setup window (960×640).
+		 */
+		public bool is_docked = false;
 
 		/**
 		 * Builds the window: title, search pulldown, host tree, session stack.
+		 * Chooses docked vs normal chrome from Shell extension state.
 		 *
 		 * @param app Owning {@link Application}
 		 */
@@ -57,21 +65,26 @@ namespace RooTerm
 			if (monitors.get_n_items() > 0) {
 				geo = ((Gdk.Monitor) monitors.get_item(0)).geometry;
 			}
-			int width_px = geo.width * config.width / 100;
-			int height_px = geo.height * config.height / 100;
+			var width_px = geo.width * config.width / 100;
+			var height_px = geo.height * config.height / 100;
 
 			Object(
 				application: app,
 				title: "Roo Term",
 				icon_name: "org.roojs.rooterm",
-				decorated: false,
-				resizable: false,
-				default_width: width_px,
-				default_height: height_px
+				decorated: true,
+				resizable: true,
+				default_width: 960,
+				default_height: 640
 			);
 			this.monitor_geo = geo;
-			this.add_css_class("drop-down");
-
+			this.is_docked = new GnomeShell(this).is_ready;
+			if (this.is_docked) {
+				this.decorated = false;
+				this.resizable = false;
+				this.set_default_size(width_px, height_px);
+				this.add_css_class("drop-down");
+			}
 			var css = new Gtk.CssProvider();
 			css.load_from_resource("/style.css");
 			Gtk.StyleContext.add_provider_for_display(
@@ -353,6 +366,9 @@ namespace RooTerm
 			this.child = root;
 
 			this.map.connect(() => {
+				if (!this.is_docked) {
+					return;
+				}
 				this.set_default_size(
 					this.monitor_geo.width * this.config.width / 100,
 					this.monitor_geo.height * this.config.height / 100

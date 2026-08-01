@@ -143,42 +143,22 @@ namespace RooTerm
 			});
 
 			this.activate.connect(() => {
-				if (this.window != null) {
-					this.window.visible = true;
+				if (this.window == null) {
+					this.window = new MainWindow(this);
+					this.add_window(this.window);
 					this.window.present();
-					this.window.set_default_size(
-						this.window.monitor_geo.width * this.window.config.width / 100,
-						this.window.monitor_geo.height * this.window.config.height / 100
-					);
+					new GnomeShell(this.window).ensure(() => {});
 					return;
 				}
-				// Hidden host for Shell checks; splash Dialog is centered (Wayland
-				// will not honour move() on a normal ApplicationWindow).
-				var app = this;
-				var host = new Gtk.ApplicationWindow(app) {
-					title = "RooTerm",
-					default_width = 1,
-					default_height = 1,
-					decorated = false
-				};
-				app.add_window(host);
-				var splash = new Adw.Dialog() {
-					title = "RooTerm",
-					content_width = 420
-				};
-				splash.set_child(new Adw.StatusPage() {
-					icon_name = "org.roojs.rooterm",
-					title = "Starting RooTerm…",
-					description = "Checking the GNOME Shell extension…"
-				});
-				splash.present(null);
-				new GnomeShell(host).ensure(() => {
-					splash.close();
-					host.close();
-					app.window = new MainWindow(app);
-					app.add_window(app.window);
-					app.window.present();
-				});
+				this.window.visible = true;
+				this.window.present();
+				if (!this.window.is_docked) {
+					return;
+				}
+				this.window.set_default_size(
+					this.window.monitor_geo.width * this.window.config.width / 100,
+					this.window.monitor_geo.height * this.window.config.height / 100
+				);
 			});
 		}
 
@@ -222,12 +202,8 @@ namespace RooTerm
 					var config = Config.load();
 					config.toggle_key = opt_toggle_key;
 					config.save();
-					// Prefer the live drop-down; otherwise a throwaway parent (binding needs no UI).
-					var parent = this.window as Gtk.Window;
-					if (parent == null) {
-						parent = new Gtk.Window();
-					}
-					new GnomeShell(parent).ensure_toggle_binding(opt_toggle_key);
+					// Settings-only; no window required (no throwaway parent).
+					new GnomeShell(this.window).ensure_toggle_binding(opt_toggle_key);
 				} catch (GLib.Error e) {
 					GLib.warning("toggle-key save failed: %s", e.message);
 				}
