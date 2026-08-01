@@ -76,8 +76,9 @@ namespace RooTerm
 		/**
 		 * True when {@link MainWindow} is in underbar drop-down mode.
 		 * Set from the window when mode is chosen; Shell docks only when true.
+		 * Must be a property (not a field) so it is exported on D-Bus as ``DockMode``.
 		 */
-		public bool dock_mode = false;
+		public bool dock_mode { get; set; default = false; }
 
 		/**
 		 * Toggle main window: create if missing, else hide when visible / present when hidden.
@@ -89,6 +90,26 @@ namespace RooTerm
 				return;
 			}
 			var window = this.application.window;
+			// Setup/restart AlertDialog is parented on the window — hide would dismiss it.
+			if (window.block_toggle) {
+				return;
+			}
+			// Shell may have become ready while the setup window stayed visible (e.g. after
+			// Alt+F2 ``r``). Ensure (enable if needed) then remorph; if still setup, hide.
+			if (window.visible && !window.is_docked) {
+				new GnomeShell(window).ensure(() => {
+					if (!new GnomeShell(window).is_ready) {
+						return;
+					}
+					if (!window.is_docked) {
+						window.show_docked();
+					}
+					this.shown();
+				});
+				if (window.block_toggle || window.is_docked) {
+					return;
+				}
+			}
 			if (window.visible) {
 				window.visible = false;
 				return;

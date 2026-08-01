@@ -162,11 +162,16 @@ namespace RooTerm
 				this.window.visible = true;
 				this.window.present();
 				if (!this.window.is_docked) {
-					if (!new GnomeShell(this.window).is_ready) {
-						return;
-					}
-					this.window.show_docked();
-					this.dbus.shown();
+					// Shell may have become ready after a reload — ensure enables if needed.
+					new GnomeShell(this.window).ensure(() => {
+						if (!new GnomeShell(this.window).is_ready) {
+							return;
+						}
+						if (!this.window.is_docked) {
+							this.window.show_docked();
+						}
+						this.dbus.shown();
+					});
 					return;
 				}
 				this.window.set_default_size(
@@ -199,6 +204,18 @@ namespace RooTerm
 			var opt_context = new GLib.OptionContext(this.get_application_id());
 			opt_context.set_help_enabled(true);
 			opt_context.add_main_entries(app_options, null);
+
+			// --help must not reach OptionContext.parse: that exits(0) the primary
+			// instance (kills the running app when invoked from a secondary CLI).
+			foreach (var arg in args) {
+				if (arg == "--help" || arg == "-h") {
+					command_line.print("%s", opt_context.get_help(true, null));
+					if (!command_line.is_remote) {
+						this.quit();
+					}
+					return 0;
+				}
+			}
 
 			try {
 				unowned string[] unowned_args = args;

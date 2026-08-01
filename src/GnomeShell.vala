@@ -231,6 +231,10 @@ $(e.message)",
 			// On-disk update does not reload Shell — running version stays old until restart.
 			if (shell_knows && bundled > 0 && shell_version < bundled) {
 				this.is_ready = false;
+				GLib.debug(
+					"Shell extension version shell=%d bundled=%d — needs reload",
+					shell_version, bundled
+				);
 				this.alert("Shell extension needs a session restart", "", (owned) done);
 				return;
 			}
@@ -241,9 +245,23 @@ $(e.message)",
 			}
 
 			if (!shell_knows) {
+				// After install or session start, Shell may not have indexed us yet.
+				var know_retries = this.get_data<int>("ensure-know-retries");
+				if (know_retries < 6) {
+					this.set_data("ensure-know-retries", know_retries + 1);
+					GLib.debug("Shell extension not known yet — retry %d", know_retries + 1);
+					GLib.Timeout.add(500, () => {
+						this.ensure((owned) done);
+						return false;
+					});
+					return;
+				}
+				this.set_data("ensure-know-retries", 0);
+				GLib.debug("Shell extension still unknown after retries — needs reload");
 				this.alert("Shell extension needs a session restart", "", (owned) done);
 				return;
 			}
+			this.set_data("ensure-know-retries", 0);
 
 			var enable_error = "";
 			try {
@@ -305,19 +323,47 @@ Global $(key) / panel icon will not work until this is fixed. You can still use 
 			if (detail == "") {
 				var middle = "You are using Wayland, so unfortunately the only way is to log out and log in again.";
 				if (GLib.Environment.get_variable("XDG_SESSION_TYPE") != "wayland") {
-					middle = "Press Alt+F2, type r, and press Enter.";
+					middle = "Press Alt+F2, type r, and press Enter — then click OK here.";
 				}
 				body = @"$(middle)
 
 RooTerm updated the extension on disk, but GNOME Shell is still running the old code until you reload.
 
-After that, $(key) and the panel icon will work. You can still use this window.";
+After reload, click OK to switch this window to the drop-down. Then $(key) and the panel icon will work.";
 			}
 			var dialog = new Adw.AlertDialog(title, body);
 			dialog.add_response("ok", "OK");
 			dialog.default_response = "ok";
 			dialog.close_response = "ok";
+			var main = this.window as MainWindow;
+			if (main != null) {
+				main.block_toggle = true;
+			}
+			// Restart hint: after Alt+F2 ``r`` / logout, re-run ensure (EnableExtension)
+			// instead of only probing is_ready — and auto-finish when Shell catches up.
+			var restart_hint = detail == "";
+			var poll_id = 0u;
+			if (restart_hint) {
+				poll_id = GLib.Timeout.add_seconds(1, () => {
+					if (new GnomeShell(this.window).is_ready) {
+						dialog.close();
+						return false;
+					}
+					return true;
+				});
+			}
 			dialog.response.connect(() => {
+				if (poll_id != 0) {
+					GLib.Source.remove(poll_id);
+					poll_id = 0;
+				}
+				if (main != null) {
+					main.block_toggle = false;
+				}
+				if (restart_hint) {
+					this.ensure((owned) done);
+					return;
+				}
 				done();
 			});
 			dialog.present(this.window);

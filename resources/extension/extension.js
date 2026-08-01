@@ -117,8 +117,8 @@ export default class RooTermExtension extends Extension {
                 ]);
                 var [, contents] = GLib.file_get_contents(confPath);
                 var conf = JSON.parse(new TextDecoder().decode(contents));
-                if (conf.toggle_key) {
-                    key = conf.toggle_key;
+                if (conf['toggle-key']) {
+                    key = conf['toggle-key'];
                 }
             } catch (e) {
                 console.error('rooterm: toggle_key: ' + e);
@@ -173,17 +173,7 @@ export default class RooTermExtension extends Extension {
             DBUS_DEST, DBUS_IFACE, 'Shown', DBUS_PATH, null,
             Gio.DBusSignalFlags.NONE,
             function() {
-                if (self.dockTimeoutId) {
-                    GLib.source_remove(self.dockTimeoutId);
-                }
-                self.dockTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 80, function() {
-                    self.dockTimeoutId = 0;
-                    var actors = global.get_window_actors();
-                    for (var i = 0; i < actors.length; i++) {
-                        self.dockWindow(actors[i].meta_window);
-                    }
-                    return GLib.SOURCE_REMOVE;
-                });
+                self.scheduleDock();
             }
         );
     }
@@ -241,15 +231,35 @@ export default class RooTermExtension extends Extension {
         if (this.dockTimeoutId) {
             GLib.source_remove(this.dockTimeoutId);
         }
-        // Brief delay so Toggle show/map finishes before Mutter move.
-        this.dockTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 80, function() {
+        this.scheduleDock();
+    }
+
+    /**
+     * Dock all RooTerm windows after a short delay (GTK may re-center after map).
+     */
+    scheduleDock() {
+        var self = this;
+        if (this.dockTimeoutId) {
+            GLib.source_remove(this.dockTimeoutId);
+        }
+        this.dockTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, function() {
             self.dockTimeoutId = 0;
-            var actors = global.get_window_actors();
-            for (var i = 0; i < actors.length; i++) {
-                self.dockWindow(actors[i].meta_window);
-            }
+            self.dockAll();
+            // Second pass — set_default_size / present often recenters after the first move.
+            self.dockTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 200, function() {
+                self.dockTimeoutId = 0;
+                self.dockAll();
+                return GLib.SOURCE_REMOVE;
+            });
             return GLib.SOURCE_REMOVE;
         });
+    }
+
+    dockAll() {
+        var actors = global.get_window_actors();
+        for (var i = 0; i < actors.length; i++) {
+            this.dockWindow(actors[i].meta_window);
+        }
     }
 
     /**
@@ -257,10 +267,12 @@ export default class RooTermExtension extends Extension {
      */
     isDockMode() {
         try {
+            // GJS: pack tuples from an array; read ``(v)`` via get_variant().
+            // deep_unpack() yields ``{}`` for booleans here — never use it for DockMode.
             var reply = Gio.DBus.session.call_sync(
                 DBUS_DEST, DBUS_PATH,
                 'org.freedesktop.DBus.Properties', 'Get',
-                new GLib.Variant('(ss)', DBUS_IFACE, 'DockMode'),
+                new GLib.Variant('(ss)', [DBUS_IFACE, 'DockMode']),
                 new GLib.VariantType('(v)'),
                 Gio.DBusCallFlags.NONE,
                 500,
@@ -268,6 +280,7 @@ export default class RooTermExtension extends Extension {
             );
             return reply.get_child_value(0).get_variant().get_boolean();
         } catch (e) {
+            console.error('rooterm: DockMode: ' + e);
             return false;
         }
     }
@@ -296,14 +309,21 @@ export default class RooTermExtension extends Extension {
         if (!this.isDockMode()) {
             return;
         }
-        var monitor = Main.layoutManager.monitors[win.get_monitor()]
-            || Main.layoutManager.primaryMonitor;
-        if (!monitor) {
+        var monitorIndex = win.get_monitor();
+        if (monitorIndex < 0) {
+            monitorIndex = Main.layoutManager.primaryIndex;
+        }
+        var workArea = Main.layoutManager.getWorkAreaForMonitor(monitorIndex);
+        if (!workArea) {
             return;
         }
         var rect = win.get_frame_rect();
-        var height = rect.height > 0 ? rect.height : Math.floor(monitor.height * 60 / 100);
-        var width = rect.width > 0 ? rect.width : monitor.width;
+        // Skip GTK's transient 1×1 / unrealized surfaces.
+        if (rect.width < 100 || rect.height < 100) {
+            return;
+        }
+        var height = rect.height;
+        var width = rect.width;
         var placement = 'centre';
         try {
             var confPath = GLib.build_filenamev([GLib.get_home_dir(), '.config', 'rooterm', 'connections.json']);
@@ -313,13 +333,39 @@ export default class RooTermExtension extends Extension {
         } catch (e) {
             console.error('rooterm: layout config: ' + e);
         }
-        var x = monitor.x
-            + (placement === 'centre' ? Math.floor((monitor.width - width) / 2)
-                : placement === 'right' ? monitor.width - width : 0);
-        try {
-            win.unmaximize(Meta.MaximizeFlags.HORIZONTAL | Meta.MaximizeFlags.VERTICAL);
-        } catch (e) {
-            console.error('rooterm: unmaximize: ' + e);
+        var x = workArea.x
+            + (placement === 'centre' ? Math.floor((workArea.width - width) / 2)
+                : placement === 'right' ? workArea.width - width : 0);
+        // Work area top — not panelBox.get_height() (can disagree with real panel).
+        var y = workArea.y;
+        var already = Math.abs(rect.x - x) < 2 && Math.abs(rect.y - y) < 2
+            && Math.abs(rect.width - width) < 2 && Math.abs(rect.height - height) < 2;
+        if (!already) {
+            if (win.rootermDocking) {
+                return;
+            }
+            win.rootermDocking = true;
+            try {
+                win.unmaximize(Meta.MaximizeFlags.HORIZONTAL | Meta.MaximizeFlags.VERTICAL);
+            } catch (e) {
+                console.error('rooterm: unmaximize: ' + e);
+            }
+            try {
+                win.move_frame(false, x, y);
+                win.move_resize_frame(false, x, y, width, height);
+            } catch (e) {
+                console.error('rooterm: move: ' + e);
+            }
+            var after = win.get_frame_rect();
+            if (Math.abs(after.y - y) > 2) {
+                console.error('rooterm: dock wanted y=' + y
+                    + ' but frame is y=' + after.y
+                    + ' (was ' + rect.y + ') workArea.y=' + workArea.y);
+            }
+            GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, function() {
+                win.rootermDocking = false;
+                return GLib.SOURCE_REMOVE;
+            });
         }
         try {
             win.make_above();
@@ -331,8 +377,25 @@ export default class RooTermExtension extends Extension {
         } catch (e) {
             console.error('rooterm: stick: ' + e);
         }
-        win.move_resize_frame(true, x,
-            monitor.y + Main.layoutManager.panelBox.get_height(),
-            width, height);
+        // Shell can take focus; GTK present() often only gets DEMANDS_ATTENTION.
+        try {
+            Main.activateWindow(win);
+        } catch (e) {
+            try {
+                win.activate(global.get_current_time());
+            } catch (e2) {
+                console.error('rooterm: activate: ' + e2);
+            }
+        }
+        if (!win.rootermDockHooked) {
+            win.rootermDockHooked = true;
+            var self = this;
+            win.connect('size-changed', function() {
+                self.dockWindow(win);
+            });
+            win.connect('position-changed', function() {
+                self.dockWindow(win);
+            });
+        }
     }
 }

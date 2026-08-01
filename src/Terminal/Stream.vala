@@ -24,8 +24,9 @@ namespace RooTerm.Terminal
 	 * Construct with a {@link Base} to wire handlers, or with neither for a
 	 * flags bag; {@link Ssh} then calls {@link attach}.
 	 *
-	 * Local tabs: ``/proc`` cwd → session {@link Base.cwd}. SSH tabs: prompt
-	 * scrape for labels, session log, ``ssh-copy-id`` watch. OSC 7 also lands here.
+	 * Local tabs: on a prompt-looking line, ``/proc`` cwd / peer user →
+	 * {@link Base.cwd}. SSH tabs: prompt scrape for labels, session log,
+	 * ``ssh-copy-id`` watch. OSC 7 also lands here.
 	 * Login / sudo / passphrase / ``lxc-console`` feeds live in Jobs.
 	 *
 	 * == Example ==
@@ -38,6 +39,19 @@ namespace RooTerm.Terminal
 	public class Stream : Object
 	{
 		/**
+		 * Streams waiting for a quiet settle before {@link check_cwd}.
+		 */
+		private static GLib.GenericArray<Stream> prompt_waiters {
+			get;
+			set;
+			default = new GLib.GenericArray<Stream>();
+		}
+		/**
+		 * Shared 500ms cwd/prompt watcher (started once, never stopped).
+		 */
+		private static uint is_watching_cwd = 0;
+
+		/**
 		 * Owning tab (pid / pty / {@link Base.cwd}).
 		 */
 		public weak Base session;
@@ -47,8 +61,18 @@ namespace RooTerm.Terminal
 		 * Last shell/mysql-style prompt line scraped from the screen.
 		 */
 		public string prompt_hint = "";
-		public uint prompt_timeout = 0;
-		public uint cwd_timeout = 0;
+		/**
+		 * Monotonic time of last output while waiting for a prompt (µs).
+		 */
+		private int64 prompt_activity = 0;
+		/**
+		 * True after Enter / attach until a prompt line is scraped.
+		 */
+		private bool await_prompt = false;
+		/**
+		 * True while this stream is in {@link prompt_waiters}.
+		 */
+		private bool prompt_queued = false;
 		public GLib.FileStream? session_log = null;
 		public bool hide_input = false;
 		/**
@@ -85,6 +109,23 @@ namespace RooTerm.Terminal
 		 */
 		public Stream(Base? session = null, Host.Connection? connection = null)
 		{
+			if (is_watching_cwd == 0) {
+				is_watching_cwd = GLib.Timeout.add(500, () => {
+					var now = GLib.get_monotonic_time();
+					var i = 0;
+					while (i < prompt_waiters.length) {
+						var stream = prompt_waiters[i];
+						if (now - stream.prompt_activity < 500 * 1000) {
+							i++;
+							continue;
+						}
+						stream.check_cwd();
+						stream.prompt_queued = false;
+						prompt_waiters.remove_index(i);
+					}
+					return true;
+				});
+			}
 			if (session == null) {
 				return;
 			}
@@ -105,20 +146,30 @@ namespace RooTerm.Terminal
 			this.session = session;
 			this.terminal = session.terminal;
 			this.connection = connection != null ? connection : session.connection;
+			// Catch the first shell prompt after spawn.
+			this.await_prompt = true;
+			this.prompt_activity = GLib.get_monotonic_time();
+			prompt_waiters.add(this);
+			this.prompt_queued = true;
 			this.terminal.commit.connect(this.on_commit);
-			this.terminal.contents_changed.connect(this.on_prompt);
+			this.terminal.contents_changed.connect(() => {
+				if (!this.await_prompt) {
+					return;
+				}
+				this.prompt_activity = GLib.get_monotonic_time();
+				if (!this.prompt_queued) {
+					prompt_waiters.add(this);
+					this.prompt_queued = true;
+				}
+			});
 			this.terminal.contents_changed.connect(this.on_log);
 			this.terminal.contents_changed.connect(this.on_key);
-			this.terminal.contents_changed.connect(this.on_cwd);
 			this.terminal.termprop_changed.connect(this.on_termprop);
 			this.terminal.child_exited.connect(() => {
-				if (this.cwd_timeout != 0) {
-					GLib.Source.remove(this.cwd_timeout);
-					this.cwd_timeout = 0;
-				}
-				if (this.prompt_timeout != 0) {
-					GLib.Source.remove(this.prompt_timeout);
-					this.prompt_timeout = 0;
+				this.await_prompt = false;
+				if (this.prompt_queued) {
+					this.prompt_queued = false;
+					prompt_waiters.remove(this);
 				}
 			});
 		}
@@ -154,69 +205,28 @@ namespace RooTerm.Terminal
 		}
 
 		/**
-		 * Local ``/proc`` cwd after screen activity (no-op for SSH child pids).
-		 */
-		private void on_cwd()
-		{
-			var local = this.session as Local;
-			if (local == null) {
-				return;
-			}
-			if (this.cwd_timeout != 0) {
-				GLib.Source.remove(this.cwd_timeout);
-			}
-			this.cwd_timeout = GLib.Timeout.add(150, () => {
-				this.cwd_timeout = 0;
-				if (this.session.child_pid <= 0) {
-					return false;
-				}
-				var pid = this.session.child_pid;
-				if (this.terminal.pty != null) {
-					var fg = Posix.tcgetpgrp(this.terminal.pty.fd);
-					if (fg > 0) {
-						pid = (int) fg;
-					}
-				}
-				try {
-					var link = GLib.FileUtils.read_link("/proc/%d/cwd".printf(pid));
-					if (link.length == 0) {
-						return false;
-					}
-					var user = "";
-					Posix.Stat st;
-					if (Posix.stat("/proc/%d".printf(pid), out st) == 0) {
-						unowned Posix.Passwd? pw = Posix.getpwuid(st.st_uid);
-						if (pw != null) {
-							user = pw.pw_name;
-						}
-					}
-					if (link == this.session.cwd && user == local.peer_user) {
-						return false;
-					}
-					GLib.debug("local cwd pid=%d user=%s path=%s", pid, user, link);
-					this.session.cwd = link;
-					local.peer_user = user;
-					this.session.label_changed();
-				} catch (GLib.FileError e) {
-					GLib.debug("local cwd read failed pid=%d: %s", pid, e.message);
-				}
-				return false;
-			});
-		}
-
-		/**
 		 * Log typed input; redact when hiding a password line.
+		 * Enter starts a prompt watch (label / local ``/proc``).
 		 *
 		 * @param text Committed keystrokes
 		 * @param size Byte length from VTE
 		 */
 		private void on_commit(string text, uint size)
 		{
+			var eol = text.index_of_char('\n') >= 0 || text.index_of_char('\r') >= 0;
+			if (eol) {
+				this.await_prompt = true;
+				this.prompt_activity = GLib.get_monotonic_time();
+				if (!this.prompt_queued) {
+					prompt_waiters.add(this);
+					this.prompt_queued = true;
+				}
+			}
 			if (this.session_log == null) {
 				return;
 			}
 			if (this.hide_input) {
-				if (text.index_of_char('\n') < 0 && text.index_of_char('\r') < 0) {
+				if (!eol) {
 					return;
 				}
 				this.hide_input = false;
@@ -229,7 +239,7 @@ namespace RooTerm.Terminal
 			}
 			this.session_log.puts(text);
 			this.session_log.flush();
-			if (text.index_of_char('\n') < 0 && text.index_of_char('\r') < 0) {
+			if (!eol) {
 				return;
 			}
 			long col, row;
@@ -238,81 +248,99 @@ namespace RooTerm.Terminal
 		}
 
 		/**
-		 * Trailing-edge scrape of the cursor row for tab-label text ({@link prompt_hint}).
+		 * After a quiet settle: if the cursor row looks like a prompt, update
+		 * cwd / peer user (local ``/proc``) or SSH prompt hint / path.
 		 *
-		 * Not login/auth — Jobs own password / passphrase / sudo. This only updates
-		 * the tab title when the line looks like a shell or db prompt, and ignores
-		 * password lines so the label does not briefly become ``Enter passphrase:``.
-		 * Resets the timer on each change so a slow redraw still catches the final prompt.
+		 * Not login/auth — Jobs own password / passphrase / sudo. Ignores
+		 * password lines so the label does not become ``Enter passphrase:``.
 		 */
-		private void on_prompt()
+		private void check_cwd()
 		{
-			if (this.prompt_timeout != 0) {
-				GLib.Source.remove(this.prompt_timeout);
+			long col, row;
+			this.terminal.get_cursor_position(out col, out row);
+			size_t len;
+			// Prefer full row (trailing spaces stripped) so a short cursor col still works.
+			var end_col = this.terminal.get_column_count();
+			if (col > end_col) {
+				end_col = col;
 			}
-			this.prompt_timeout = GLib.Timeout.add(120, () => {
-				this.prompt_timeout = 0;
-				long col, row;
-				this.terminal.get_cursor_position(out col, out row);
-				size_t len;
-				// Prefer full row (trailing spaces stripped) so a short cursor col still works.
-				var end_col = this.terminal.get_column_count();
-				if (col > end_col) {
-					end_col = col;
+			var raw = this.terminal.get_text_range_format(Vte.Format.TEXT, row, 0, row, end_col, out len);
+			var last = raw != null ? raw.replace("\r", "").strip() : "";
+			// Multiline prompts: path often on the previous row, ``$``/``#`` alone here.
+			if (last.length > 0 && last.length <= 2 && (last == "$" || last == "#" || last == "%") && row > 0) {
+				var prev_raw = this.terminal.get_text_range_format(Vte.Format.TEXT, row - 1, 0, row - 1, end_col, out len);
+				var prev = prev_raw != null ? prev_raw.replace("\r", "").strip() : "";
+				if (prev.length > 0 && prev.length < 240) {
+					last = prev + last;
 				}
-				var raw = this.terminal.get_text_range_format(
-					Vte.Format.TEXT, row, 0, row, end_col, out len
-				);
-				var last = raw != null ? raw.replace("\r", "").strip() : "";
-				// Multiline prompts: path often on the previous row, ``$``/``#`` alone here.
-				if (last.length > 0 && last.length <= 2
-						&& (last == "$" || last == "#" || last == "%")
-						&& row > 0) {
-					var prev_raw = this.terminal.get_text_range_format(
-						Vte.Format.TEXT, row - 1, 0, row - 1, end_col, out len
-					);
-					var prev = prev_raw != null ? prev_raw.replace("\r", "").strip() : "";
-					if (prev.length > 0 && prev.length < 240) {
-						last = prev + last;
+			}
+			if (last.length == 0 || last.length > 240) {
+				return;
+			}
+			// Auth prompts are not titles.
+			if (GLib.Regex.match_simple("(password|passphrase).*:\\s*$", last, GLib.RegexCompileFlags.CASELESS, 0)) {
+				return;
+			}
+			var is_prompt = GLib.Regex.match_simple("^[^\\s@]+@[^\\s:]+:.*[#$]\\s*$", last, 0, 0)
+				|| GLib.Regex.match_simple("^(MariaDB|mysql|sqlite3?|postgres|plsql)\\b.*>\\s*$", last, GLib.RegexCompileFlags.CASELESS, 0)
+				|| ((last.has_suffix("$") || last.has_suffix("#") || last.has_suffix("%")) && last.length < 160);
+			if (!is_prompt) {
+				return;
+			}
+			this.await_prompt = false;
+			var local = this.session as Local;
+			if (local != null && this.session.child_pid > 0) {
+				// ``/proc`` st_uid works for root shells; cwd often EACCES after ``sudo su``.
+				var pid = this.session.child_pid;
+				if (this.terminal.pty != null) {
+					var fg = Posix.tcgetpgrp(this.terminal.pty.fd);
+					if (fg > 0) {
+						pid = (int) fg;
 					}
 				}
-				if (last.length == 0 || last.length > 240) {
-					return false;
-				}
-				// Auth prompts are not titles.
-				if (GLib.Regex.match_simple("(password|passphrase).*:\\s*$", last, GLib.RegexCompileFlags.CASELESS, 0)) {
-					return false;
-				}
-				var is_prompt = GLib.Regex.match_simple("^[^\\s@]+@[^\\s:]+:.*[#$]\\s*$", last, 0, 0)
-					|| GLib.Regex.match_simple("^(MariaDB|mysql|sqlite3?|postgres|plsql)\\b.*>\\s*$", last, GLib.RegexCompileFlags.CASELESS, 0)
-					|| ((last.has_suffix("$") || last.has_suffix("#") || last.has_suffix("%")) && last.length < 160);
-				if (!is_prompt) {
-					return false;
-				}
-				if (last == this.prompt_hint) {
-					return false;
-				}
-				GLib.debug("prompt_hint name=%s hint=%s", this.connection.name, last);
-				this.prompt_hint = last;
-				// Local tabs use ``/proc`` cwd; prompt path is often ``~`` and would clobber it.
-				if (!(this.session is Local)) {
-					try {
-						var re = new GLib.Regex("^[^\\s@]+@[^\\s:]+:(.+)[#$]\\s*$");
-						MatchInfo info;
-						if (re.match(last, 0, out info)) {
-							var dir = info.fetch(1);
-							if (dir != null && dir.length > 0 && dir != this.session.cwd) {
-								this.session.cwd = dir;
-								this.session.label_changed();
-							}
-						}
-					} catch (GLib.RegexError e) {
-						GLib.debug("prompt cwd parse: %s", e.message);
+				var user = "";
+				Posix.Stat st;
+				if (Posix.stat("/proc/%d".printf(pid), out st) == 0) {
+					unowned Posix.Passwd? pw = Posix.getpwuid(st.st_uid);
+					if (pw != null) {
+						user = pw.pw_name;
 					}
 				}
-				this.label_changed();
-				return false;
-			});
+				var link = "";
+				try {
+					link = GLib.FileUtils.read_link("/proc/%d/cwd".printf(pid));
+				} catch (GLib.FileError e) {
+					GLib.debug("local cwd read failed pid=%d: %s", pid, e.message);
+				}
+				var cwd_changed = link.length > 0 && link != this.session.cwd;
+				var user_changed = user.length > 0 && user != local.peer_user;
+				if (cwd_changed || user_changed) {
+					GLib.debug("local cwd pid=%d user=%s path=%s", pid, user, link.length > 0 ? link : this.session.cwd);
+					if (cwd_changed) {
+						this.session.cwd = link;
+					}
+					if (user_changed) {
+						local.peer_user = user;
+					}
+					this.session.label_changed();
+				}
+			}
+			if (last == this.prompt_hint) {
+				return;
+			}
+			GLib.debug("prompt_hint name=%s hint=%s", this.connection.name, last);
+			this.prompt_hint = last;
+			// Local tabs use ``/proc``; prompt path is often ``~`` and would clobber it.
+			if (local == null && GLib.Regex.match_simple("^[^\\s@]+@[^\\s:]+:.+[#$]\\s*$", last, 0, 0)) {
+				var colon = last.index_of_char(':');
+				var dir = last.substring(colon + 1);
+				dir = dir.substring(0, dir.length - 1);
+				if (dir.length > 0 && dir != this.session.cwd) {
+					this.session.cwd = dir;
+					this.session.label_changed();
+				}
+			}
+			this.label_changed();
 		}
 
 		/**
@@ -326,14 +354,11 @@ namespace RooTerm.Terminal
 			long col, row;
 			this.terminal.get_cursor_position(out col, out row);
 			size_t len;
-			var raw = this.terminal.get_text_range_format(
-				Vte.Format.TEXT, 0, 0, row, col, out len
-			);
+			var raw = this.terminal.get_text_range_format(Vte.Format.TEXT, 0, 0, row, col, out len);
 			if (raw == null) {
 				return;
 			}
-			if (raw.index_of("Number of key(s) added") < 0
-					&& raw.index_of("already exist") < 0) {
+			if (raw.index_of("Number of key(s) added") < 0 && raw.index_of("already exist") < 0) {
 				return;
 			}
 			var identity = this.install_identity;

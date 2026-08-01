@@ -22,9 +22,8 @@ namespace RooTerm
 	 * Host tree + search on the left, terminal stack on the right.
 	 *
 	 * When {@link is_docked}: undecorated Guake-style drop-down; Shell docks
-	 * under the top panel. Otherwise: decorated 960×640 when the Shell
-	 * extension is not ready yet. Window close closes the current terminal
-	 * (then shows another if any); hide via toggle rather than quit.
+	 * under the top panel; close closes the current terminal (or hides).
+	 * Otherwise: decorated 960×640 setup chrome; window close quits the app.
 	 */
 	public class MainWindow : Gtk.ApplicationWindow
 	{
@@ -43,6 +42,11 @@ namespace RooTerm
 		 * False when decorated setup window (960×640).
 		 */
 		public bool is_docked = false;
+		/**
+		 * True while a {@link GnomeShell} setup/restart dialog is open.
+		 * {@link DBus.toggle} must not hide/show the window then.
+		 */
+		public bool block_toggle = false;
 
 		/**
 		 * Switch to underbar drop-down chrome and set {@link DBus.dock_mode}.
@@ -386,6 +390,10 @@ namespace RooTerm
 			});
 
 			this.close_request.connect(() => {
+				if (!this.is_docked) {
+					((Application) this.application).quit();
+					return true;
+				}
 				if (this.sessions.close_current()) {
 					return true;
 				}
