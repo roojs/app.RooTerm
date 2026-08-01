@@ -168,10 +168,6 @@ namespace RooTerm.Dialog
 			} catch (GLib.Error e) {
 				GLib.warning("config save failed: %s", e.message);
 			}
-			this.window.set_default_size(
-				this.window.monitor_geo.width * config.width / 100,
-				this.window.monitor_geo.height * config.height / 100
-			);
 			var app = this.window.application as Application;
 			if (app == null) {
 				return;
@@ -182,6 +178,13 @@ namespace RooTerm.Dialog
 			} catch (GLib.Error e) {
 				GLib.warning("toggle binding: %s", e.message);
 			}
+			if (!this.window.is_docked) {
+				return;
+			}
+			this.window.set_default_size(
+				this.window.monitor_geo.width * config.width / 100,
+				this.window.monitor_geo.height * config.height / 100
+			);
 			app.dbus.shown();
 		}
 	}

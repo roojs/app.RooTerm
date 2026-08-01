@@ -74,13 +74,18 @@ namespace RooTerm
 		public signal void shown();
 
 		/**
+		 * True when {@link MainWindow} is in underbar drop-down mode.
+		 * Set from the window when mode is chosen; Shell docks only when true.
+		 */
+		public bool dock_mode = false;
+
+		/**
 		 * Toggle main window: create if missing, else hide when visible / present when hidden.
 		 */
 		public void toggle()
 		{
 			if (this.application.window == null) {
 				this.application.activate();
-				this.shown();
 				return;
 			}
 			var window = this.application.window;
@@ -88,15 +93,8 @@ namespace RooTerm
 				window.visible = false;
 				return;
 			}
-			window.visible = true;
-			window.present();
-			if (window.is_docked) {
-				window.set_default_size(
-					window.monitor_geo.width * window.config.width / 100,
-					window.monitor_geo.height * window.config.height / 100
-				);
-			}
-			this.shown();
+			// activate re-checks Shell ready and remorphs normal → docked when possible.
+			this.application.activate();
 		}
 
 		/**
@@ -122,7 +120,9 @@ namespace RooTerm
 			if (!window.visible) {
 				window.visible = true;
 				window.present();
-				this.shown();
+				if (window.is_docked) {
+					this.shown();
+				}
 			}
 			new Dialog.Preferences(window).present(window);
 		}

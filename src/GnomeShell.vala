@@ -51,7 +51,7 @@ namespace RooTerm
 		public Gtk.Window? window { get; construct; default = null; }
 
 		/**
-		 * True when the extension is on disk and Shell reports it enabled.
+		 * True when Shell has the extension enabled at the bundled version.
 		 * Set in the constructor (and refreshed by {@link ensure}).
 		 */
 		public bool is_ready = false;
@@ -62,6 +62,23 @@ namespace RooTerm
 		public GnomeShell(Gtk.Window? window = null)
 		{
 			Object(window: window);
+
+			var bundled = 0;
+			try {
+				var bundled_data = GLib.resources_lookup_data(
+					"/rooterm/extension/metadata.json", GLib.ResourceLookupFlags.NONE
+				);
+				var bundled_parser = new Json.Parser();
+				bundled_parser.load_from_data(
+					(string) bundled_data.get_data(), (ssize_t) bundled_data.get_size()
+				);
+				bundled = (int) bundled_parser.get_root().get_object().get_int_member("version");
+			} catch (GLib.Error e) {
+				GLib.debug("Shell extension bundled metadata: %s", e.message);
+			}
+			if (bundled <= 0) {
+				return;
+			}
 
 			var data_home = GLib.Environment.get_variable("XDG_DATA_HOME");
 			if (data_home == null || data_home == "") {
@@ -89,11 +106,15 @@ namespace RooTerm
 					null
 				);
 				var info = info_reply.get_child_value(0);
-				if (info.n_children() > 0) {
-					var state = (int32) 0;
-					info.lookup("state", "i", out state);
-					this.is_ready = (state == 1);
+				if (info.n_children() == 0) {
+					return;
 				}
+				// Shell sends state/version as doubles over D-Bus.
+				var state_d = 0.0;
+				var version_d = 0.0;
+				info.lookup("state", "d", out state_d);
+				info.lookup("version", "d", out version_d);
+				this.is_ready = ((int) state_d == 1) && ((int) version_d >= bundled);
 			} catch (GLib.Error e) {
 				GLib.debug("Shell extension check failed: %s", e.message);
 			}
@@ -156,11 +177,9 @@ namespace RooTerm
 				break;
 			}
 
-			var updated = false;
 			if (bundled > 0 && installed < bundled) {
 				try {
 					this.install(data_home, user_dir);
-					updated = true;
 				} catch (GLib.Error e) {
 					GLib.warning("Shell extension install failed: %s", e.message);
 					this.alert(
@@ -181,6 +200,7 @@ $(e.message)",
 
 			var shell_knows = false;
 			var enabled = false;
+			var shell_version = 0;
 			try {
 				var bus = GLib.Bus.get_sync(GLib.BusType.SESSION);
 				var info_reply = bus.call_sync(
@@ -195,25 +215,27 @@ $(e.message)",
 				var info = info_reply.get_child_value(0);
 				if (info.n_children() > 0) {
 					shell_knows = true;
-					var state = (int32) 0;
-					info.lookup("state", "i", out state);
-					enabled = (state == 1);
+					// Shell sends state/version as doubles over D-Bus.
+					var state_d = 0.0;
+					var version_d = 0.0;
+					info.lookup("state", "d", out state_d);
+					info.lookup("version", "d", out version_d);
+					enabled = ((int) state_d == 1);
+					shell_version = (int) version_d;
 				}
 			} catch (GLib.Error e) {
 				GLib.debug("Shell extension check failed: %s", e.message);
 			}
-			this.is_ready = enabled;
+			this.is_ready = enabled && bundled > 0 && shell_version >= bundled;
 
-			if (updated) {
-				if (enabled) {
-					done();
-					return;
-				}
+			// On-disk update does not reload Shell — running version stays old until restart.
+			if (shell_knows && bundled > 0 && shell_version < bundled) {
+				this.is_ready = false;
 				this.alert("Shell extension needs a session restart", "", (owned) done);
 				return;
 			}
 
-			if (enabled) {
+			if (this.is_ready) {
 				done();
 				return;
 			}
@@ -240,8 +262,13 @@ $(e.message)",
 				enable_error = e.message;
 				GLib.debug("Shell extension enable failed: %s", e.message);
 			}
-			this.is_ready = enabled;
-			if (enabled) {
+			this.is_ready = enabled && bundled > 0 && shell_version >= bundled;
+			if (enabled && shell_version < bundled) {
+				this.is_ready = false;
+				this.alert("Shell extension needs a session restart", "", (owned) done);
+				return;
+			}
+			if (this.is_ready) {
 				done();
 				return;
 			}
@@ -281,6 +308,8 @@ Global $(key) / panel icon will not work until this is fixed. You can still use 
 					middle = "Press Alt+F2, type r, and press Enter.";
 				}
 				body = @"$(middle)
+
+RooTerm updated the extension on disk, but GNOME Shell is still running the old code until you reload.
 
 After that, $(key) and the panel icon will work. You can still use this window.";
 			}

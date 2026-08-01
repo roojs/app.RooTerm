@@ -253,7 +253,27 @@ export default class RooTermExtension extends Extension {
     }
 
     /**
-     * If ``win`` is RooTerm, move it under the top panel and keep it above.
+     * True when the app reports underbar drop-down mode (D-Bus ``DockMode``).
+     */
+    isDockMode() {
+        try {
+            var reply = Gio.DBus.session.call_sync(
+                DBUS_DEST, DBUS_PATH,
+                'org.freedesktop.DBus.Properties', 'Get',
+                new GLib.Variant('(ss)', DBUS_IFACE, 'DockMode'),
+                new GLib.VariantType('(v)'),
+                Gio.DBusCallFlags.NONE,
+                500,
+                null
+            );
+            return reply.get_child_value(0).get_variant().get_boolean();
+        } catch (e) {
+            return false;
+        }
+    }
+
+    /**
+     * If ``win`` is RooTerm in dock mode, move it under the top panel and keep it above.
      */
     dockWindow(win) {
         if (!win || win.minimized) {
@@ -271,6 +291,9 @@ export default class RooTermExtension extends Extension {
                 || (instance && instance.toLowerCase().indexOf('rooterm') !== -1);
         }
         if (!match) {
+            return;
+        }
+        if (!this.isDockMode()) {
             return;
         }
         var monitor = Main.layoutManager.monitors[win.get_monitor()]

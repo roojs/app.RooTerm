@@ -147,18 +147,30 @@ namespace RooTerm
 					this.window = new MainWindow(this);
 					this.add_window(this.window);
 					this.window.present();
-					new GnomeShell(this.window).ensure(() => {});
+					new GnomeShell(this.window).ensure(() => {
+						if (this.window.is_docked || !new GnomeShell(this.window).is_ready) {
+							return;
+						}
+						this.window.show_docked();
+						this.dbus.shown();
+					});
 					return;
 				}
 				this.window.visible = true;
 				this.window.present();
 				if (!this.window.is_docked) {
+					if (!new GnomeShell(this.window).is_ready) {
+						return;
+					}
+					this.window.show_docked();
+					this.dbus.shown();
 					return;
 				}
 				this.window.set_default_size(
 					this.window.monitor_geo.width * this.window.config.width / 100,
 					this.window.monitor_geo.height * this.window.config.height / 100
 				);
+				this.dbus.shown();
 			});
 		}
 

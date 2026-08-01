@@ -45,6 +45,23 @@ namespace RooTerm
 		public bool is_docked = false;
 
 		/**
+		 * Switch to underbar drop-down chrome and set {@link DBus.dock_mode}.
+		 * Call when Shell is ready and the window is still in normal mode.
+		 */
+		public void show_docked()
+		{
+			this.is_docked = true;
+			((Application) this.application).dbus.dock_mode = true;
+			this.decorated = false;
+			this.resizable = false;
+			this.add_css_class("drop-down");
+			this.set_default_size(
+				this.monitor_geo.width * this.config.width / 100,
+				this.monitor_geo.height * this.config.height / 100
+			);
+		}
+
+		/**
 		 * Builds the window: title, search pulldown, host tree, session stack.
 		 * Chooses docked vs normal chrome from Shell extension state.
 		 *
@@ -65,8 +82,6 @@ namespace RooTerm
 			if (monitors.get_n_items() > 0) {
 				geo = ((Gdk.Monitor) monitors.get_item(0)).geometry;
 			}
-			var width_px = geo.width * config.width / 100;
-			var height_px = geo.height * config.height / 100;
 
 			Object(
 				application: app,
@@ -78,12 +93,9 @@ namespace RooTerm
 				default_height: 640
 			);
 			this.monitor_geo = geo;
-			this.is_docked = new GnomeShell(this).is_ready;
-			if (this.is_docked) {
-				this.decorated = false;
-				this.resizable = false;
-				this.set_default_size(width_px, height_px);
-				this.add_css_class("drop-down");
+			this.config = config;
+			if (new GnomeShell(this).is_ready) {
+				this.show_docked();
 			}
 			var css = new Gtk.CssProvider();
 			css.load_from_resource("/style.css");
@@ -92,8 +104,6 @@ namespace RooTerm
 				css,
 				Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
 			);
-
-			this.config = config;
 			this.localhost = new Host.Connection() {
 				uuid = "localhost",
 				name = "Localhost",
