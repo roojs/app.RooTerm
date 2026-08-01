@@ -87,6 +87,14 @@ vte-terminal {
 		rgba(0, 0, 0, 0.0));
 }
 
+/* Preferences / Connection — separate from light desktops. */
+window.floating-dialog {
+	box-shadow:
+		0 1px 3px rgba(0, 0, 0, 0.18),
+		0 10px 32px rgba(0, 0, 0, 0.32);
+	border: 1px solid alpha(@borders, 0.7);
+}
+
 popover.menu {
 	margin-top: 6px;
 	padding: 0;

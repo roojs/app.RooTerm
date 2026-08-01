@@ -34,7 +34,7 @@ VTE GTK4 ≥ 0.70):
 
 ```bash
 sudo apt-get install -y \
-  valac meson ninja-build pkg-config \
+  valac meson ninja-build pkg-config desktop-file-utils \
   libgtk-4-dev libadwaita-1-dev \
   libvte-2.91-gtk4-dev \
   libgee-0.8-dev libgcrypt20-dev \

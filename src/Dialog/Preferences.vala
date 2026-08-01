@@ -60,9 +60,21 @@ namespace RooTerm.Dialog
 			Object(
 				application: window.application,
 				title: "Preferences",
+				resizable: false,
 				default_width: 520,
 				default_height: 504
 			);
+			this.add_css_class("floating-dialog");
+			this.notify["maximized"].connect(() => {
+				if (this.maximized) {
+					this.unmaximize();
+				}
+			});
+			this.notify["fullscreened"].connect(() => {
+				if (this.fullscreened) {
+					this.unfullscreen();
+				}
+			});
 			this.window = window;
 			this.map.connect(() => {
 				var app = this.window.application as Application;
@@ -70,6 +82,10 @@ namespace RooTerm.Dialog
 					return;
 				}
 				app.dbus.floating_count++;
+				GLib.debug(
+					"preferences map floating_count=%u",
+					app.dbus.floating_count
+				);
 			});
 			this.unmap.connect(() => {
 				var app = this.window.application as Application;
@@ -77,6 +93,10 @@ namespace RooTerm.Dialog
 					return;
 				}
 				app.dbus.floating_count--;
+				GLib.debug(
+					"preferences unmap floating_count=%u",
+					app.dbus.floating_count
+				);
 			});
 			this.snap_opacity = window.config.opacity;
 			this.snap_height = window.config.height;

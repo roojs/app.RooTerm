@@ -79,9 +79,21 @@ namespace RooTerm.Dialog
 			Object(
 				application: window.application,
 				title: "Connection",
+				resizable: false,
 				default_width: 560,
 				default_height: 520
 			);
+			this.add_css_class("floating-dialog");
+			this.notify["maximized"].connect(() => {
+				if (this.maximized) {
+					this.unmaximize();
+				}
+			});
+			this.notify["fullscreened"].connect(() => {
+				if (this.fullscreened) {
+					this.unfullscreen();
+				}
+			});
 			this.window = window;
 			this.map.connect(() => {
 				var app = this.window.application as Application;
@@ -89,6 +101,11 @@ namespace RooTerm.Dialog
 					return;
 				}
 				app.dbus.floating_count++;
+				GLib.debug(
+					"connection map floating_count=%u title=%s",
+					app.dbus.floating_count,
+					this.title
+				);
 			});
 			this.unmap.connect(() => {
 				var app = this.window.application as Application;
@@ -96,6 +113,11 @@ namespace RooTerm.Dialog
 					return;
 				}
 				app.dbus.floating_count--;
+				GLib.debug(
+					"connection unmap floating_count=%u title=%s",
+					app.dbus.floating_count,
+					this.title
+				);
 			});
 			this.target = new Host.Connection();
 

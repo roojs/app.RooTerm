@@ -191,6 +191,8 @@ export default class RooTermExtension extends Extension {
                 }
                 var changed = params.get_child_value(1);
                 if (changed.lookup_value('FloatingCount', null)) {
+                    console.error('rooterm: FloatingCount changed → '
+                        + self.getFloatingCount());
                     self.scheduleDock();
                 }
             }
@@ -361,7 +363,9 @@ export default class RooTermExtension extends Extension {
     }
 
     /**
-     * Gate + dispatch: claim drop-down once, then raise floating or dock.
+     * Gate + dispatch by frame width: wider than half the work area is the
+     * drop-down strip; narrower windows are Preferences / Connection when
+     * FloatingCount is non-zero.
      */
     dockWindow(win) {
         if (!win || win.minimized) {
@@ -383,17 +387,25 @@ export default class RooTermExtension extends Extension {
         if (rect.width < 100 || rect.height < 100) {
             return;
         }
-        var floating = this.getFloatingCount();
-        var self = this;
-        if (this.dropDownWin === null && floating === 0) {
-            this.dropDownWin = win;
-            win.connect('unmanaged', function() {
-                if (self.dropDownWin === win) {
-                    self.dropDownWin = null;
-                }
-            });
+        var monitorIndex = win.get_monitor();
+        if (monitorIndex < 0) {
+            monitorIndex = Main.layoutManager.primaryIndex;
         }
-        if (win === this.dropDownWin) {
+        var workArea = Main.layoutManager.getWorkAreaForMonitor(monitorIndex);
+        if (!workArea) {
+            return;
+        }
+        var floating = this.getFloatingCount();
+        var title = win.get_title() || '';
+        var isDropDown = rect.width > workArea.width / 2;
+        console.error('rooterm: classify id=' + win.get_id()
+            + ' title=' + title
+            + ' ' + rect.width + 'x' + rect.height
+            + ' workW=' + workArea.width
+            + ' isDropDown=' + isDropDown
+            + ' floating=' + floating);
+        if (isDropDown) {
+            this.dropDownWin = win;
             this.dockDropDown(win, floating);
             return;
         }
