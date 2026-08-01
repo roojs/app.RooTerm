@@ -86,6 +86,12 @@ namespace RooTerm
 		public bool dock_mode { get; set; default = false; }
 
 		/**
+		 * Open Preferences / Connection windows. Shell centres and raises those
+		 * while this is non-zero (Wayland-safe; no WM role / title matching).
+		 */
+		public uint floating_count { get; set; default = 0; }
+
+		/**
 		 * Toggle main window: create if missing, else hide when visible / present when hidden.
 		 */
 		public void toggle()

@@ -6,3 +6,4 @@
 .specstory/
 .cursor/
 .cursorindexingignore
+.gdb_history

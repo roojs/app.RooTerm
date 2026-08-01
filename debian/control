@@ -1,0 +1,35 @@
+Source: rooterm
+Section: gnome
+Priority: optional
+Maintainer: Alan Knowles <alan@roojs.com>
+Build-Depends: debhelper-compat (= 13),
+               meson,
+               ninja-build,
+               pkg-config,
+               valac,
+               libgtk-4-dev (>= 4.14),
+               libadwaita-1-dev (>= 1.5),
+               libvte-2.91-gtk4-dev (>= 0.70),
+               libgee-0.8-dev,
+               libgcrypt20-dev,
+               libyaml-dev,
+               libjson-glib-dev,
+               libsecret-1-dev
+Standards-Version: 4.6.2
+Homepage: https://github.com/roojs/app.RooTerm
+Vcs-Browser: https://github.com/roojs/app.RooTerm
+Vcs-Git: https://github.com/roojs/app.RooTerm.git
+Rules-Requires-Root: no
+
+Package: rooterm
+Architecture: any
+Depends: ${shlibs:Depends},
+         ${misc:Depends},
+         openssh-client
+Description: SSH host manager and terminal for GNOME
+ Roo Term is a thin SSH host manager and terminal for GNOME — a crossover
+ between Guake and Ásbrú Connection Manager.
+ .
+ It provides a host tree with per-host terminal tabs, libsecret-backed
+ passwords, optional Guake-style drop-down via a GNOME Shell extension,
+ Ásbrú config import, port forwards, and local PTY sessions.

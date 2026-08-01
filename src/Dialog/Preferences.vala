@@ -24,8 +24,8 @@ namespace RooTerm.Dialog
 	 * hosting an {@link Adw.PreferencesPage} (not a dialog of the drop-down).
 	 *
 	 * Sliders write {@link RooTerm.Config} live; geometry apply is owned by
-	 * {@link MainWindow} via config notify. JSON is saved on close (and when a
-	 * toggle key is captured).
+	 * {@link MainWindow} via config notify. JSON is saved on Save; Cancel
+	 * restores the snapshot taken when the window opened.
 	 *
 	 * == Example ==
 	 *
@@ -43,6 +43,12 @@ namespace RooTerm.Dialog
 		private Gtk.Scale width_scale;
 		private Adw.ComboRow placement_row;
 		private bool capturing = false;
+		private bool accepting = false;
+		private int snap_opacity;
+		private int snap_height;
+		private int snap_width;
+		private string snap_placement;
+		private string snap_toggle_key;
 
 		/**
 		 * Build the window bound to ``window``'s {@link RooTerm.Config}.
@@ -58,6 +64,25 @@ namespace RooTerm.Dialog
 				default_height: 504
 			);
 			this.window = window;
+			this.map.connect(() => {
+				var app = this.window.application as Application;
+				if (app == null) {
+					return;
+				}
+				app.dbus.floating_count++;
+			});
+			this.unmap.connect(() => {
+				var app = this.window.application as Application;
+				if (app == null) {
+					return;
+				}
+				app.dbus.floating_count--;
+			});
+			this.snap_opacity = window.config.opacity;
+			this.snap_height = window.config.height;
+			this.snap_width = window.config.width;
+			this.snap_placement = window.config.placement;
+			this.snap_toggle_key = window.config.toggle_key;
 
 			var page = new Adw.PreferencesPage();
 
@@ -179,7 +204,24 @@ namespace RooTerm.Dialog
 			});
 			appearance.add(this.placement_row);
 
-			var header = new Adw.HeaderBar();
+			var cancel = new Gtk.Button.with_label("Cancel");
+			cancel.clicked.connect(() => {
+				this.close();
+			});
+			var save = new Gtk.Button.with_label("Save") {
+				css_classes = { "suggested-action" }
+			};
+			save.clicked.connect(() => {
+				this.accepting = true;
+				this.save();
+				this.close();
+			});
+			var header = new Adw.HeaderBar() {
+				show_start_title_buttons = false,
+				show_end_title_buttons = false
+			};
+			header.pack_start(cancel);
+			header.pack_end(save);
 			var toolbar = new Adw.ToolbarView();
 			toolbar.add_top_bar(header);
 			toolbar.content = page;
@@ -225,11 +267,6 @@ namespace RooTerm.Dialog
 				} catch (GLib.Error e) {
 					GLib.warning("toggle binding: %s", e.message);
 				}
-				try {
-					this.window.config.save();
-				} catch (GLib.Error e) {
-					GLib.warning("config save failed: %s", e.message);
-				}
 				return true;
 			});
 			// Adw.Window's ShortcutManager.add_controller shadows Widget's.
@@ -240,7 +277,26 @@ namespace RooTerm.Dialog
 					this.capturing = false;
 					this.window.block_toggle = false;
 				}
-				this.save();
+				if (!this.accepting) {
+					this.window.config.opacity = this.snap_opacity;
+					this.window.config.height = this.snap_height;
+					this.window.config.width = this.snap_width;
+					this.window.config.placement = this.snap_placement;
+					this.window.config.toggle_key = this.snap_toggle_key;
+					var app = this.window.application as Application;
+					if (app != null) {
+						app.set_accels_for_action("win.toggle", {
+							this.window.config.toggle_key
+						});
+					}
+					try {
+						new GnomeShell(this.window).ensure_toggle_binding(
+							this.window.config.toggle_key
+						);
+					} catch (GLib.Error e) {
+						GLib.warning("toggle binding: %s", e.message);
+					}
+				}
 				return false;
 			});
 		}
@@ -250,28 +306,27 @@ namespace RooTerm.Dialog
 		 */
 		private void save()
 		{
-			var config = this.window.config;
-			config.opacity = (int) this.opacity_scale.get_value();
-			config.height = (int) this.height_scale.get_value();
-			config.width = (int) this.width_scale.get_value();
+			this.window.config.opacity = (int) this.opacity_scale.get_value();
+			this.window.config.height = (int) this.height_scale.get_value();
+			this.window.config.width = (int) this.width_scale.get_value();
 			switch (this.placement_row.selected) {
 				case 0:
-					config.placement = "left";
+					this.window.config.placement = "left";
 					break;
 
 				case 2:
-					config.placement = "right";
+					this.window.config.placement = "right";
 					break;
 
 				default:
-					config.placement = "centre";
+					this.window.config.placement = "centre";
 					break;
 			}
 			if (this.toggle_btn.label != "Press a key…" && this.toggle_btn.label.length > 0) {
-				config.toggle_key = this.toggle_btn.label;
+				this.window.config.toggle_key = this.toggle_btn.label;
 			}
 			try {
-				config.save();
+				this.window.config.save();
 			} catch (GLib.Error e) {
 				GLib.warning("config save failed: %s", e.message);
 			}
@@ -279,9 +334,11 @@ namespace RooTerm.Dialog
 			if (app == null) {
 				return;
 			}
-			app.set_accels_for_action("win.toggle", { config.toggle_key });
+			app.set_accels_for_action("win.toggle", { this.window.config.toggle_key });
 			try {
-				new GnomeShell(this.window).ensure_toggle_binding(config.toggle_key);
+				new GnomeShell(this.window).ensure_toggle_binding(
+					this.window.config.toggle_key
+				);
 			} catch (GLib.Error e) {
 				GLib.warning("toggle binding: %s", e.message);
 			}

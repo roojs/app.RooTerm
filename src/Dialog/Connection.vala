@@ -83,6 +83,20 @@ namespace RooTerm.Dialog
 				default_height: 520
 			);
 			this.window = window;
+			this.map.connect(() => {
+				var app = this.window.application as Application;
+				if (app == null) {
+					return;
+				}
+				app.dbus.floating_count++;
+			});
+			this.unmap.connect(() => {
+				var app = this.window.application as Application;
+				if (app == null) {
+					return;
+				}
+				app.dbus.floating_count--;
+			});
 			this.target = new Host.Connection();
 
 			this.name_entry = new Gtk.Entry() { hexpand = true };
@@ -468,7 +482,9 @@ namespace RooTerm.Dialog
 			});
 
 			var header = new Adw.HeaderBar() {
-				title_widget = switcher
+				title_widget = switcher,
+				show_start_title_buttons = false,
+				show_end_title_buttons = false
 			};
 			header.pack_start(cancel);
 			header.pack_end(save);

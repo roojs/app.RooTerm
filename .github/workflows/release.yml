@@ -1,0 +1,80 @@
+name: Release build
+
+# Builds a Debian .deb (amd64) on Ubuntu and publishes it for tags like `v0.1.0`.
+# Also runnable via workflow_dispatch (artifact upload only when untagged).
+
+run-name: Release build · ${{ github.ref_name }}
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Debian package
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential debhelper devscripts meson ninja-build \
+            pkg-config valac \
+            libgtk-4-dev libadwaita-1-dev libvte-2.91-gtk4-dev \
+            libgee-0.8-dev libgcrypt20-dev libyaml-dev \
+            libjson-glib-dev libsecret-1-dev
+
+      - name: Sync changelog version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -euo pipefail
+          ver="${GITHUB_REF_NAME#v}"
+          # Keep Debian revision; replace upstream version in the top entry.
+          if head -1 debian/changelog | grep -q "^rooterm ("; then
+            sed -i "1s/^rooterm ([^)]*)/rooterm (${ver}-1)/" debian/changelog
+          fi
+          head -1 debian/changelog
+
+      - name: Build .deb
+        env:
+          DEBFULLNAME: GitHub Actions
+          DEBEMAIL: actions@users.noreply.github.com
+        run: |
+          set -euo pipefail
+          dpkg-buildpackage -us -uc -b
+          mkdir -p artifacts
+          cp ../rooterm_*.deb artifacts/
+          ls -lh artifacts
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rooterm-deb
+          path: artifacts/*
+
+      - name: Publish release assets
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          notes="$(sed -n '/^  \*/,/^ -- /p' debian/changelog | sed '$d')"
+          gh release create "$GITHUB_REF_NAME" artifacts/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$GITHUB_REF_NAME" \
+            --notes "$notes" \
+          || {
+            gh release upload "$GITHUB_REF_NAME" artifacts/* \
+              --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$GITHUB_REF_NAME" \
+              --repo "$GITHUB_REPOSITORY" \
+              --notes "$notes"
+          }

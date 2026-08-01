@@ -1,9 +1,9 @@
-# Toggle key: tooltip stays F12; F1 / F12 do not toggle
+# FIXED — Toggle key: tooltip stays F12; F1 / F12 do not toggle
 
 > Pointer: `docs/bug-fix-process.md` (emoji). Legend:
 > `docs/guide-to-writing-plans.md` — Discussion style (emoji prefixes).
 
-**Status:** ✔️ tooltip + steal-key on `--toggle-key` applied; await user ✅ on F1
+**Status:** ✅ FIXED — user verified 2026-08-01
 
 **Started:** 2026-08-01
 
@@ -25,8 +25,8 @@
 | Config on disk | **✔️** `Read` `connections.json` | `"toggle-key" : "F1"` present |
 | Debug warnings | **✔️** `Grep` debug log | no `toggle-key save failed` / `toggle binding` hits |
 | Tooltip key name | **✔️** code vs JSON | JSON kebab `toggle-key`; JS reads `toggle_key` → always miss → F12 |
-| `rooterm --toggle` | **⏳** user | not captured (would need shell Accept) |
-| media-keys slot | **⏳** user paste | not captured |
+| `rooterm --toggle` | **✅** user | works |
+| media-keys slot | **✅** user | F1 toggles; Guake custom0 cleared / stolen |
 
 **How to read (remaining)**
 
@@ -121,7 +121,7 @@ Possible causes (unranked until evidence):
 - **✔️** `extension.js` hover uses `conf.toggle_key` (underscore) — property never present → keeps default `'F12'`
 - **✔️** `--toggle-key=F1` **did** save; tooltip bug is name mismatch, not a failed CLI save
 - **ℹ️** No matching lines in `rooterm.debug.log` for `toggle-key save failed` / `toggle binding`
-- **⏳** Whether F1 media-keys slot exists / whether `rooterm --toggle` works — not captured without shell
+- **✅** F1 media-keys + `rooterm --toggle` — user verified working
 
 ---
 
@@ -172,7 +172,7 @@ gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/or
 ```
 
 - **🔷** Tooltip fix already applied (kebab-case + version 17).
-- **⏳** Confirm F1 works after clearing custom0; then approve Add above if wanted.
+- **🔷** Steal-key: clear other custom slots with the same binding when setting RooTerm’s.
 
 ---
 
@@ -181,11 +181,4 @@ gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/or
 - **ℹ️** 2026-08-01 — bug log from code reading.
 - **✔️** 2026-08-01 — confirmed JSON `toggle-key: F1` vs JS `toggle_key` via file Read (no shell).
 - **🚫** Avoid shell/`gsettings` in-agent when Cursor Accept spam is an issue; user can paste.
-
----
-
-## Next
-
-1. **🔷** ⏳ Approve tooltip Replace (+ version bump) — apply.
-2. **🔷** ⏳ You check: does `rooterm --toggle` toggle? Does F1 work after re-`ensure` / reload?
-3. **💩** ⏳ If keys still dead, paste media-keys binding or say `--toggle` failed → next root cause.
+- **✅** 2026-08-01 — user: toggle key working fine; moved to `docs/bugs/done/`.

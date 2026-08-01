@@ -1,16 +1,16 @@
-# Open issues: tab width, password feed, localhost tree
+# FIXED — tab width, password feed, localhost tree
 
 > Pointer: `docs/bug-fix-process.md` (emoji). Legend:
 > `docs/guide-to-writing-plans.md` — Discussion style (emoji prefixes).
 
-**Status:** ⏳ OPEN — three independent defects; debug not started on password / tree; tab width constrained by Adw API
+**Status:** ✅ FIXED — user verified 2026-08-01
 
 **Started:** 2026-08-01
 
 **Related (separate, mostly done):**
 
-- **ℹ️** `docs/bugs/2026-08-01-toggle-key-tooltip-and-binding.md` — tooltip kebab-case + steal F1 from Guake; user: F1 works for now
-- **ℹ️** `docs/bugs/2026-08-01-docked-ui-not-under-panel.md` — D-Bus name race / dock retry
+- **ℹ️** `docs/bugs/done/2026-08-01-FIXED-toggle-key-tooltip-and-binding.md` — tooltip kebab-case + steal F1 from Guake
+- **ℹ️** `docs/bugs/done/2026-08-01-FIXED-docked-ui-not-under-panel.md` — D-Bus name race / dock retry
 
 ---
 
@@ -18,11 +18,9 @@
 
 | # | Topic | Status |
 | - | ----- | ------ |
-| A | Adw tab button width | ✔️ `Host.TabBar` + max 30% / equal-share shrink |
-| B | Password / userpass auto-feed fails | ✔️ schema unified; user: done |
-| C | Localhost tree: selection + icons + session marks | ✔️ icons/sessions/select; await verify if needed |
-
-**🚫** Do not fold these into Guake/toggle/dock bugs. **🚫** Fix without a short DEBUG pass on B (password).
+| A | Adw tab button width | ✅ `Host.TabBar` + max 30% / equal-share shrink |
+| B | Password / userpass auto-feed fails | ✅ schema unified |
+| C | Localhost tree: selection + icons + session marks | ✅ icons/sessions/select |
 
 ---
 
@@ -40,7 +38,6 @@
   - `FALSE` → “minimum possible size” (current: `expand_tabs = false` in `Host/Page.vala`)
 - **✔️** No documented per-tab min/max width API; CSS node documented as `tabbar` only
 - **ℹ️** Current CSS: `resources/style.css` `tabbar.thin-tabbar tab` / `tabbox > tab` **`min-width: 360px`** (bumped from 240; broader selector). Restart app to reload gresource CSS.
-- **⏳** User verify whether min-width actually widens tabs (GTK may still ignore it on Adw tab nodes).
 
 ### Root cause
 
@@ -50,11 +47,7 @@
 
 - **🔷** Dropped `Adw.TabBar`; added `Host.TabBar` bound to the same `Adw.TabView`.
 - **🔷** Select / close / title / tooltip / `+` (`win.new-terminal`) wired in the bar ctor.
-- **🔷** Fixed tab width: `width_request = 280`, no `hexpand`; strip scrolls when crowded.
-
-### Next for A
-
-1. **🔷** ⏳ Restart and verify; tweak `280` in `TabBar.vala` if it feels wrong.
+- **🔷** Fixed tab width: `width_request = 280`, no `hexpand`; strip scrolls when crowded; max 30% / equal-share shrink.
 
 ---
 
@@ -100,7 +93,7 @@ MainWindow.vala:201: open session failed … login shell timeout
 - **✔️** User: Edit Connection dialog shows the password correctly → secret exists under the **dialog** schema; spawn looks under the **other** name → empty.
 - **ℹ️** GTask Secret Service warning may be noise; empty lookup is explained by the schema mismatch.
 
-### Proposed fix
+### Fix applied
 
 Unify on the schema the dialog already uses (where live secrets are), so spawn finds them.
 
@@ -119,10 +112,6 @@ Unify on the schema the dialog already uses (where live secrets are), so spawn f
 - **🔷** One string everywhere for host passwords: `org.roojs.rooterm.Connection`.
 - **🚫** Do not only “skip feed when empty”.
 - **ℹ️** Old Ásbrú imports stored under `Host.Connection` (if any) would need a one-time re-save or dual lookup — optional follow-up; dialog-saved passwords are the broken path.
-
-### Next for B
-
-1. **🔷** ⏳ Approve schema unify → apply → reopen hebe 24hr with `--debug` (expect `pass_len>0` + successful feed).
 
 ---
 
@@ -148,7 +137,7 @@ On startup there is a Localhost terminal:
 - **ℹ️** `Host/Tree.vala` — session marks via `append_session_mark` on connection’s `sessions`; row icons TBD in factory
 - **ℹ️** `Host/Page.vala` — local tabs create `LOCAL_PATH` children under Localhost
 - **ℹ️** `Tree.select(connection)` — who calls it on open / `wire`?
-- **⏳** Confirm which `Connection` is passed to `select` on first local open (parent vs path child)
+- **✔️** Confirm which `Connection` is passed to `select` on first local open (parent vs path child)
 
 ### Root cause
 
@@ -162,21 +151,12 @@ On startup there is a Localhost terminal:
 - **🔷** `Page.add`: local tabs only put the terminal on the `LOCAL_PATH` row’s `sessions` (not Localhost). Close path updated to match.
 - **🔷** `MainWindow` after first `open_local`: Idle `host_tree.select(term.connection)` (the path child).
 
-### Next for C
-
-1. **🔷** ⏳ Restart / verify: Localhost = folder, no mark; path child = terminal icon + selected.
-
 ---
 
 ## Attempts / changelog
 
 - **ℹ️** 2026-08-01 — user reported A/B/C in chat after F1/dock work; this file created so they are tracked.
 - **🔷** 2026-08-01 — B: Secret schema unify `org.roojs.rooterm.Connection` (user: done).
-- **🔷** 2026-08-01 — C: icons / sessions ownership / startup select applied; awaiting verify.
-- **🔷** A: max 30% / equal-share shrink on `Host.TabBar` (await verify).
-
----
-
-## Next (overall)
-
-1. **🔷** ⏳ Verify A (tab width) and C after restart.
+- **🔷** 2026-08-01 — C: icons / sessions ownership / startup select applied.
+- **🔷** A: max 30% / equal-share shrink on `Host.TabBar`.
+- **✅** 2026-08-01 — user: fixed; moved to `docs/bugs/done/`.

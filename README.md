@@ -4,39 +4,33 @@ A thin SSH host manager and terminal for GNOME — a crossover between
 [Guake](https://guake.github.io/) and
 [Ásbrú Connection Manager](https://www.asbru-cm.net/).
 
-Roo Term aims for the quick-access feel of Guake with Ásbrú-style host
-organisation, without the heavyweight connection-manager feature set
-(no clusters, Expect automation, RDP, and so on).
-
 **Status:** early / usable for day-to-day SSH testing (version **0.1.0**).
 Screenshot coming later.
 
-## What it is
+## Features
 
-- **GTK4** + **Libadwaita** + **VTE** app written in Vala
-- Left host tree, right per-host terminal tabs
-- Own config under `~/.config/rooterm/` (JSON); can import from Ásbrú’s
-  `~/.config/asbru/asbru.yml` on first run
-- Passwords and key passphrases in **libsecret** (GNOME Keyring / Secret
-  Service) — not Blowfish blobs in the config file
-
-## Special features (vs Guake / Ásbrú)
-
-| Feature | Notes |
-| ------- | ----- |
-| **Per-tab session icons** | Each open terminal shows as a small icon on the host row; click an icon to jump to that tab. Icons reflect state (idle / busy / ready / dead). |
-| **Multi-connection chrome** | One host page with a tab bar; open several sessions to the same host without spawning a new window each time. |
-| **Secrets in the keyring** | Connection passwords and SSH key passphrases live in libsecret, keyed by UUID / key path. |
-| **Host search** | Header search pulldown (`Ctrl+Shift+O`) filters hosts and opens or focuses them. |
-| **Ásbrú import** | Read existing Ásbrú hosts once, then own the config. |
-| **Port forwards** | Local forwards on a connection (add / edit in the connection dialog). |
-| **Local shells** | Local PTY tabs alongside SSH hosts. |
-
-Intentionally **not** included (yet, and may stay out): Ásbrú clusters,
-Expect scripts, multi-protocol sessions, full Guake drop-down overlay
-(planned later), packaging / distro packages.
+- **GTK4 + Libadwaita + VTE** — Vala app for GNOME
+- **Host tree and tabs** — left host tree, right per-host terminal tabs
+- **Per-tab session icons** — each open terminal shows as a small icon on the
+  host row; click an icon to jump to that tab (idle / busy / ready / dead)
+- **Multi-connection chrome** — one host page with a tab bar; several sessions
+  to the same host in one window
+- **Guake-style drop-down** — optional GNOME Shell extension with global toggle
+  and panel menu
+- **Secrets in the keyring** — passwords and SSH key passphrases in libsecret
+  (GNOME Keyring / Secret Service), keyed by UUID / key path
+- **Own JSON config** — hosts, groups, and forwards under `~/.config/rooterm/`
+- **Ásbrú import** — can import from `~/.config/asbru/asbru.yml` on first run
+- **Host search** — header search pulldown (`Ctrl+Shift+O`)
+- **Port forwards** — local forwards on a connection (add / edit in the dialog)
+- **SSH key helpers** — create / install / replace / retire identity keys
+- **Local shells** — local PTY tabs alongside SSH hosts
+- **sudo after login** — optional `sudo -i` (and LXC-host helpers) on connect
 
 ## Dependencies (Debian / Ubuntu)
+
+Build (matches `meson.build` minimums: GTK ≥ 4.14, Libadwaita ≥ 1.5,
+VTE GTK4 ≥ 0.70):
 
 ```bash
 sudo apt-get install -y \
@@ -47,7 +41,8 @@ sudo apt-get install -y \
   libyaml-dev libjson-glib-dev libsecret-1-dev
 ```
 
-Runtime packages of the same libraries are pulled in by the `-dev` packages.
+Runtime also needs **openssh-client** (`ssh`, `ssh-keygen`). The `-dev`
+packages pull in the matching shared libraries.
 
 ## Build and run (for testing)
 
@@ -74,27 +69,41 @@ Default prefix is `/usr` (needs root):
 sudo meson install -C build
 ```
 
-That installs `rooterm`, the desktop entry, and the app icon. For day-to-day
-testing, running `./build/rooterm` from the build tree is enough.
+That installs `rooterm`, the desktop entry, the app icon, and the GNOME Shell
+extension. For day-to-day testing, running `./build/rooterm` from the build
+tree is enough.
 
 **Do not** call `valac` directly — always build with Meson/Ninja.
 
+### Debian package
+
+```bash
+dpkg-buildpackage -us -uc -b
+```
+
+GitHub Actions builds `.deb` artifacts on `v*` tags (and via workflow
+dispatch) — see [`.github/workflows/release.yml`](.github/workflows/release.yml).
+
 ## Config paths
 
-| Path | Purpose |
-| ---- | ------- |
-| `~/.config/rooterm/connections.json` | Hosts, groups, forwards (no secrets) |
-| `~/.config/asbru/asbru.yml` | Read-only import source (Ásbrú) |
-| `~/.cache/rooterm/` | Debug log |
-| `~/.local/share/rooterm/` | Session data (when used) |
+- `~/.config/rooterm/connections.json` — hosts, groups, forwards (no secrets)
+- `~/.config/asbru/asbru.yml` — read-only import source (Ásbrú)
+- `~/.cache/rooterm/` — debug log
+- `~/.local/share/rooterm/` — session data (when used)
+
+## Artificial Intelligence Usage
+
+This project was developed with the assistance of artificial intelligence.
+
+- Product design and code design were done by the author
+- AI’s main role was writing implementation for review
+- Most of the coding was performed by AI
+- Code was then reviewed, revised, and approved by the author
+- Every line of application code was reviewed and approved by the author
+- Limited exceptions apply mainly to the build system
 
 ## License
 
 Roo Term is licensed under the **GNU Lesser General Public License**
 version 3 or later — see [LICENSE](LICENSE).  
 LGPL-3.0 incorporates the GPL; a copy is in [COPYING.GPL](COPYING.GPL).
-
-## Related projects
-
-- [Guake](https://github.com/Guake/guake) — drop-down terminal for GNOME
-- [Ásbrú Connection Manager](https://github.com/asbru-cm/asbru-cm) — full connection manager (Perl)
