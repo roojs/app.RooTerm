@@ -34,7 +34,7 @@ namespace RooTerm
 	 * == Example ==
 	 *
 	 * {{{
-	 * new GnomeShell(window).ensure(() => { … });
+	 * new GnomeShell(main_window).ensure(() => { … });
 	 * }}}
 	 */
 	public class GnomeShell : GLib.Object
@@ -48,7 +48,7 @@ namespace RooTerm
 		 * Parent for install-failure / restart {@link Adw.AlertDialog}s.
 		 * Null only for headless ``--toggle-key`` (settings write; no UI).
 		 */
-		public Gtk.Window? window { get; construct; default = null; }
+		public MainWindow? window { get; construct; default = null; }
 
 		/**
 		 * True when Shell has the extension enabled at the bundled version.
@@ -59,7 +59,7 @@ namespace RooTerm
 		/**
 		 * @param window Parent for extension dialogs, or null for settings-only
 		 */
-		public GnomeShell(Gtk.Window? window = null)
+		public GnomeShell(MainWindow? window = null)
 		{
 			Object(window: window);
 
@@ -329,10 +329,7 @@ After reload, click OK to switch this window to the drop-down. Then $(key) and t
 			dialog.add_response("ok", "OK");
 			dialog.default_response = "ok";
 			dialog.close_response = "ok";
-			var main = this.window as MainWindow;
-			if (main != null) {
-				main.block_toggle = true;
-			}
+			this.window.block_toggle = true;
 			// Restart hint: after Alt+F2 ``r`` / logout, re-run ensure (EnableExtension)
 			// instead of only probing is_ready — and auto-finish when Shell catches up.
 			var restart_hint = detail == "";
@@ -351,9 +348,7 @@ After reload, click OK to switch this window to the drop-down. Then $(key) and t
 					GLib.Source.remove(poll_id);
 					poll_id = 0;
 				}
-				if (main != null) {
-					main.block_toggle = false;
-				}
+				this.window.block_toggle = false;
 				if (restart_hint) {
 					this.ensure((owned) done);
 					return;
@@ -438,6 +433,48 @@ After reload, click OK to switch this window to the drop-down. Then $(key) and t
 		}
 
 		/**
+		 * Export a portal-style window handle and ``Register`` with
+		 * ``org.roojs.RooTerm.Shell``. Retries D-Bus when the handle is
+		 * already known (Shell bus may appear after first map).
+		 *
+		 * @param window Mapped window with a native surface
+		 * @param role ``main`` / ``preferences`` / ``connection``
+		 */
+		public void register(Gtk.Window window, string role)
+		{
+			var existing = window.get_data<string>("rooterm-shell-handle");
+			if (existing != null) {
+				GLib.debug("Shell handle retry role=%s %s", role, existing);
+				this.window.dbus.call("Register", new GLib.Variant("(ss)", role, existing));
+				return;
+			}
+			var surface = window.get_surface();
+			if (surface == null) {
+				return;
+			}
+			var x11_surface = surface as Gdk.X11.Surface;
+			if (x11_surface != null) {
+				var handle = "x11:%x".printf((uint) x11_surface.get_xid());
+				window.set_data("rooterm-shell-handle", handle.dup());
+				GLib.debug("Shell handle role=%s %s", role, handle);
+				this.window.dbus.call("Register", new GLib.Variant("(ss)", role, handle));
+				return;
+			}
+			var wl_toplevel = surface as Gdk.Wayland.Toplevel;
+			if (wl_toplevel == null) {
+				return;
+			}
+			if (!wl_toplevel.export_handle((toplevel, h) => {
+				var handle = "wayland:" + h;
+				window.set_data("rooterm-shell-handle", handle.dup());
+				GLib.debug("Shell handle role=%s %s", role, handle);
+				this.window.dbus.call("Register", new GLib.Variant("(ss)", role, handle));
+			})) {
+				GLib.warning("Shell export_handle failed role=%s", role);
+			}
+		}
+
+		/**
 		 * Copy the bundled extension into the user extensions dir and compile schemas.
 		 *
 		 * @param data_home XDG data home (e.g. ``~/.local/share``)
@@ -450,6 +487,11 @@ After reload, click OK to switch this window to the drop-down. Then $(key) and t
 			string[] names = {
 				"metadata.json",
 				"extension.js",
+				"Const.js",
+				"Indicator.js",
+				"ShellService.js",
+				"ShellIface.xml",
+				"Dock.js",
 				"stylesheet.css",
 				"schemas/org.gnome.shell.extensions.rooterm.gschema.xml"
 			};

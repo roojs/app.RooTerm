@@ -63,8 +63,8 @@ namespace RooTerm
 					GLib.debug("D-Bus name acquired");
 					var window = this.application.window;
 					if (window != null && window.is_docked && window.visible) {
-						GLib.debug("shown after name acquired dock_mode=%d", (int) this.dock_mode);
-						this.shown();
+						GLib.debug("redock after name acquired dock_mode=%d", (int) this.dock_mode);
+						this.redock();
 					}
 				},
 				() => {
@@ -74,9 +74,9 @@ namespace RooTerm
 		}
 
 		/**
-		 * Fired after a successful show (Shell extension docks under the panel).
+		 * Cue the Shell extension to (re)apply underbar dock geometry on main.
 		 */
-		public signal void shown();
+		public signal void redock();
 
 		/**
 		 * True when {@link MainWindow} is in underbar drop-down mode.
@@ -86,13 +86,35 @@ namespace RooTerm
 		public bool dock_mode { get; set; default = false; }
 
 		/**
-		 * Open Preferences / Connection windows. Shell centres and raises those
-		 * while this is non-zero (Wayland-safe; no WM role / title matching).
+		 * Call a method on ``org.roojs.RooTerm.Shell`` (try/catch; logs failures).
+		 *
+		 * Not exported on ``org.roojs.RooTerm.DBus``.
+		 *
+		 * @param method D-Bus method (``Register`` / ``Show`` / ``Hide`` / ``Toggle``)
+		 * @param parameters Method arguments variant
 		 */
-		public uint floating_count { get; set; default = 0; }
+		[DBus (visible = false)]
+		public void call(string method, GLib.Variant parameters)
+		{
+			try {
+				GLib.Bus.get_sync(GLib.BusType.SESSION, null).call_sync(
+					"org.roojs.RooTerm.Shell",
+					"/org/roojs/RooTerm/Shell",
+					"org.roojs.RooTerm.Shell",
+					method,
+					parameters,
+					null,
+					GLib.DBusCallFlags.NONE,
+					2000,
+					null
+				);
+			} catch (GLib.Error e) {
+				GLib.debug("Shell %s: %s", method, e.message);
+			}
+		}
 
 		/**
-		 * Toggle main window: create if missing, else hide when visible / present when hidden.
+		 * Toggle main window: create if missing, else Shell ``Toggle('main')``.
 		 */
 		public void toggle()
 		{
@@ -106,27 +128,22 @@ namespace RooTerm
 				return;
 			}
 			// Shell may have become ready while the setup window stayed visible (e.g. after
-			// Alt+F2 ``r``). Ensure (enable if needed) then remorph; if still setup, hide.
-			if (window.visible && !window.is_docked) {
-				new GnomeShell(window).ensure(() => {
-					if (!new GnomeShell(window).is_ready) {
+			// Alt+F2 ``r``). Ensure (enable if needed) then remorph; if still setup, skip Toggle.
+			if (!window.is_docked) {
+				window.shell.ensure(() => {
+					if (!window.shell.is_ready) {
 						return;
 					}
 					if (!window.is_docked) {
 						window.show_docked();
 					}
-					this.shown();
+					this.redock();
 				});
-				if (window.block_toggle || window.is_docked) {
+				if (window.block_toggle || !window.is_docked) {
 					return;
 				}
 			}
-			if (window.visible) {
-				window.visible = false;
-				return;
-			}
-			// activate re-checks Shell ready and remorphs normal → docked when possible.
-			this.application.activate();
+			this.call("Toggle", new GLib.Variant("(s)", "main"));
 		}
 
 		/**
@@ -138,7 +155,7 @@ namespace RooTerm
 		}
 
 		/**
-		 * Present {@link Dialog.Preferences} (Shell panel menu / ``Ctrl+,``).
+		 * Show {@link Dialog.Preferences} (Shell panel menu / ``Ctrl+,``).
 		 */
 		public void preferences()
 		{
@@ -149,7 +166,8 @@ namespace RooTerm
 			if (window == null) {
 				return;
 			}
-			new Dialog.Preferences(window).present();
+			window.preferences_editor.fill();
+			this.call("Show", new GLib.Variant("(s)", "preferences"));
 		}
 
 		/**

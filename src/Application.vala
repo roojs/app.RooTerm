@@ -141,48 +141,6 @@ namespace RooTerm
 			GLib.Log.set_default_handler((dom, lvl, msg) => {
 				RooTerm.debug_log("rooterm", dom != null ? dom : "", lvl, msg);
 			});
-
-			this.activate.connect(() => {
-				if (this.window == null) {
-					this.window = new MainWindow(this);
-					this.add_window(this.window);
-					this.window.present();
-					new GnomeShell(this.window).ensure(() => {
-						if (!new GnomeShell(this.window).is_ready) {
-							return;
-						}
-						// Already-docked first present also needs Shown — Shell docks on that cue.
-						if (!this.window.is_docked) {
-							this.window.show_docked();
-						}
-						GLib.debug("shown after ensure dock_mode=%d", (int) this.dbus.dock_mode);
-						this.dbus.shown();
-					});
-					return;
-				}
-				this.window.visible = true;
-				this.window.present();
-				if (!this.window.is_docked) {
-					// Shell may have become ready after a reload — ensure enables if needed.
-					new GnomeShell(this.window).ensure(() => {
-						if (!new GnomeShell(this.window).is_ready) {
-							return;
-						}
-						if (!this.window.is_docked) {
-							this.window.show_docked();
-						}
-						GLib.debug("shown after remorph dock_mode=%d", (int) this.dbus.dock_mode);
-						this.dbus.shown();
-					});
-					return;
-				}
-				this.window.set_default_size(
-					this.window.monitor_geo.width * this.window.config.width / 100,
-					this.window.monitor_geo.height * this.window.config.height / 100
-				);
-				GLib.debug("shown activate docked dock_mode=%d", (int) this.dbus.dock_mode);
-				this.dbus.shown();
-			});
 		}
 
 		/**
@@ -193,6 +151,41 @@ namespace RooTerm
 			base.startup();
 			this.dbus = new DBus(this);
 			this.hold();
+		}
+
+		/**
+		 * First run: create and present main ({@link MainWindow} primes Shell roles).
+		 * Later: remorph if needed, else Shell ``Show('main')``.
+		 */
+		protected override void activate()
+		{
+			if (this.window == null) {
+				this.window = new MainWindow(this);
+				this.add_window(this.window);
+				this.window.present();
+				return;
+			}
+			if (!this.window.is_docked) {
+				// Shell may have become ready after a reload — ensure enables if needed.
+				this.window.shell.ensure(() => {
+					if (!this.window.shell.is_ready) {
+						return;
+					}
+					if (!this.window.is_docked) {
+						this.window.show_docked();
+					}
+					GLib.debug("redock after remorph dock_mode=%d", (int) this.dbus.dock_mode);
+					this.dbus.redock();
+				});
+				return;
+			}
+			this.dbus.call("Show", new GLib.Variant("(s)", "main"));
+			this.window.set_default_size(
+				this.window.monitor_geo.width * this.window.config.width / 100,
+				this.window.monitor_geo.height * this.window.config.height / 100
+			);
+			GLib.debug("redock activate docked dock_mode=%d", (int) this.dbus.dock_mode);
+			this.dbus.redock();
 		}
 
 		protected override int command_line(GLib.ApplicationCommandLine command_line)

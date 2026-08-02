@@ -1,101 +1,27 @@
-import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
-import GObject from 'gi://GObject';
-import Meta from 'gi://Meta';
-import Shell from 'gi://Shell';
 import St from 'gi://St';
 
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
-import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
-import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
-const DBUS_DEST = 'org.roojs.RooTerm.DBus';
-const DBUS_PATH = '/org/roojs/RooTerm/DBus';
-const DBUS_IFACE = 'org.roojs.RooTerm.DBus';
-const APP_ID = 'org.roojs.rooterm';
-
-const RooTermIndicator = GObject.registerClass(
-class RooTermIndicator extends PanelMenu.Button {
-    _init(extension) {
-        super._init(0.0, 'RooTerm', false);
-        this.extension = extension;
-
-        this.add_child(new St.Icon({
-            icon_name: 'utilities-terminal-symbolic',
-            style_class: 'system-status-icon',
-        }));
-
-        var self = this;
-        var prefsItem = new PopupMenu.PopupMenuItem('Preferences');
-        prefsItem.connect('activate', function() {
-            Gio.DBus.session.call(
-                DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'Preferences',
-                null, null, Gio.DBusCallFlags.NONE, 2000, null,
-                self.extension.onDBusFinished.bind(self.extension, 'Preferences')
-            );
-        });
-        this.menu.addMenuItem(prefsItem);
-
-        var aboutItem = new PopupMenu.PopupMenuItem('About');
-        aboutItem.connect('activate', function() {
-            Gio.DBus.session.call(
-                DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'About',
-                null, null, Gio.DBusCallFlags.NONE, 2000, null,
-                self.extension.onDBusFinished.bind(self.extension, 'About')
-            );
-        });
-        this.menu.addMenuItem(aboutItem);
-
-        var quitItem = new PopupMenu.PopupMenuItem('Quit');
-        quitItem.connect('activate', function() {
-            Gio.DBus.session.call(
-                DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'Quit',
-                null, null, Gio.DBusCallFlags.NONE, 2000, null,
-                self.extension.onDBusFinished.bind(self.extension, 'Quit')
-            );
-        });
-        this.menu.addMenuItem(quitItem);
-    }
-
-    vfunc_event(event) {
-        if (!this.menu) {
-            return Clutter.EVENT_PROPAGATE;
-        }
-        if (event.type() !== Clutter.EventType.TOUCH_BEGIN
-                && event.type() !== Clutter.EventType.BUTTON_PRESS) {
-            return Clutter.EVENT_PROPAGATE;
-        }
-
-        // Left click / touch → toggle; right click → menu
-        if (event.type() === Clutter.EventType.TOUCH_BEGIN
-                || event.get_button() === Clutter.BUTTON_PRIMARY) {
-            Gio.DBus.session.call(
-                DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'Toggle',
-                null, null, Gio.DBusCallFlags.NONE, 2000, null,
-                this.extension.onDBusFinished.bind(this.extension, 'Toggle')
-            );
-            return Clutter.EVENT_PROPAGATE;
-        }
-        if (event.get_button() === Clutter.BUTTON_SECONDARY) {
-            this.menu.toggle();
-        }
-        return Clutter.EVENT_PROPAGATE;
-    }
-});
+import {DBUS_DEST, DBUS_PATH, DBUS_IFACE} from './Const.js';
+import {Dock} from './Dock.js';
+import {Indicator} from './Indicator.js';
+import {ShellService} from './ShellService.js';
 
 export default class RooTermExtension extends Extension {
     enable() {
         var self = this;
         this.windowCreatedId = 0;
         this.mapId = 0;
-        this.shownSignalId = 0;
-        this.propsSignalId = 0;
-        this.dockTimeoutId = 0;
-        this.dropDownWin = null;
+        this.redockSignalId = 0;
 
-        this.indicator = new RooTermIndicator(this);
+        this.shell = new ShellService(this.path);
+        this.shell.enable();
+        this.dock = new Dock(this.shell);
+
+        this.indicator = new Indicator(this);
 
         if (Main.layoutManager && Main.layoutManager.uiGroup) {
             this.panelTooltip = new St.BoxLayout({
@@ -149,8 +75,8 @@ export default class RooTermExtension extends Extension {
                 if (self.indicator) {
                     self.indicator.visible = true;
                 }
-                // Name can appear after first map/Shown — retry dock then.
-                self.scheduleDock();
+                // Name can appear after first map/Redock — retry dock then.
+                self.dock.scheduleDock();
             },
             function() {
                 if (self.panelTooltip) {
@@ -164,46 +90,27 @@ export default class RooTermExtension extends Extension {
             }
         );
         // Global toggle is a settings-daemon custom shortcut (rooterm --toggle).
-        // Dock on map / Shown so media-keys path still pins under the panel.
+        // Dock on map / Redock so media-keys path still pins under the panel.
         this.windowCreatedId = global.display.connect('window-created', function(display, window) {
             window.connect('shown', function() {
-                self.dockWindow(window);
+                self.shell.bindPendingWayland();
+                self.dock.dockWindow(window);
             });
         });
         this.mapId = global.window_manager.connect('map', function(wm, actor) {
-            self.dockWindow(actor.meta_window);
+            self.shell.bindPendingWayland();
+            self.dock.dockWindow(actor.meta_window);
         });
-        this.shownSignalId = Gio.DBus.session.signal_subscribe(
-            DBUS_DEST, DBUS_IFACE, 'Shown', DBUS_PATH, null,
+        this.redockSignalId = Gio.DBus.session.signal_subscribe(
+            DBUS_DEST, DBUS_IFACE, 'Redock', DBUS_PATH, null,
             Gio.DBusSignalFlags.NONE,
             function() {
-                self.scheduleDock();
-            }
-        );
-        this.propsSignalId = Gio.DBus.session.signal_subscribe(
-            DBUS_DEST, 'org.freedesktop.DBus.Properties', 'PropertiesChanged',
-            DBUS_PATH, null,
-            Gio.DBusSignalFlags.NONE,
-            function(conn, sender, path, iface, signal, params) {
-                var ifaceName = params.get_child_value(0).unpack();
-                if (ifaceName !== DBUS_IFACE) {
-                    return;
-                }
-                var changed = params.get_child_value(1);
-                if (changed.lookup_value('FloatingCount', null)) {
-                    console.error('rooterm: FloatingCount changed → '
-                        + self.getFloatingCount());
-                    self.scheduleDock();
-                }
+                self.dock.scheduleDock();
             }
         );
     }
 
     disable() {
-        if (this.dockTimeoutId) {
-            GLib.source_remove(this.dockTimeoutId);
-            this.dockTimeoutId = 0;
-        }
         if (this.windowCreatedId) {
             global.display.disconnect(this.windowCreatedId);
             this.windowCreatedId = 0;
@@ -212,15 +119,10 @@ export default class RooTermExtension extends Extension {
             global.window_manager.disconnect(this.mapId);
             this.mapId = 0;
         }
-        if (this.shownSignalId) {
-            Gio.DBus.session.signal_unsubscribe(this.shownSignalId);
-            this.shownSignalId = 0;
+        if (this.redockSignalId) {
+            Gio.DBus.session.signal_unsubscribe(this.redockSignalId);
+            this.redockSignalId = 0;
         }
-        if (this.propsSignalId) {
-            Gio.DBus.session.signal_unsubscribe(this.propsSignalId);
-            this.propsSignalId = 0;
-        }
-        this.dropDownWin = null;
         if (this.nameWatchId) {
             Gio.DBus.session.unwatch_name(this.nameWatchId);
             this.nameWatchId = 0;
@@ -234,10 +136,17 @@ export default class RooTermExtension extends Extension {
             this.indicator.destroy();
             this.indicator = null;
         }
+        if (this.dock) {
+            this.dock.disable();
+            this.dock = null;
+        }
+        if (this.shell) {
+            this.shell.disable();
+            this.shell = null;
+        }
     }
 
     onDBusFinished(method, conn, result) {
-        var self = this;
         try {
             conn.call_finish(result);
         } catch (e) {
@@ -254,276 +163,6 @@ export default class RooTermExtension extends Extension {
         if (method !== 'Toggle') {
             return;
         }
-        if (this.dockTimeoutId) {
-            GLib.source_remove(this.dockTimeoutId);
-        }
-        this.scheduleDock();
-    }
-
-    /**
-     * Dock all RooTerm windows after a short delay (GTK may re-center after map).
-     */
-    scheduleDock() {
-        var self = this;
-        if (this.dockTimeoutId) {
-            GLib.source_remove(this.dockTimeoutId);
-        }
-        this.dockTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, function() {
-            self.dockTimeoutId = 0;
-            self.dockAll();
-            // Second pass — set_default_size / present often recenters after the first move.
-            self.dockTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 200, function() {
-                self.dockTimeoutId = 0;
-                self.dockAll();
-                return GLib.SOURCE_REMOVE;
-            });
-            return GLib.SOURCE_REMOVE;
-        });
-    }
-
-    dockAll() {
-        var actors = global.get_window_actors();
-        for (var i = 0; i < actors.length; i++) {
-            this.dockWindow(actors[i].meta_window);
-        }
-        // Drop-down re-dock may have run last — put floating windows back on top.
-        if (this.getFloatingCount() === 0 || !this.dropDownWin) {
-            return;
-        }
-        this.dropDownWin.unmake_above();
-        for (var j = 0; j < actors.length; j++) {
-            var win = actors[j].meta_window;
-            if (!win || win.minimized || win === this.dropDownWin) {
-                continue;
-            }
-            var match = win.get_gtk_application_id
-                && win.get_gtk_application_id() === APP_ID;
-            if (!match) {
-                var cls = win.get_wm_class();
-                var instance = win.get_wm_class_instance();
-                match = (cls && cls.toLowerCase().indexOf('rooterm') !== -1)
-                    || (instance && instance.toLowerCase().indexOf('rooterm') !== -1);
-            }
-            var rect = win.get_frame_rect();
-            if (!match || rect.width < 100 || rect.height < 100) {
-                continue;
-            }
-            win.make_above();
-            win.raise();
-            try {
-                Main.activateWindow(win);
-            } catch (e) {
-                win.activate(global.get_current_time());
-            }
-        }
-    }
-
-    /**
-     * True when the app reports underbar drop-down mode (D-Bus ``DockMode``).
-     */
-    isDockMode() {
-        try {
-            // GJS: pack tuples from an array; read ``(v)`` via get_variant().
-            // deep_unpack() yields ``{}`` for booleans here — never use it for DockMode.
-            var reply = Gio.DBus.session.call_sync(
-                DBUS_DEST, DBUS_PATH,
-                'org.freedesktop.DBus.Properties', 'Get',
-                new GLib.Variant('(ss)', [DBUS_IFACE, 'DockMode']),
-                new GLib.VariantType('(v)'),
-                Gio.DBusCallFlags.NONE,
-                500,
-                null
-            );
-            return reply.get_child_value(0).get_variant().get_boolean();
-        } catch (e) {
-            console.error('rooterm: DockMode: ' + e);
-            return false;
-        }
-    }
-
-    /**
-     * Open Preferences / Connection count (D-Bus ``FloatingCount``).
-     */
-    getFloatingCount() {
-        try {
-            var reply = Gio.DBus.session.call_sync(
-                DBUS_DEST, DBUS_PATH,
-                'org.freedesktop.DBus.Properties', 'Get',
-                new GLib.Variant('(ss)', [DBUS_IFACE, 'FloatingCount']),
-                new GLib.VariantType('(v)'),
-                Gio.DBusCallFlags.NONE,
-                500,
-                null
-            );
-            return reply.get_child_value(0).get_variant().get_uint32();
-        } catch (e) {
-            console.error('rooterm: FloatingCount: ' + e);
-            return 0;
-        }
-    }
-
-    /**
-     * Gate + dispatch by frame width: wider than half the work area is the
-     * drop-down strip; narrower windows are Preferences / Connection when
-     * FloatingCount is non-zero.
-     */
-    dockWindow(win) {
-        if (!win || win.minimized) {
-            return;
-        }
-        var match = win.get_gtk_application_id
-            && win.get_gtk_application_id() === APP_ID;
-        if (!match) {
-            var cls = win.get_wm_class();
-            var instance = win.get_wm_class_instance();
-            match = (cls && cls.toLowerCase().indexOf('rooterm') !== -1)
-                || (instance && instance.toLowerCase().indexOf('rooterm') !== -1);
-        }
-        if (!match || !this.isDockMode()) {
-            return;
-        }
-        var rect = win.get_frame_rect();
-        // Skip GTK's transient 1×1 / unrealized surfaces.
-        if (rect.width < 100 || rect.height < 100) {
-            return;
-        }
-        var monitorIndex = win.get_monitor();
-        if (monitorIndex < 0) {
-            monitorIndex = Main.layoutManager.primaryIndex;
-        }
-        var workArea = Main.layoutManager.getWorkAreaForMonitor(monitorIndex);
-        if (!workArea) {
-            return;
-        }
-        var floating = this.getFloatingCount();
-        var title = win.get_title() || '';
-        var isDropDown = rect.width > workArea.width / 2;
-        console.error('rooterm: classify id=' + win.get_id()
-            + ' title=' + title
-            + ' ' + rect.width + 'x' + rect.height
-            + ' workW=' + workArea.width
-            + ' isDropDown=' + isDropDown
-            + ' floating=' + floating);
-        if (isDropDown) {
-            this.dropDownWin = win;
-            this.dockDropDown(win, floating);
-            return;
-        }
-        if (floating > 0) {
-            this.raiseFloating(win);
-        }
-    }
-
-    /**
-     * Preferences / Connection: centre once, keep above the drop-down.
-     */
-    raiseFloating(win) {
-        var self = this;
-        if (this.dropDownWin) {
-            this.dropDownWin.unmake_above();
-        }
-        if (!win.rootermCentered) {
-            var mon = win.get_monitor();
-            if (mon < 0) {
-                mon = Main.layoutManager.primaryIndex;
-            }
-            var area = Main.layoutManager.getWorkAreaForMonitor(mon);
-            var frame = win.get_frame_rect();
-            win.rootermCentered = true;
-            win.move_frame(
-                true,
-                area.x + Math.floor((area.width - frame.width) / 2),
-                area.y + Math.floor((area.height - frame.height) / 2)
-            );
-        }
-        win.make_above();
-        win.raise();
-        if (!win.rootermPrefsHooked) {
-            win.rootermPrefsHooked = true;
-            win.connect('unmanaged', function() {
-                self.scheduleDock();
-            });
-        }
-        try {
-            Main.activateWindow(win);
-        } catch (e) {
-            win.activate(global.get_current_time());
-        }
-    }
-
-    /**
-     * Drop-down: pin under the panel; yield ``make_above`` while floating is open.
-     */
-    dockDropDown(win, floating) {
-        var self = this;
-        var monitorIndex = win.get_monitor();
-        if (monitorIndex < 0) {
-            monitorIndex = Main.layoutManager.primaryIndex;
-        }
-        var workArea = Main.layoutManager.getWorkAreaForMonitor(monitorIndex);
-        if (!workArea) {
-            return;
-        }
-        var rect = win.get_frame_rect();
-        var height = rect.height;
-        var width = rect.width;
-        var placement = 'centre';
-        try {
-            var confPath = GLib.build_filenamev([
-                GLib.get_home_dir(), '.config', 'rooterm', 'connections.json',
-            ]);
-            var [, contents] = GLib.file_get_contents(confPath);
-            var conf = JSON.parse(new TextDecoder().decode(contents));
-            placement = conf.placement;
-        } catch (e) {
-            console.error('rooterm: layout config: ' + e);
-        }
-        var x = workArea.x
-            + (placement === 'centre' ? Math.floor((workArea.width - width) / 2)
-                : placement === 'right' ? workArea.width - width : 0);
-        // Work area top — not panelBox.get_height() (can disagree with real panel).
-        var y = workArea.y;
-        var already = Math.abs(rect.x - x) < 2 && Math.abs(rect.y - y) < 2
-            && Math.abs(rect.width - width) < 2 && Math.abs(rect.height - height) < 2;
-        if (!already) {
-            if (win.rootermDocking) {
-                return;
-            }
-            win.rootermDocking = true;
-            win.unmaximize(Meta.MaximizeFlags.HORIZONTAL | Meta.MaximizeFlags.VERTICAL);
-            win.move_frame(false, x, y);
-            win.move_resize_frame(false, x, y, width, height);
-            var after = win.get_frame_rect();
-            if (Math.abs(after.y - y) > 2) {
-                console.error('rooterm: dock wanted y=' + y
-                    + ' but frame is y=' + after.y
-                    + ' (was ' + rect.y + ') workArea.y=' + workArea.y);
-            }
-            GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, function() {
-                win.rootermDocking = false;
-                return GLib.SOURCE_REMOVE;
-            });
-        }
-        if (!win.rootermDockHooked) {
-            win.rootermDockHooked = true;
-            win.connect('size-changed', function() {
-                self.dockWindow(win);
-            });
-            win.connect('position-changed', function() {
-                self.dockWindow(win);
-            });
-        }
-        if (floating > 0) {
-            win.unmake_above();
-            win.stick();
-            return;
-        }
-        win.make_above();
-        win.stick();
-        try {
-            Main.activateWindow(win);
-        } catch (e) {
-            win.activate(global.get_current_time());
-        }
+        this.dock.scheduleDock();
     }
 }

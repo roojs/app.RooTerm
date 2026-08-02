@@ -1,0 +1,17 @@
+<node>
+  <interface name="org.roojs.RooTerm.Shell">
+    <method name="Register">
+      <arg type="s" name="role" direction="in"/>
+      <arg type="s" name="handle" direction="in"/>
+    </method>
+    <method name="Show">
+      <arg type="s" name="role" direction="in"/>
+    </method>
+    <method name="Hide">
+      <arg type="s" name="role" direction="in"/>
+    </method>
+    <method name="Toggle">
+      <arg type="s" name="role" direction="in"/>
+    </method>
+  </interface>
+</node>

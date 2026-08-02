@@ -10,6 +10,8 @@ project('rooterm', 'vala', 'c',
 gnome = import('gnome')
 
 gtk_dep = dependency('gtk4', version: '>= 4.14')
+gtk_wayland_dep = dependency('gtk4-wayland')
+gtk_x11_dep = dependency('gtk4-x11')
 adw_dep = dependency('libadwaita-1', version: '>= 1.5')
 vte_dep = dependency('vte-2.91-gtk4', version: '>= 0.70')
 gee_dep = dependency('gee-0.8')
@@ -72,10 +74,23 @@ executable('rooterm',
     'src/Jobs/OpenSession.vala',
   ),
   rooterm_resources,
-  dependencies: [gtk_dep, adw_dep, vte_dep, gee_dep, gcrypt_dep, yaml_dep, json_dep, secret_dep],
+  dependencies: [
+    gtk_dep,
+    gtk_wayland_dep,
+    gtk_x11_dep,
+    adw_dep,
+    vte_dep,
+    gee_dep,
+    gcrypt_dep,
+    yaml_dep,
+    json_dep,
+    secret_dep,
+  ],
   vala_args: [
     '--vapidir', meson.project_source_root() / 'vapi',
     '--pkg', 'posix',
+    '--pkg', 'gtk4-wayland',
+    '--pkg', 'gtk4-x11',
   ],
   install: true,
 )

@@ -111,19 +111,8 @@ namespace RooTerm.Host
 				if (this.target == null) {
 					return;
 				}
-				var group = this.target;
-				var dlg = new Dialog.Connection(this.window);
-				dlg.fill(null, group);
-				dlg.saved.connect((conn) => {
-					this.window.config.by_uuid.set(conn.uuid, conn);
-					this.window.config.tree.append(group, conn);
-					try {
-						this.window.config.save();
-					} catch (GLib.Error e) {
-						GLib.warning("config save failed: %s", e.message);
-					}
-				});
-				dlg.present();
+				this.window.connection_editor.fill(null, this.target);
+				this.window.dbus.call("Show", new GLib.Variant("(s)", "connection"));
 			});
 			box.append(this.add_connection_btn);
 			this.edit_connection_btn = new Gtk.Button.with_label("Edit connection") {
@@ -136,16 +125,8 @@ namespace RooTerm.Host
 				if (this.target == null || this.target.kind == ConnectionKind.LXC) {
 					return;
 				}
-				var dlg = new Dialog.Connection(this.window);
-				dlg.fill(this.target, null);
-				dlg.saved.connect((conn) => {
-					try {
-						this.window.config.save();
-					} catch (GLib.Error e) {
-						GLib.warning("config save failed: %s", e.message);
-					}
-				});
-				dlg.present();
+				this.window.connection_editor.fill(this.target, null);
+				this.window.dbus.call("Show", new GLib.Variant("(s)", "connection"));
 			});
 			box.append(this.edit_connection_btn);
 			this.refresh_containers_btn = new Gtk.Button.with_label("Refresh containers") {

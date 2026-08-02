@@ -47,6 +47,26 @@ namespace RooTerm
 		 * {@link DBus.toggle} must not hide/show the window then.
 		 */
 		public bool block_toggle = false;
+		/**
+		 * Shared add/edit connection window (Shell Show/Hide).
+		 */
+		public Dialog.Connection connection_editor;
+		/**
+		 * Shared preferences window (Shell Show/Hide).
+		 */
+		public Dialog.Preferences preferences_editor;
+		/**
+		 * Extension install / readiness / window {@link GnomeShell.register}.
+		 */
+		public GnomeShell shell;
+		/**
+		 * Session-bus {@link DBus} on the owning {@link Application}.
+		 */
+		public DBus dbus {
+			get {
+				return ((Application) this.application).dbus;
+			}
+		}
 
 		/**
 		 * Switch to underbar drop-down chrome and set {@link DBus.dock_mode}.
@@ -55,7 +75,7 @@ namespace RooTerm
 		public void show_docked()
 		{
 			this.is_docked = true;
-			((Application) this.application).dbus.dock_mode = true;
+			this.dbus.dock_mode = true;
 			GLib.debug(
 				"show_docked size=%dx%d dock_mode=1",
 				this.monitor_geo.width * this.config.width / 100,
@@ -103,6 +123,24 @@ namespace RooTerm
 			);
 			this.monitor_geo = geo;
 			this.config = config;
+			this.shell = new GnomeShell(this);
+			this.connection_editor = new Dialog.Connection(this);
+			this.preferences_editor = new Dialog.Preferences(this);
+			this.map.connect(() => {
+				this.shell.register(this, "main");
+			});
+			GLib.Bus.watch_name(
+				GLib.BusType.SESSION,
+				"org.roojs.RooTerm.Shell",
+				GLib.BusNameWatcherFlags.NONE,
+				() => {
+					this.shell.register(this, "main");
+					this.shell.register(this.preferences_editor, "preferences");
+					this.shell.register(this.connection_editor, "connection");
+				},
+				() => {
+				}
+			);
 			this.config.notify["height"].connect(() => {
 				if (!this.is_docked) {
 					return;
@@ -111,7 +149,7 @@ namespace RooTerm
 					this.monitor_geo.width * this.config.width / 100,
 					this.monitor_geo.height * this.config.height / 100
 				);
-				((Application) this.application).dbus.shown();
+				this.dbus.redock();
 			});
 			this.config.notify["width"].connect(() => {
 				if (!this.is_docked) {
@@ -121,15 +159,15 @@ namespace RooTerm
 					this.monitor_geo.width * this.config.width / 100,
 					this.monitor_geo.height * this.config.height / 100
 				);
-				((Application) this.application).dbus.shown();
+				this.dbus.redock();
 			});
 			this.config.notify["placement"].connect(() => {
 				if (!this.is_docked) {
 					return;
 				}
-				((Application) this.application).dbus.shown();
+				this.dbus.redock();
 			});
-			if (new GnomeShell(this).is_ready) {
+			if (this.shell.is_ready) {
 				this.show_docked();
 			}
 			var css = new Gtk.CssProvider();
@@ -193,16 +231,8 @@ namespace RooTerm
 					if (response != "edit") {
 						return;
 					}
-					var dlg = new Dialog.Connection(this);
-					dlg.fill(conn, null);
-					dlg.saved.connect((c) => {
-						try {
-							this.config.save();
-						} catch (GLib.Error e) {
-							GLib.warning("config save failed: %s", e.message);
-						}
-					});
-					dlg.present();
+					this.connection_editor.fill(conn, null);
+					this.dbus.call("Show", new GLib.Variant("(s)", "connection"));
 				});
 				alert.present(this);
 			});
@@ -368,7 +398,8 @@ namespace RooTerm
 
 			var prefs_action = new GLib.SimpleAction("preferences", null);
 			prefs_action.activate.connect(() => {
-				new Dialog.Preferences(this).present();
+				this.preferences_editor.fill();
+				this.dbus.call("Show", new GLib.Variant("(s)", "preferences"));
 			});
 			this.add_action(prefs_action);
 			app.set_accels_for_action("win.preferences", { "<Control>comma" });
@@ -432,14 +463,33 @@ namespace RooTerm
 				if (this.sessions.close_current()) {
 					return true;
 				}
-				this.visible = false;
+				this.dbus.call("Hide", new GLib.Variant("(s)", "main"));
 				return true;
 			});
 
 			var term = this.sessions.open_local(this.localhost);
+			// After Application add_window + present: focus, prime Shell roles, dock cue.
 			GLib.Idle.add(() => {
 				this.host_tree.select(term.connection);
 				this.sessions.focus();
+				this.preferences_editor.present();
+				this.connection_editor.present();
+				GLib.Timeout.add(400, () => {
+					this.dbus.call("Hide", new GLib.Variant("(s)", "preferences"));
+					this.dbus.call("Hide", new GLib.Variant("(s)", "connection"));
+					return GLib.Source.REMOVE;
+				});
+				this.shell.ensure(() => {
+					if (!this.shell.is_ready) {
+						return;
+					}
+					if (!this.is_docked) {
+						this.show_docked();
+					}
+					GLib.debug("redock after ensure dock_mode=%d",
+						(int) this.dbus.dock_mode);
+					this.dbus.redock();
+				});
 				return false;
 			});
 		}

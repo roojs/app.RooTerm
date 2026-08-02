@@ -1,3 +1,8 @@
+/* Panel icon — terminal symbolic tinted to RooTerm green. */
+.rooterm-icon {
+  color: #6fd19a;
+}
+
 /* Panel hover tooltip. */
 .rooterm-tooltip {
   background-color: rgba(0, 0, 0, 0.8);

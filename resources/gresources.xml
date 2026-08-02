@@ -7,6 +7,11 @@
   <gresource prefix="/extension">
     <file>metadata.json</file>
     <file>extension.js</file>
+    <file>Const.js</file>
+    <file>Indicator.js</file>
+    <file>ShellService.js</file>
+    <file>ShellIface.xml</file>
+    <file>Dock.js</file>
     <file>stylesheet.css</file>
   </gresource>
   <gresource prefix="/extension/schemas">

@@ -25,13 +25,14 @@ namespace RooTerm.Dialog
 	 *
 	 * Sliders write {@link RooTerm.Config} live; geometry apply is owned by
 	 * {@link MainWindow} via config notify. JSON is saved on Save; Cancel
-	 * restores the snapshot taken when the window opened.
+	 * restores the snapshot from {@link fill}. One instance is kept on
+	 * {@link MainWindow.preferences_editor}; Shell owns show/hide.
 	 *
 	 * == Example ==
 	 *
 	 * {{{
-	 * var prefs = new Preferences(window);
-	 * prefs.present();
+	 * window.preferences_editor.fill();
+	 * window.dbus.call("Show", new GLib.Variant("(s)", "preferences"));
 	 * }}}
 	 */
 	public class Preferences : Adw.Window
@@ -61,48 +62,15 @@ namespace RooTerm.Dialog
 				application: window.application,
 				title: "Preferences",
 				resizable: false,
+				hide_on_close: false,
 				default_width: 520,
 				default_height: 504
 			);
 			this.add_css_class("floating-dialog");
-			this.notify["maximized"].connect(() => {
-				if (this.maximized) {
-					this.unmaximize();
-				}
-			});
-			this.notify["fullscreened"].connect(() => {
-				if (this.fullscreened) {
-					this.unfullscreen();
-				}
-			});
 			this.window = window;
 			this.map.connect(() => {
-				var app = this.window.application as Application;
-				if (app == null) {
-					return;
-				}
-				app.dbus.floating_count++;
-				GLib.debug(
-					"preferences map floating_count=%u",
-					app.dbus.floating_count
-				);
+				this.window.shell.register(this, "preferences");
 			});
-			this.unmap.connect(() => {
-				var app = this.window.application as Application;
-				if (app == null) {
-					return;
-				}
-				app.dbus.floating_count--;
-				GLib.debug(
-					"preferences unmap floating_count=%u",
-					app.dbus.floating_count
-				);
-			});
-			this.snap_opacity = window.config.opacity;
-			this.snap_height = window.config.height;
-			this.snap_width = window.config.width;
-			this.snap_placement = window.config.placement;
-			this.snap_toggle_key = window.config.toggle_key;
 
 			var page = new Adw.PreferencesPage();
 
@@ -240,6 +208,16 @@ namespace RooTerm.Dialog
 				show_start_title_buttons = false,
 				show_end_title_buttons = false
 			};
+			var no_max = new Gtk.GestureClick() {
+				propagation_phase = Gtk.PropagationPhase.CAPTURE,
+				button = Gdk.BUTTON_PRIMARY
+			};
+			no_max.pressed.connect((n_press, x, y) => {
+				if (n_press >= 2) {
+					no_max.set_state(Gtk.EventSequenceState.CLAIMED);
+				}
+			});
+			header.add_controller(no_max);
 			header.pack_start(cancel);
 			header.pack_end(save);
 			var toolbar = new Adw.ToolbarView();
@@ -317,8 +295,45 @@ namespace RooTerm.Dialog
 						GLib.warning("toggle binding: %s", e.message);
 					}
 				}
-				return false;
+				this.accepting = false;
+				this.window.dbus.call("Hide", new GLib.Variant("(s)", "preferences"));
+				return true;
 			});
+			this.fill();
+		}
+
+		/**
+		 * Reload widgets and Cancel snapshot from {@link MainWindow.config}.
+		 */
+		public void fill()
+		{
+			if (this.capturing) {
+				this.capturing = false;
+				this.window.block_toggle = false;
+			}
+			this.accepting = false;
+			this.snap_opacity = this.window.config.opacity;
+			this.snap_height = this.window.config.height;
+			this.snap_width = this.window.config.width;
+			this.snap_placement = this.window.config.placement;
+			this.snap_toggle_key = this.window.config.toggle_key;
+			this.toggle_btn.label = this.window.config.toggle_key;
+			this.opacity_scale.set_value(this.window.config.opacity);
+			this.height_scale.set_value(this.window.config.height);
+			this.width_scale.set_value(this.window.config.width);
+			switch (this.window.config.placement) {
+				case "left":
+					this.placement_row.selected = 0;
+					break;
+
+				case "right":
+					this.placement_row.selected = 2;
+					break;
+
+				default:
+					this.placement_row.selected = 1;
+					break;
+			}
 		}
 
 		/**

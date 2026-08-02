@@ -22,7 +22,8 @@ namespace RooTerm.Dialog
 	 * Add / edit a host {@link Host.Connection}: Basic + Port forwarding.
 	 * Standalone {@link Adw.Window} (not a sheet of the drop-down) so hide/show
 	 * of the main window does not bury or strand the editor — same pattern as
-	 * {@link Preferences}.
+	 * {@link Preferences}. One instance is kept on
+	 * {@link MainWindow.connection_editor} ({@link fill} + present).
 	 */
 	public class Connection : Adw.Window
 	{
@@ -63,13 +64,6 @@ namespace RooTerm.Dialog
 		private bool pending_lxc_sync = false;
 
 		/**
-		 * Emitted after Save writes fields onto ``target``.
-		 *
-		 * @param connection The connection that was saved
-		 */
-		public signal void saved(Host.Connection connection);
-
-		/**
 		 * Build the window UI (call {@link fill} before presenting).
 		 *
 		 * @param window Main window (sessions / config for SSH key setup)
@@ -80,44 +74,18 @@ namespace RooTerm.Dialog
 				application: window.application,
 				title: "Connection",
 				resizable: false,
+				hide_on_close: false,
 				default_width: 560,
 				default_height: 520
 			);
 			this.add_css_class("floating-dialog");
-			this.notify["maximized"].connect(() => {
-				if (this.maximized) {
-					this.unmaximize();
-				}
-			});
-			this.notify["fullscreened"].connect(() => {
-				if (this.fullscreened) {
-					this.unfullscreen();
-				}
-			});
 			this.window = window;
 			this.map.connect(() => {
-				var app = this.window.application as Application;
-				if (app == null) {
-					return;
-				}
-				app.dbus.floating_count++;
-				GLib.debug(
-					"connection map floating_count=%u title=%s",
-					app.dbus.floating_count,
-					this.title
-				);
+				this.window.shell.register(this, "connection");
 			});
-			this.unmap.connect(() => {
-				var app = this.window.application as Application;
-				if (app == null) {
-					return;
-				}
-				app.dbus.floating_count--;
-				GLib.debug(
-					"connection unmap floating_count=%u title=%s",
-					app.dbus.floating_count,
-					this.title
-				);
+			this.close_request.connect(() => {
+				this.window.dbus.call("Hide", new GLib.Variant("(s)", "connection"));
+				return true;
 			});
 			this.target = new Host.Connection();
 
@@ -200,7 +168,7 @@ namespace RooTerm.Dialog
 					} catch (Jobs.Error e) {
 						GLib.warning("fetch hosts failed name=%s: %s", this.target.name, e.message);
 					}
-					this.present();
+					this.window.dbus.call("Show", new GLib.Variant("(s)", "connection"));
 				});
 			});
 			this.setup_key_btn.clicked.connect(() => {
@@ -508,6 +476,16 @@ namespace RooTerm.Dialog
 				show_start_title_buttons = false,
 				show_end_title_buttons = false
 			};
+			var no_max = new Gtk.GestureClick() {
+				propagation_phase = Gtk.PropagationPhase.CAPTURE,
+				button = Gdk.BUTTON_PRIMARY
+			};
+			no_max.pressed.connect((n_press, x, y) => {
+				if (n_press >= 2) {
+					no_max.set_state(Gtk.EventSequenceState.CLAIMED);
+				}
+			});
+			header.add_controller(no_max);
 			header.pack_start(cancel);
 			header.pack_end(save);
 			var toolbar = new Adw.ToolbarView();
@@ -602,7 +580,7 @@ namespace RooTerm.Dialog
 				job.terminal.close_in(ok ? 0 : 30);
 			}
 			if (!ok) {
-				this.present();
+				this.window.dbus.call("Show", new GLib.Variant("(s)", "connection"));
 				return;
 			}
 			this.pending_key_identity = job.installed_identity.length > 0
@@ -623,7 +601,7 @@ namespace RooTerm.Dialog
 				: "Password";
 			GLib.debug("ssh key installed identity=%s name=%s",
 				this.target.public_key, this.target.name);
-			this.present();
+			this.window.dbus.call("Show", new GLib.Variant("(s)", "connection"));
 		}
 
 		/**
@@ -734,7 +712,7 @@ namespace RooTerm.Dialog
 				job.terminal.close_in(ok ? 0 : 30);
 			}
 			if (!ok) {
-				this.present();
+				this.window.dbus.call("Show", new GLib.Variant("(s)", "connection"));
 				return;
 			}
 			this.target.auth = "ssh_key";
@@ -762,7 +740,7 @@ namespace RooTerm.Dialog
 			done.default_response = "ok";
 			done.close_response = "ok";
 			done.response.connect(() => {
-				this.present();
+				this.window.dbus.call("Show", new GLib.Variant("(s)", "connection"));
 			});
 			done.present(this.window);
 		}
@@ -820,7 +798,7 @@ namespace RooTerm.Dialog
 				job.terminal.close_in(ok ? 0 : 30);
 			}
 			if (!ok) {
-				this.present();
+				this.window.dbus.call("Show", new GLib.Variant("(s)", "connection"));
 				return;
 			}
 			this.target.retire_key = "";
@@ -831,7 +809,7 @@ namespace RooTerm.Dialog
 				GLib.warning("config save failed: %s", e.message);
 			}
 			GLib.debug("retire_key cleared name=%s", this.target.name);
-			this.present();
+			this.window.dbus.call("Show", new GLib.Variant("(s)", "connection"));
 		}
 
 		/**
@@ -930,7 +908,15 @@ namespace RooTerm.Dialog
 				this.pending_lxc_sync = false;
 				this.pending_lxc_names = {};
 			}
-			this.saved(this.target);
+			if (this.is_new && this.parent_group != null) {
+				this.window.config.by_uuid.set(this.target.uuid, this.target);
+				this.window.config.tree.append(this.parent_group, this.target);
+			}
+			try {
+				this.window.config.save();
+			} catch (GLib.Error e) {
+				GLib.warning("config save failed: %s", e.message);
+			}
 
 			if (this.target.auth == "ssh_key" && this.target.retire_key.length == 0
 					&& this.key_open()) {

@@ -2,7 +2,7 @@
 
 > Pointer: `docs/bug-fix-process.md` (emoji).
 
-**Status:** ✔️ size classify applied — await user verify (extension **v28**)
+**Status:** ⏳ Superseded by **`docs/plans/0.12-shell-owns-three-windows.md`** Phase 3 (extension **v36**) — await ✅ verify on X11 + Wayland
 
 **Started:** 2026-08-01
 
@@ -15,15 +15,14 @@
 
 ## Evidence
 
-- **✔️** Sticky `dropDownWin` cleared on `unmanaged`; with `FloatingCount=1` both windows hit `raiseFloating`.
-- **🔷** Distinguish by size: drop-down ~work-area-wide; dialogs ~520–560px.
+- **✔️** Sticky `dropDownWin` + `FloatingCount` + width classify were the old hunt (removed).
 
 ## Fix applied
 
-- **✔️** Extension v28: `rect.width > workArea.width / 2` → `dockDropDown`; else if `FloatingCount > 0` → `raiseFloating`. No sticky claim / first-window guess.
-- **✔️** Debug `classify` log kept for verify.
+- **✔️** Plan 0.12: three long-lived windows; Shell `Register` / `Show` / `Hide` / `Toggle`; Dock only uses stored `mainWin` / `prefsWin` / `connectionWin`.
+- **✔️** No `FloatingCount`, width classify, or scavenger scan (extension **v36**).
 
 ## Next
 
-1. **🔷** ⏳ Restart app / reload extension (v28); open Edit Connection; hide/show drop-down; confirm dialog stays centred above.
-2. **💩** ⏳ Remove temporary `console.error` / Vala floating_count debug when ✅.
+1. **🔷** ⏳ Verify on **X11 and Wayland**: Edit Connection survives main Toggle; dialogs stay above main; no `unmanaged cleared slot` on dialog Hide.
+2. **🔷** ⏳ Move this file to `docs/bugs/done/` after ✅ on both.
