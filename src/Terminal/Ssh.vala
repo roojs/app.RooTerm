@@ -119,7 +119,7 @@ namespace RooTerm.Terminal
 					return;
 				}
 				this.selected = on;
-				if (on) {
+				if (on && !this.connection.deleted && !this.close_confirmed) {
 					this.close_in(30);
 				}
 				return;

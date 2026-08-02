@@ -38,7 +38,7 @@ namespace RooTerm.Jobs
 			base(window, connection, existing);
 			var ssh = (Terminal.Ssh) this.terminal;
 			ssh.exited.connect(() => {
-				if (ssh.selected) {
+				if (ssh.selected && !ssh.connection.deleted && !ssh.close_confirmed) {
 					ssh.close_in(30);
 				}
 			});

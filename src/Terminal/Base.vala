@@ -351,6 +351,10 @@ namespace RooTerm.Terminal
 		 */
 		public void close_in(int seconds)
 		{
+			// deleted host: never hold EXITED / X-close countdowns
+			if (this.connection.deleted && seconds > 0) {
+				seconds = 0;
+			}
 			if (seconds <= 0) {
 				if (this.close_tick != 0) {
 					GLib.Source.remove(this.close_tick);
@@ -363,7 +367,8 @@ namespace RooTerm.Terminal
 				this.close_tab();
 				return;
 			}
-			if (this.close_armed || this.close_paused) {
+			// close_confirmed: delete / Close now already wiped — do not re-arm
+			if (this.close_confirmed || this.close_armed || this.close_paused) {
 				return;
 			}
 			this.close_armed = true;

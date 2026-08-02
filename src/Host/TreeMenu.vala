@@ -180,13 +180,15 @@ namespace RooTerm.Host
 					}
 					conn.deleted = true;
 					this.window.config.tree.remove(conn);
-					// reverse: close_in(0) removes from sessions synchronously
+					// reverse: close_in(0) removes from sessions synchronously;
+					// close before kill so EXITED handlers cannot re-arm a countdown
 					for (var i = (int) conn.sessions.get_n_items() - 1; i >= 0; i--) {
 						var term = (Terminal.Base) conn.sessions.get_item(i);
-						if (term.child_pid > 0) {
-							Posix.kill(term.child_pid, Posix.Signal.TERM);
-						}
+						var pid = term.child_pid;
 						term.close_in(0);
+						if (pid > 0) {
+							Posix.kill(pid, Posix.Signal.TERM);
+						}
 					}
 					try {
 						this.window.config.save();
