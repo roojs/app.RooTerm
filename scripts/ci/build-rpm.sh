@@ -36,7 +36,7 @@ run_root() {
 }
 
 run_root dnf -y install \
-  rpm-build rpmdevtools \
+  rpm-build rpmdevtools python3 \
   meson ninja-build gcc pkgconf-pkg-config vala desktop-file-utils \
   gtk4-devel libadwaita-devel vte291-gtk4-devel \
   libgee-devel libgcrypt-devel libyaml-devel \
