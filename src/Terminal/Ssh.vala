@@ -38,7 +38,7 @@ namespace RooTerm.Terminal
 		 * @param config App config (VTE opacity)
 		 * @param in_stream Optional stream to adopt (flags bag or pre-wired); otherwise a new stream
 		 */
-		public Ssh(Host.Connection connection, string font, Config config, Stream? in_stream = null)
+		public Ssh(Host.Connection connection, string font, RooTerm.Config config, Stream? in_stream = null)
 		{
 			base(connection, font, config);
 
@@ -140,7 +140,7 @@ namespace RooTerm.Terminal
 			this.stream.log_line = -1;
 			this.stream.prompt_hint = "";
 			this.state = Session.State.IDLE;
-			var window = this.get_root() as MainWindow;
+			var window = this.get_root() as RooTerm.MainWindow;
 			if (window == null) {
 				this.spawn();
 				return;

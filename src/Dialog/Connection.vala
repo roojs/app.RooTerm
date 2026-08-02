@@ -23,7 +23,7 @@ namespace RooTerm.Dialog
 	 * Standalone {@link Adw.Window} (not a sheet of the drop-down) so hide/show
 	 * of the main window does not bury or strand the editor — same pattern as
 	 * {@link Preferences}. One instance is kept on
-	 * {@link MainWindow.connection_editor} ({@link fill} + present).
+	 * {@link RooTerm.MainWindow.connection_editor} ({@link fill} + present).
 	 */
 	public class Connection : Adw.Window
 	{
@@ -52,7 +52,7 @@ namespace RooTerm.Dialog
 		private Gtk.SingleSelection forward_selection;
 		private Gtk.ColumnView forward_view;
 		private Gtk.Button edit_forward_btn;
-		private weak MainWindow window;
+		private weak RooTerm.MainWindow window;
 		/**
 		 * Identity path from a successful ``ssh-copy-id``; applied on Save.
 		 */
@@ -68,7 +68,7 @@ namespace RooTerm.Dialog
 		 *
 		 * @param window Main window (sessions / config for SSH key setup)
 		 */
-		public Connection(MainWindow window)
+		public Connection(RooTerm.MainWindow window)
 		{
 			Object(
 				application: window.application,

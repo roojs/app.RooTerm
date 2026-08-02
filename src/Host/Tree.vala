@@ -28,6 +28,11 @@ namespace RooTerm.Host
 		public Gtk.SingleSelection selection;
 		private Gtk.TreeListModel tree_model;
 		private TreeMenu menu;
+		/**
+		 * Row under the context menu. Separate from {@link selection} (active
+		 * terminal); drives the ``menu-target`` row chrome only.
+		 */
+		public Connection? menu_target { get; set; default = null; }
 
 		/**
 		 * Emitted on double-click / activate of a non-group connection.
@@ -70,7 +75,7 @@ namespace RooTerm.Host
 		 *
 		 * @param window Main window (passed to {@link TreeMenu})
 		 */
-		public Tree(MainWindow window)
+		public Tree(RooTerm.MainWindow window)
 		{
 			Object(
 				orientation: Gtk.Orientation.VERTICAL,
@@ -183,6 +188,21 @@ namespace RooTerm.Host
 						this.append_session_mark(mark_box, conn, (Terminal.Base) conn.sessions.get_item(i), i);
 					}
 				}));
+				var old_menu_sid = expander.get_data<ulong>("menu-target-sid");
+				if (old_menu_sid != 0) {
+					this.disconnect(old_menu_sid);
+				}
+				expander.remove_css_class("menu-target");
+				if (conn == this.menu_target) {
+					expander.add_css_class("menu-target");
+				}
+				expander.set_data<ulong>("menu-target-sid", this.notify["menu-target"].connect(() => {
+					if (conn == this.menu_target) {
+						expander.add_css_class("menu-target");
+					} else {
+						expander.remove_css_class("menu-target");
+					}
+				}));
 			});
 			factory.unbind.connect((obj) => {
 				var list_item = (Gtk.ListItem) obj;
@@ -193,6 +213,12 @@ namespace RooTerm.Host
 					mark_box.get_data<GLib.ListStore>("sessions").disconnect(sid);
 					mark_box.set_data<ulong>("sessions-sid", 0);
 				}
+				var menu_sid = expander.get_data<ulong>("menu-target-sid");
+				if (menu_sid != 0) {
+					this.disconnect(menu_sid);
+					expander.set_data<ulong>("menu-target-sid", 0);
+				}
+				expander.remove_css_class("menu-target");
 			});
 
 			this.list_view = new Gtk.ListView(this.selection, factory) {

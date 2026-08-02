@@ -30,7 +30,7 @@ Screenshot coming later.
 ## Dependencies (Debian / Ubuntu)
 
 Build (matches `meson.build` minimums: GTK ≥ 4.14, Libadwaita ≥ 1.5,
-VTE GTK4 ≥ 0.70):
+VTE GTK4 ≥ 0.78):
 
 ```bash
 sudo apt-get install -y \

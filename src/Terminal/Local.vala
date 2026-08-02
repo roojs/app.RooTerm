@@ -43,7 +43,8 @@ namespace RooTerm.Terminal
 		 * @param config App config (VTE opacity)
 		 * @param cwd Working directory (home when empty)
 		 */
-		public Local(Host.Connection connection, string font, Config config, string cwd = "")
+		public Local(Host.Connection connection, 
+			string font, RooTerm.Config config, string cwd = "")
 		{
 			base(connection, font, config);
 			this.start_cwd = cwd;

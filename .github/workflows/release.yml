@@ -28,9 +28,11 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             build-essential debhelper devscripts meson ninja-build \
             pkg-config valac desktop-file-utils \
-            libgtk-4-dev libadwaita-1-dev libvte-2.91-gtk4-dev \
+            libgtk-4-dev libadwaita-1-dev \
             libgee-0.8-dev libgcrypt20-dev libyaml-dev \
             libjson-glib-dev libsecret-1-dev
+          # Noble’s VTE is 0.76; termprop needs ≥ 0.78 — pull Plucky VTE.
+          ./scripts/ci/install-libvte-plucky.sh
 
       - name: Sync changelog version from tag
         if: startsWith(github.ref, 'refs/tags/v')

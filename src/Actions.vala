@@ -1,0 +1,150 @@
+/*
+ * Copyright (C) 2026 Alan Knowles <alan@roojs.com>
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this library; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+ */
+
+namespace RooTerm
+{
+	/**
+	 * ``win.*`` {@link GLib.SimpleAction}s and accelerators for
+	 * {@link MainWindow}. Construct once and keep a field so the instance
+	 * stays alive.
+	 *
+	 * == Example ==
+	 *
+	 * {{{
+	 * this.actions = new Actions(this);
+	 * }}}
+	 */
+	public class Actions : GLib.Object
+	{
+		private weak MainWindow window;
+
+		/**
+		 * Register all window actions and their accelerators on ``window``.
+		 *
+		 * @param window Owning main window
+		 */
+		public Actions(MainWindow window)
+		{
+			this.window = window;
+			var app = (Application) window.application;
+
+			var search_action = new GLib.SimpleAction("search", null);
+			search_action.activate.connect(() => {
+				this.window.host_search.grab_focus();
+				this.window.host_search.entry.select_region(0, -1);
+			});
+			this.window.add_action(search_action);
+			app.set_accels_for_action("win.search", { "<Control><Shift>o" });
+
+			var new_term_action = new GLib.SimpleAction("new-terminal", null);
+			new_term_action.activate.connect(() => {
+				this.window.sessions.open_new(this.window.localhost, this.window);
+			});
+			this.window.add_action(new_term_action);
+			app.set_accels_for_action("win.new-terminal", { "<Control><Shift>t" });
+
+			var close_term_action = new GLib.SimpleAction("close-terminal", null);
+			close_term_action.activate.connect(() => {
+				this.window.sessions.close_current();
+			});
+			this.window.add_action(close_term_action);
+			app.set_accels_for_action("win.close-terminal", { "<Control><Shift>w" });
+
+			var prev_tab_action = new GLib.SimpleAction("prev-tab", null);
+			prev_tab_action.activate.connect(() => {
+				this.window.sessions.select_tab(-1);
+			});
+			this.window.add_action(prev_tab_action);
+			app.set_accels_for_action("win.prev-tab", { "<Control><Shift>Left" });
+
+			var next_tab_action = new GLib.SimpleAction("next-tab", null);
+			next_tab_action.activate.connect(() => {
+				this.window.sessions.select_tab(1);
+			});
+			this.window.add_action(next_tab_action);
+			app.set_accels_for_action("win.next-tab", { "<Control><Shift>Right" });
+
+			var select_all_action = new GLib.SimpleAction("select-all", null);
+			select_all_action.activate.connect(() => {
+				this.window.sessions.select_all();
+			});
+			this.window.add_action(select_all_action);
+			app.set_accels_for_action("win.select-all", { "<Control><Shift>a" });
+
+			var copy_action = new GLib.SimpleAction("copy", null);
+			copy_action.activate.connect(() => {
+				var page = this.window.host_stack.pages.visible_child as Host.Page;
+				if (page == null || page.current == null) {
+					return;
+				}
+				page.current.terminal.copy_clipboard_format(Vte.Format.TEXT);
+			});
+			this.window.add_action(copy_action);
+			app.set_accels_for_action("win.copy", { "<Control><Shift>c" });
+
+			var paste_action = new GLib.SimpleAction("paste", null);
+			paste_action.activate.connect(() => {
+				var page = this.window.host_stack.pages.visible_child as Host.Page;
+				if (page == null || page.current == null) {
+					return;
+				}
+				page.current.terminal.paste_clipboard();
+			});
+			this.window.add_action(paste_action);
+			app.set_accels_for_action("win.paste", { "<Control><Shift>v" });
+
+			var reset_action = new GLib.SimpleAction("reset-terminal", null);
+			reset_action.activate.connect(() => {
+				var page = this.window.host_stack.pages.visible_child as Host.Page;
+				if (page == null || page.current == null) {
+					return;
+				}
+				page.current.terminal.reset(true, true);
+			});
+			this.window.add_action(reset_action);
+
+			var toggle_action = new GLib.SimpleAction("toggle", null);
+			toggle_action.activate.connect(() => {
+				app.dbus.toggle();
+			});
+			this.window.add_action(toggle_action);
+			// Shell / media-keys own the global binding; this covers in-app when focused.
+			app.set_accels_for_action("win.toggle", { this.window.config.toggle_key });
+
+			var prefs_action = new GLib.SimpleAction("preferences", null);
+			prefs_action.activate.connect(() => {
+				this.window.preferences_editor.fill();
+				this.window.dbus.call("Show", new GLib.Variant("(s)", "preferences"));
+			});
+			this.window.add_action(prefs_action);
+			app.set_accels_for_action("win.preferences", { "<Control>comma" });
+
+			var about_action = new GLib.SimpleAction("about", null);
+			about_action.activate.connect(() => {
+				this.window.dbus.about();
+			});
+			this.window.add_action(about_action);
+
+			var quit_action = new GLib.SimpleAction("quit", null);
+			quit_action.activate.connect(() => {
+				this.window.dbus.quit();
+			});
+			this.window.add_action(quit_action);
+		}
+	}
+}

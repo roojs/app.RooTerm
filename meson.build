@@ -13,7 +13,7 @@ gtk_dep = dependency('gtk4', version: '>= 4.14')
 gtk_wayland_dep = dependency('gtk4-wayland')
 gtk_x11_dep = dependency('gtk4-x11')
 adw_dep = dependency('libadwaita-1', version: '>= 1.5')
-vte_dep = dependency('vte-2.91-gtk4', version: '>= 0.70')
+vte_dep = dependency('vte-2.91-gtk4', version: '>= 0.78')
 gee_dep = dependency('gee-0.8')
 gcrypt_dep = dependency('libgcrypt')
 yaml_dep = dependency('yaml-0.1')
@@ -41,6 +41,7 @@ executable('rooterm',
     'src/DBus.vala',
     'src/GnomeShell.vala',
     'src/MainWindow.vala',
+    'src/Actions.vala',
     'src/Host/Connection.vala',
     'src/Host/TreeNodes.vala',
     'src/Host/TreeNodesFlat.vala',
@@ -59,6 +60,7 @@ executable('rooterm',
     'src/Terminal/Ssh.vala',
     'src/Terminal/Local.vala',
     'src/Terminal/Base.vala',
+    'src/Terminal/ContextMenu.vala',
     'src/Terminal/Stream.vala',
     'src/Host/Page.vala',
     'src/Host/TabBar.vala',

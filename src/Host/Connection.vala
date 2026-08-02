@@ -271,7 +271,7 @@ namespace RooTerm.Host
 		 * @param window Window providing sessions / config
 		 * @return Parsed container names from ``lxc-ls``
 		 */
-		public async string[] refresh_containers(MainWindow window) throws Jobs.Error
+		public async string[] refresh_containers(RooTerm.MainWindow window) throws Jobs.Error
 		{
 			var job = new Jobs.FetchHosts(window, this);
 			try {
@@ -290,7 +290,7 @@ namespace RooTerm.Host
 		 * @param names Container names from the remote host
 		 * @param window Window providing config
 		 */
-		public void apply_containers(string[] names, MainWindow window)
+		public void apply_containers(string[] names, RooTerm.MainWindow window)
 		{
 			GLib.debug("containers_found host=%s count=%d", this.name, names.length);
 			if (names.length == 0) {

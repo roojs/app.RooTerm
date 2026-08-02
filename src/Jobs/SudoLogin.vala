@@ -43,7 +43,7 @@ namespace RooTerm.Jobs
 		 * @param connection Host the job acts on
 		 * @param existing Adopt this tab instead of creating one
 		 */
-		public SudoLogin(MainWindow window, Host.Connection connection, Terminal.Base? existing = null)
+		public SudoLogin(RooTerm.MainWindow window, Host.Connection connection, Terminal.Base? existing = null)
 		{
 			base(window, connection, existing);
 		}

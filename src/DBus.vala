@@ -143,6 +143,7 @@ namespace RooTerm
 					return;
 				}
 			}
+			window.terminal_menu.popdown();
 			this.call("Toggle", new GLib.Variant("(s)", "main"));
 		}
 

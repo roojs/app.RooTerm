@@ -31,6 +31,14 @@ namespace RooTerm
 		public Host.Tree host_tree;
 		public Host.Stack host_stack;
 		public Session.Controller sessions;
+		/**
+		 * One VTE right-click menu for all tabs (reparents per click).
+		 */
+		public Terminal.ContextMenu terminal_menu;
+		/**
+		 * ``win.*`` actions (kept alive for refcounting).
+		 */
+		public Actions actions;
 		public Config config;
 		public Host.Connection localhost;
 		/**
@@ -209,6 +217,7 @@ namespace RooTerm
 			};
 
 			this.host_stack = new Host.Stack();
+			this.terminal_menu = new Terminal.ContextMenu(this);
 			this.sessions = new Session.Controller(this.host_stack, this.config.tree, this.config);
 			this.sessions.terminal_font = this.config.terminal_font;
 			this.sessions.display_changed.connect(() => {
@@ -345,64 +354,7 @@ namespace RooTerm
 				((Terminal.Base) page.tab_view.selected_page.child).terminal.grab_focus();
 			});
 
-			var search_action = new GLib.SimpleAction("search", null);
-			search_action.activate.connect(() => {
-				this.host_search.grab_focus();
-				this.host_search.entry.select_region(0, -1);
-			});
-			this.add_action(search_action);
-			app.set_accels_for_action("win.search", { "<Control><Shift>o" });
-
-			var new_term_action = new GLib.SimpleAction("new-terminal", null);
-			new_term_action.activate.connect(() => {
-				this.sessions.open_new(this.localhost, this);
-			});
-			this.add_action(new_term_action);
-			app.set_accels_for_action("win.new-terminal", { "<Control><Shift>t" });
-
-			var close_term_action = new GLib.SimpleAction("close-terminal", null);
-			close_term_action.activate.connect(() => {
-				this.sessions.close_current();
-			});
-			this.add_action(close_term_action);
-			app.set_accels_for_action("win.close-terminal", { "<Control><Shift>w" });
-
-			var prev_tab_action = new GLib.SimpleAction("prev-tab", null);
-			prev_tab_action.activate.connect(() => {
-				this.sessions.select_tab(-1);
-			});
-			this.add_action(prev_tab_action);
-			app.set_accels_for_action("win.prev-tab", { "<Control><Shift>Left" });
-
-			var next_tab_action = new GLib.SimpleAction("next-tab", null);
-			next_tab_action.activate.connect(() => {
-				this.sessions.select_tab(1);
-			});
-			this.add_action(next_tab_action);
-			app.set_accels_for_action("win.next-tab", { "<Control><Shift>Right" });
-
-			var select_all_action = new GLib.SimpleAction("select-all", null);
-			select_all_action.activate.connect(() => {
-				this.sessions.select_all();
-			});
-			this.add_action(select_all_action);
-			app.set_accels_for_action("win.select-all", { "<Control><Shift>a" });
-
-			var toggle_action = new GLib.SimpleAction("toggle", null);
-			toggle_action.activate.connect(() => {
-				app.dbus.toggle();
-			});
-			this.add_action(toggle_action);
-			// Shell / media-keys own the global binding; this covers in-app when focused.
-			app.set_accels_for_action("win.toggle", { this.config.toggle_key });
-
-			var prefs_action = new GLib.SimpleAction("preferences", null);
-			prefs_action.activate.connect(() => {
-				this.preferences_editor.fill();
-				this.dbus.call("Show", new GLib.Variant("(s)", "preferences"));
-			});
-			this.add_action(prefs_action);
-			app.set_accels_for_action("win.preferences", { "<Control>comma" });
+			this.actions = new Actions(this);
 
 			var tree_width = 300;
 			this.host_tree.add_css_class("host-tree");
@@ -463,6 +415,7 @@ namespace RooTerm
 				if (this.sessions.close_current()) {
 					return true;
 				}
+				this.terminal_menu.popdown();
 				this.dbus.call("Hide", new GLib.Variant("(s)", "main"));
 				return true;
 			});

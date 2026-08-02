@@ -74,7 +74,7 @@ namespace RooTerm.Jobs
 		/**
 		 * Main window (sessions / dialogs).
 		 */
-		public MainWindow window { get; construct; }
+		public RooTerm.MainWindow window { get; construct; }
 
 		/**
 		 * Host the job acts on.
@@ -113,7 +113,7 @@ namespace RooTerm.Jobs
 		 * @param connection Host the job acts on
 		 * @param existing Adopt this tab instead of {@link Session.Controller.create}
 		 */
-		protected Job(MainWindow window, Host.Connection connection, Terminal.Base? existing = null)
+		protected Job(RooTerm.MainWindow window, Host.Connection connection, Terminal.Base? existing = null)
 		{
 			Object(window: window, connection: connection);
 			if (existing != null) {

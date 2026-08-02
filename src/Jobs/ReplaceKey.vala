@@ -35,7 +35,7 @@ namespace RooTerm.Jobs
 		 * @param connection Host the job acts on
 		 * @param install_identity Private key path for ``ssh-copy-id``
 		 */
-		public ReplaceKey(MainWindow window, Host.Connection connection, string install_identity)
+		public ReplaceKey(RooTerm.MainWindow window, Host.Connection connection, string install_identity)
 		{
 			base(window, connection);
 			this.stream.install_identity = install_identity;

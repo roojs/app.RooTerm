@@ -28,7 +28,7 @@ namespace RooTerm.Jobs
 		 * @param connection Host the job acts on
 		 * @param existing Adopt this tab instead of creating one
 		 */
-		public SshLogin(MainWindow window, Host.Connection connection, Terminal.Base? existing = null)
+		public SshLogin(RooTerm.MainWindow window, Host.Connection connection, Terminal.Base? existing = null)
 		{
 			base(window, connection, existing);
 		}

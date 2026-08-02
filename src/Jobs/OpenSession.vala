@@ -33,7 +33,7 @@ namespace RooTerm.Jobs
 		 * @param connection Host the job acts on
 		 * @param existing Adopt this tab (Enter reconnect) instead of creating one
 		 */
-		public OpenSession(MainWindow window, Host.Connection connection, Terminal.Base? existing = null)
+		public OpenSession(RooTerm.MainWindow window, Host.Connection connection, Terminal.Base? existing = null)
 		{
 			base(window, connection, existing);
 			var ssh = (Terminal.Ssh) this.terminal;

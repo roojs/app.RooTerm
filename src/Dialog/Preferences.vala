@@ -24,9 +24,9 @@ namespace RooTerm.Dialog
 	 * hosting an {@link Adw.PreferencesPage} (not a dialog of the drop-down).
 	 *
 	 * Sliders write {@link RooTerm.Config} live; geometry apply is owned by
-	 * {@link MainWindow} via config notify. JSON is saved on Save; Cancel
+	 * {@link RooTerm.MainWindow} via config notify. JSON is saved on Save; Cancel
 	 * restores the snapshot from {@link fill}. One instance is kept on
-	 * {@link MainWindow.preferences_editor}; Shell owns show/hide.
+	 * {@link RooTerm.MainWindow.preferences_editor}; Shell owns show/hide.
 	 *
 	 * == Example ==
 	 *
@@ -37,7 +37,7 @@ namespace RooTerm.Dialog
 	 */
 	public class Preferences : Adw.Window
 	{
-		public MainWindow window;
+		public RooTerm.MainWindow window;
 		private Gtk.Button toggle_btn;
 		private Gtk.Scale opacity_scale;
 		private Gtk.Scale height_scale;
@@ -56,7 +56,7 @@ namespace RooTerm.Dialog
 		 *
 		 * @param window Main window (config + live apply)
 		 */
-		public Preferences(MainWindow window)
+		public Preferences(RooTerm.MainWindow window)
 		{
 			Object(
 				application: window.application,
@@ -256,12 +256,12 @@ namespace RooTerm.Dialog
 				this.window.block_toggle = false;
 				this.window.config.toggle_key = accel;
 				this.toggle_btn.label = accel;
-				var app = this.window.application as Application;
+				var app = this.window.application as RooTerm.Application;
 				if (app != null) {
 					app.set_accels_for_action("win.toggle", { accel });
 				}
 				try {
-					new GnomeShell(this.window).ensure_toggle_binding(accel);
+					new RooTerm.GnomeShell(this.window).ensure_toggle_binding(accel);
 				} catch (GLib.Error e) {
 					GLib.warning("toggle binding: %s", e.message);
 				}
@@ -281,14 +281,14 @@ namespace RooTerm.Dialog
 					this.window.config.width = this.snap_width;
 					this.window.config.placement = this.snap_placement;
 					this.window.config.toggle_key = this.snap_toggle_key;
-					var app = this.window.application as Application;
+					var app = this.window.application as RooTerm.Application;
 					if (app != null) {
 						app.set_accels_for_action("win.toggle", {
 							this.window.config.toggle_key
 						});
 					}
 					try {
-						new GnomeShell(this.window).ensure_toggle_binding(
+						new RooTerm.GnomeShell(this.window).ensure_toggle_binding(
 							this.window.config.toggle_key
 						);
 					} catch (GLib.Error e) {
@@ -303,7 +303,7 @@ namespace RooTerm.Dialog
 		}
 
 		/**
-		 * Reload widgets and Cancel snapshot from {@link MainWindow.config}.
+		 * Reload widgets and Cancel snapshot from {@link RooTerm.MainWindow.config}.
 		 */
 		public void fill()
 		{
@@ -365,13 +365,13 @@ namespace RooTerm.Dialog
 			} catch (GLib.Error e) {
 				GLib.warning("config save failed: %s", e.message);
 			}
-			var app = this.window.application as Application;
+			var app = this.window.application as RooTerm.Application;
 			if (app == null) {
 				return;
 			}
 			app.set_accels_for_action("win.toggle", { this.window.config.toggle_key });
 			try {
-				new GnomeShell(this.window).ensure_toggle_binding(
+				new RooTerm.GnomeShell(this.window).ensure_toggle_binding(
 					this.window.config.toggle_key
 				);
 			} catch (GLib.Error e) {

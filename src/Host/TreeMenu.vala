@@ -19,9 +19,9 @@
 namespace RooTerm.Host
 {
 	/**
-	 * Context menu for {@link Tree} rows. Built once; items are shown or
-	 * hidden per {@link Connection.kind} when {@link popup_for} runs. Owns
-	 * add / edit / delete / local / refresh using {@link window} and {@link tree}.
+	 * Context menu for {@link Tree} rows. Owns one {@link Gtk.PopoverMenu};
+	 * {@link popup_for} rebuilds the {@link GLib.Menu} for the row’s
+	 * {@link Connection.kind}. Actions live on the ``tree`` action group.
 	 *
 	 * == Example ==
 	 *
@@ -31,62 +31,48 @@ namespace RooTerm.Host
 	 * menu.popup_for(conn, x, y);
 	 * }}}
 	 */
-	public class TreeMenu : Gtk.Popover
+	public class TreeMenu : GLib.Object
 	{
-		private weak MainWindow window;
+		/**
+		 * The real menu widget ({@link Gtk.PopoverMenu} is not subclassable).
+		 */
+		public Gtk.PopoverMenu menu { get; private set; }
+		private weak RooTerm.MainWindow window;
 		private weak Tree tree;
 		private Connection? target;
-		private Gtk.Button new_terminal;
-		private Gtk.Button new_terminal_here;
-		private Gtk.Button close_path;
-		private Gtk.Button add_connection_btn;
-		private Gtk.Button edit_connection_btn;
-		private Gtk.Button refresh_containers_btn;
-		private Gtk.Button delete_btn;
+		private GLib.SimpleAction delete_action;
 
 		/**
-		 * Build all menu buttons (caller sets the popover parent once).
+		 * Register ``tree.*`` actions (caller sets the popover parent once).
 		 *
 		 * @param window Main window (dialogs / sessions / config)
 		 * @param tree Host tree that owns this menu
 		 */
-		public TreeMenu(MainWindow window, Tree tree)
+		public TreeMenu(RooTerm.MainWindow window, Tree tree)
 		{
 			this.window = window;
 			this.tree = tree;
-			var box = new Gtk.Box(Gtk.Orientation.VERTICAL, 0);
-			this.new_terminal = new Gtk.Button.with_label("New terminal") {
-				has_frame = false,
-				halign = Gtk.Align.FILL,
-				visible = false
+			this.menu = new Gtk.PopoverMenu.from_model(new GLib.Menu()) {
+				has_arrow = false
 			};
-			this.new_terminal.clicked.connect(() => {
-				this.popdown();
+			var group = new GLib.SimpleActionGroup();
+			var new_terminal = new GLib.SimpleAction("new-terminal", null);
+			new_terminal.activate.connect(() => {
 				if (this.target != null) {
 					this.window.sessions.open_local(this.target);
 				}
 			});
-			box.append(this.new_terminal);
-			this.new_terminal_here = new Gtk.Button.with_label("New terminal here") {
-				has_frame = false,
-				halign = Gtk.Align.FILL,
-				visible = false
-			};
-			this.new_terminal_here.clicked.connect(() => {
-				this.popdown();
+			group.add_action(new_terminal);
+			var new_terminal_here = new GLib.SimpleAction("new-terminal-here", null);
+			new_terminal_here.activate.connect(() => {
 				if (this.target != null && this.target.parent != null) {
 					var path_term = (Terminal.Base) this.target.sessions.get_item(0);
 					this.window.sessions.open_local(this.target.parent, path_term.cwd);
 				}
 			});
-			box.append(this.new_terminal_here);
-			this.close_path = new Gtk.Button.with_label("Close") {
-				has_frame = false,
-				halign = Gtk.Align.FILL,
-				visible = false
-			};
-			this.close_path.clicked.connect(() => {
-				this.popdown();
+			group.add_action(new_terminal_here);
+			var close_path = new GLib.SimpleAction("close", null);
+			close_path.activate.connect(() => {
 				if (this.target == null) {
 					return;
 				}
@@ -100,42 +86,27 @@ namespace RooTerm.Host
 				page.tab_view.close_page(page.tab_view.get_page(term));
 				this.window.sessions.focus();
 			});
-			box.append(this.close_path);
-			this.add_connection_btn = new Gtk.Button.with_label("Add connection") {
-				has_frame = false,
-				halign = Gtk.Align.FILL,
-				visible = false
-			};
-			this.add_connection_btn.clicked.connect(() => {
-				this.popdown();
+			group.add_action(close_path);
+			var add_connection = new GLib.SimpleAction("add-connection", null);
+			add_connection.activate.connect(() => {
 				if (this.target == null) {
 					return;
 				}
 				this.window.connection_editor.fill(null, this.target);
 				this.window.dbus.call("Show", new GLib.Variant("(s)", "connection"));
 			});
-			box.append(this.add_connection_btn);
-			this.edit_connection_btn = new Gtk.Button.with_label("Edit connection") {
-				has_frame = false,
-				halign = Gtk.Align.FILL,
-				visible = false
-			};
-			this.edit_connection_btn.clicked.connect(() => {
-				this.popdown();
+			group.add_action(add_connection);
+			var edit_connection = new GLib.SimpleAction("edit-connection", null);
+			edit_connection.activate.connect(() => {
 				if (this.target == null || this.target.kind == ConnectionKind.LXC) {
 					return;
 				}
 				this.window.connection_editor.fill(this.target, null);
 				this.window.dbus.call("Show", new GLib.Variant("(s)", "connection"));
 			});
-			box.append(this.edit_connection_btn);
-			this.refresh_containers_btn = new Gtk.Button.with_label("Refresh containers") {
-				has_frame = false,
-				halign = Gtk.Align.FILL,
-				visible = false
-			};
-			this.refresh_containers_btn.clicked.connect(() => {
-				this.popdown();
+			group.add_action(edit_connection);
+			var refresh_containers = new GLib.SimpleAction("refresh-containers", null);
+			refresh_containers.activate.connect(() => {
 				if (this.target == null) {
 					return;
 				}
@@ -151,14 +122,9 @@ namespace RooTerm.Host
 					}
 				});
 			});
-			box.append(this.refresh_containers_btn);
-			this.delete_btn = new Gtk.Button.with_label("Delete") {
-				has_frame = false,
-				halign = Gtk.Align.FILL,
-				visible = false
-			};
-			this.delete_btn.clicked.connect(() => {
-				this.popdown();
+			group.add_action(refresh_containers);
+			this.delete_action = new GLib.SimpleAction("delete", null);
+			this.delete_action.activate.connect(() => {
 				if (this.target == null) {
 					return;
 				}
@@ -183,12 +149,27 @@ namespace RooTerm.Host
 				});
 				alert.present(this.window);
 			});
-			box.append(this.delete_btn);
-			this.child = box;
+			group.add_action(this.delete_action);
+			this.menu.insert_action_group("tree", group);
+			this.menu.notify["visible"].connect(() => {
+				if (!this.menu.visible) {
+					this.tree.menu_target = null;
+				}
+			});
 		}
 
 		/**
-		 * Show or hide items for ``conn`` and popup at the click point.
+		 * Parent the popover once (usually the tree {@link Gtk.ListView}).
+		 *
+		 * @param parent Widget that owns the click coordinates
+		 */
+		public void set_parent(Gtk.Widget parent)
+		{
+			this.menu.set_parent(parent);
+		}
+
+		/**
+		 * Rebuild items for ``conn`` and popup at the click point.
 		 *
 		 * @param conn Row that was right-clicked
 		 * @param x Click X in the parent widget
@@ -197,17 +178,31 @@ namespace RooTerm.Host
 		public void popup_for(Connection conn, double x, double y)
 		{
 			this.target = conn;
-			this.new_terminal.visible = conn.kind == ConnectionKind.LOCAL;
-			this.new_terminal_here.visible = conn.kind == ConnectionKind.LOCAL_PATH;
-			this.close_path.visible = conn.kind == ConnectionKind.LOCAL_PATH;
-			this.add_connection_btn.visible = conn.kind == ConnectionKind.GROUP;
-			this.edit_connection_btn.visible = conn.kind == ConnectionKind.HOST;
-			this.refresh_containers_btn.visible = conn.kind == ConnectionKind.HOST && conn.lxc_host;
-			this.delete_btn.visible = conn.kind == ConnectionKind.HOST
-				|| conn.kind == ConnectionKind.GROUP
-				|| conn.kind == ConnectionKind.LXC;
-			this.delete_btn.sensitive = true;
-			if (conn.kind == ConnectionKind.GROUP) {
+			this.tree.menu_target = conn;
+			var model = new GLib.Menu();
+			switch (conn.kind) {
+			case ConnectionKind.LOCAL:
+				var item = new GLib.MenuItem("New terminal", "tree.new-terminal");
+				item.set_icon(new GLib.ThemedIcon("utilities-terminal-symbolic"));
+				model.append_item(item);
+				break;
+
+			case ConnectionKind.LOCAL_PATH:
+				var here = new GLib.MenuItem("New terminal here", "tree.new-terminal-here");
+				here.set_icon(new GLib.ThemedIcon("utilities-terminal-symbolic"));
+				model.append_item(here);
+				var close_item = new GLib.MenuItem("Close", "tree.close");
+				close_item.set_icon(new GLib.ThemedIcon("window-close-symbolic"));
+				model.append_item(close_item);
+				break;
+
+			case ConnectionKind.GROUP:
+				var add = new GLib.MenuItem("Add connection", "tree.add-connection");
+				add.set_icon(new GLib.ThemedIcon("list-add-symbolic"));
+				model.append_item(add);
+				var del_group = new GLib.MenuItem("Delete", "tree.delete");
+				del_group.set_icon(new GLib.ThemedIcon("user-trash-symbolic"));
+				model.append_item(del_group);
 				var can_delete = true;
 				foreach (var child in conn.children) {
 					if (!child.deleted) {
@@ -215,15 +210,39 @@ namespace RooTerm.Host
 						break;
 					}
 				}
-				this.delete_btn.sensitive = can_delete;
+				this.delete_action.set_enabled(can_delete);
+				break;
+
+			case ConnectionKind.HOST:
+				var edit = new GLib.MenuItem("Edit connection", "tree.edit-connection");
+				edit.set_icon(new GLib.ThemedIcon("document-edit-symbolic"));
+				model.append_item(edit);
+				if (conn.lxc_host) {
+					var refresh = new GLib.MenuItem("Refresh containers", "tree.refresh-containers");
+					refresh.set_icon(new GLib.ThemedIcon("view-refresh-symbolic"));
+					model.append_item(refresh);
+				}
+				var del_host = new GLib.MenuItem("Delete", "tree.delete");
+				del_host.set_icon(new GLib.ThemedIcon("user-trash-symbolic"));
+				model.append_item(del_host);
+				this.delete_action.set_enabled(true);
+				break;
+
+			case ConnectionKind.LXC:
+				var del_lxc = new GLib.MenuItem("Delete", "tree.delete");
+				del_lxc.set_icon(new GLib.ThemedIcon("user-trash-symbolic"));
+				model.append_item(del_lxc);
+				this.delete_action.set_enabled(true);
+				break;
 			}
-			this.pointing_to = Gdk.Rectangle() {
-				x = (int) x, 
+			this.menu.menu_model = model;
+			this.menu.pointing_to = Gdk.Rectangle() {
+				x = (int) x,
 				y = (int) y,
-				width = 1, 
+				width = 1,
 				height = 1
 			};
-			this.popup();
+			this.menu.popup();
 		}
 	}
 }

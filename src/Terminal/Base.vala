@@ -38,8 +38,8 @@ namespace RooTerm.Terminal
 		public Gdk.RGBA[] theme_palette;
 		/**
 		 * Extra display CSS provider for live ``.vte-frame`` opacity (not the main
-		 * ``style.css`` provider in {@link MainWindow}). Gresource CSS cannot take
-		 * runtime {@link Config.opacity}; this shared provider is reloaded with an
+		 * ``style.css`` provider in {@link RooTerm.MainWindow}). Gresource CSS cannot take
+		 * runtime {@link RooTerm.Config.opacity}; this shared provider is reloaded with an
 		 * ``rgba(...)`` rule when opacity changes. Static so every tab shares one.
 		 */
 		private static Gtk.CssProvider frame_css = new Gtk.CssProvider();
@@ -145,9 +145,9 @@ namespace RooTerm.Terminal
 		 *
 		 * @param connection Host or Localhost this tab belongs to
 		 * @param font Pango font string
-		 * @param config App config (binds VTE background to {@link Config.opacity})
+		 * @param config App config (binds VTE background to {@link RooTerm.Config.opacity})
 		 */
-		protected Base(Host.Connection connection, string font, Config config)
+		protected Base(Host.Connection connection, string font, RooTerm.Config config)
 		{
 			Object(orientation: Gtk.Orientation.VERTICAL, spacing: 0, hexpand: true, vexpand: true);
 			this.connection = connection;
@@ -267,32 +267,6 @@ namespace RooTerm.Terminal
 			this.close_bar.append(leave_open);
 			this.append(this.close_bar);
 
-			var shortcuts = new Gtk.ShortcutController() {
-				propagation_phase = Gtk.PropagationPhase.CAPTURE,
-				scope = Gtk.ShortcutScope.LOCAL
-			};
-			shortcuts.add_shortcut(new Gtk.Shortcut(
-				Gtk.ShortcutTrigger.parse_string("<Control><Shift>c"),
-				new Gtk.CallbackAction(() => {
-					this.terminal.copy_clipboard_format(Vte.Format.TEXT);
-					return true;
-				})
-			));
-			shortcuts.add_shortcut(new Gtk.Shortcut(
-				Gtk.ShortcutTrigger.parse_string("<Control><Shift>v"),
-				new Gtk.CallbackAction(() => {
-					this.terminal.paste_clipboard();
-					return true;
-				})
-			));
-			shortcuts.add_shortcut(new Gtk.Shortcut(
-				Gtk.ShortcutTrigger.parse_string("<Control><Shift>a"),
-				new Gtk.CallbackAction(() => {
-					this.terminal.select_all();
-					return true;
-				})
-			));
-			this.terminal.add_controller(shortcuts);
 			// mouse zoom
 			var zoom = new Gtk.EventControllerScroll(
 				Gtk.EventControllerScrollFlags.VERTICAL
@@ -312,6 +286,18 @@ namespace RooTerm.Terminal
 				return true;
 			});
 			this.terminal.add_controller(zoom);
+
+			var menu_click = new Gtk.GestureClick() {
+				button = Gdk.BUTTON_SECONDARY
+			};
+			menu_click.pressed.connect((n_press, x, y) => {
+				var window = this.get_root() as RooTerm.MainWindow;
+				if (window == null) {
+					return;
+				}
+				window.terminal_menu.popup_for(this, x, y);
+			});
+			this.terminal.add_controller(menu_click);
 
 			this.terminal.contents_changed.connect(() => {
 				if (this.selected || this.state == Session.State.EXITED) {

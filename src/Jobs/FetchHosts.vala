@@ -32,7 +32,7 @@ namespace RooTerm.Jobs
 		 * @param window Main window
 		 * @param connection Host the job acts on
 		 */
-		public FetchHosts(MainWindow window, Host.Connection connection)
+		public FetchHosts(RooTerm.MainWindow window, Host.Connection connection)
 		{
 			base(window, connection);
 		}

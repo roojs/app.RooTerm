@@ -49,6 +49,13 @@ vte-terminal {
 	padding-right: 4px;
 }
 
+/* Context-menu target (not session selection — that stays on the active term). */
+.host-tree treeexpander.menu-target {
+	border-radius: 4px;
+	background-color: alpha(@accent_bg_color, 0.14);
+	box-shadow: inset 3px 0 0 @accent_bg_color;
+}
+
 /* Bottom host tab strip (Host.TabBar — not Adw.TabBar).
  * Tab width is width_request on the row (no hexpand); strip scrolls when crowded. */
 .host-tabbar {

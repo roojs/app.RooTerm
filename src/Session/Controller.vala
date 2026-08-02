@@ -26,7 +26,7 @@ namespace RooTerm.Session
 	{
 		public Host.Stack stack;
 		public Host.TreeNodes tree;
-		public Config config;
+		public RooTerm.Config config;
 		public string display = "Roo Term";
 		/**
 		 * VTE font from Ásbrú defaults (``Monospace 9`` etc.).
@@ -58,7 +58,7 @@ namespace RooTerm.Session
 		 * @param tree Root host tree (gateway; Localhost path children)
 		 * @param config App config (passed into new terminals for opacity)
 		 */
-		public Controller(Host.Stack stack, Host.TreeNodes tree, Config config)
+		public Controller(Host.Stack stack, Host.TreeNodes tree, RooTerm.Config config)
 		{
 			this.stack = stack;
 			this.tree = tree;
@@ -124,7 +124,7 @@ namespace RooTerm.Session
 		 * @param localhost Localhost connection for local / empty fallback
 		 * @param window Main window (for {@link Jobs.OpenSession})
 		 */
-		public void open_new(Host.Connection localhost, MainWindow window)
+		public void open_new(Host.Connection localhost, RooTerm.MainWindow window)
 		{
 			if (this.shown_uuid.length == 0 || !this.by_uuid.has_key(this.shown_uuid)) {
 				this.open_local(localhost);

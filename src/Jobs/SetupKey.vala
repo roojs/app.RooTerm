@@ -37,7 +37,7 @@ namespace RooTerm.Jobs
 		 * @param window Main window
 		 * @param connection Host the job acts on
 		 */
-		public SetupKey(MainWindow window, Host.Connection connection)
+		public SetupKey(RooTerm.MainWindow window, Host.Connection connection)
 		{
 			base(window, connection);
 			this.stream.install_key = true;

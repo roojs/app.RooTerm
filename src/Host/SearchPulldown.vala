@@ -53,7 +53,7 @@ namespace RooTerm.Host
 		/**
 		 * @param config Loaded RooTerm config (SSH hosts become list rows)
 		 */
-		public SearchPulldown(Config config)
+		public SearchPulldown(RooTerm.Config config)
 		{
 			Object();
 
