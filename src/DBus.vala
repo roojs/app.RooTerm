@@ -156,6 +156,47 @@ namespace RooTerm
 		}
 
 		/**
+		 * Set X11 skip-taskbar/pager for a Shell-owned window role.
+		 *
+		 * Shell clears this briefly before minimize so Mutter allows it, then
+		 * sets it again so overview and Alt-Tab stay clear. On GNOME 48, Meta
+		 * has no hide_from_window_list for ordinary app windows.
+		 *
+		 * @param role ``main`` / ``preferences`` / ``connection``
+		 * @param skip True to hide from task lists
+		 */
+		public void skip_taskbar(string role, bool skip)
+		{
+			if (this.application.window == null) {
+				return;
+			}
+			var target = this.application.window as Gtk.Window;
+			switch (role) {
+				case "main":
+					target = this.application.window;
+					break;
+
+				case "preferences":
+					target = this.application.window.preferences_editor;
+					break;
+
+				case "connection":
+					target = this.application.window.connection_editor;
+					break;
+
+				default:
+					return;
+			}
+			// Wayland / unrealized: no Gdk.X11.Surface (external API).
+			var x11 = target.get_surface() as Gdk.X11.Surface;
+			if (x11 == null) {
+				return;
+			}
+			x11.set_skip_taskbar_hint(skip);
+			x11.set_skip_pager_hint(skip);
+		}
+
+		/**
 		 * Show {@link Dialog.Preferences} (Shell panel menu / ``Ctrl+,``).
 		 */
 		public void preferences()

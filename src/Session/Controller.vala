@@ -27,6 +27,10 @@ namespace RooTerm.Session
 		public Host.Stack stack;
 		public Host.TreeNodes tree;
 		public RooTerm.Config config;
+		/**
+		 * Localhost connection (same instance as {@link MainWindow.localhost}).
+		 */
+		public Host.Connection localhost;
 		public string display = "Roo Term";
 		/**
 		 * VTE font from Ásbrú defaults (``Monospace 9`` etc.).
@@ -57,12 +61,15 @@ namespace RooTerm.Session
 		 * @param stack Outer host stack to manage
 		 * @param tree Root host tree (gateway; Localhost path children)
 		 * @param config App config (passed into new terminals for opacity)
+		 * @param localhost Localhost connection for empty-stack fallback
 		 */
-		public Controller(Host.Stack stack, Host.TreeNodes tree, RooTerm.Config config)
+		public Controller(Host.Stack stack, Host.TreeNodes tree, RooTerm.Config config,
+			Host.Connection localhost)
 		{
 			this.stack = stack;
 			this.tree = tree;
 			this.config = config;
+			this.localhost = localhost;
 			this.stack.pages.notify["visible-child"].connect(() => {
 				var next = this.stack.pages.visible_child as Host.Page;
 				var next_uuid = next != null ? next.connection.uuid : "";
@@ -201,6 +208,7 @@ namespace RooTerm.Session
 
 		/**
 		 * Remove an empty host page from the stack; show another open host if any.
+		 * When no terminals remain, opens a fresh local shell so the window is never blank.
 		 *
 		 * @param page Host.Page to remove
 		 */
@@ -220,15 +228,22 @@ namespace RooTerm.Session
 			var other = this.stack.pages.get_first_child() as Host.Page;
 			if (other != null) {
 				this.stack.pages.visible_child = other;
+				this.focus();
+				return;
 			}
+			GLib.Idle.add(() => {
+				this.open_local(this.localhost);
+				return false;
+			});
 			this.focus();
 		}
 
 		/**
 		 * Close the focused terminal tab (window-close hook). Shows another
-		 * open terminal when possible.
+		 * open terminal when possible. Closing the last confirmed tab returns
+		 * false so a docked window can hide (a replacement local opens idle).
 		 *
-		 * @return true if a tab was closed (inhibit window destroy)
+		 * @return true if a tab was closed and the window should stay up
 		 */
 		public bool close_current()
 		{
@@ -239,9 +254,12 @@ namespace RooTerm.Session
 			if (page.tab_view.selected_page == null) {
 				return false;
 			}
+			var term = (Terminal.Base) page.tab_view.selected_page.child;
+			var was_last = page.tab_view.n_pages == 1 && this.by_uuid.size == 1
+				&& term.close_confirmed;
 			page.tab_view.close_page(page.tab_view.selected_page);
 			this.focus();
-			return true;
+			return !was_last;
 		}
 
 		/**

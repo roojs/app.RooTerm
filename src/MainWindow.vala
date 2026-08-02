@@ -145,6 +145,9 @@ namespace RooTerm
 					this.shell.register(this, "main");
 					this.shell.register(this.preferences_editor, "preferences");
 					this.shell.register(this.connection_editor, "connection");
+					// Shell reload remaps dialogs; re-hide after Register (prime timeout is once).
+					this.dbus.call("Hide", new GLib.Variant("(s)", "preferences"));
+					this.dbus.call("Hide", new GLib.Variant("(s)", "connection"));
 				},
 				() => {
 				}
@@ -218,7 +221,9 @@ namespace RooTerm
 
 			this.host_stack = new Host.Stack();
 			this.terminal_menu = new Terminal.ContextMenu(this);
-			this.sessions = new Session.Controller(this.host_stack, this.config.tree, this.config);
+			this.sessions = new Session.Controller(
+				this.host_stack, this.config.tree, this.config, this.localhost
+			);
 			this.sessions.terminal_font = this.config.terminal_font;
 			this.sessions.display_changed.connect(() => {
 				this.title = this.sessions.display;

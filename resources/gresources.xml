@@ -11,6 +11,7 @@
     <file>Indicator.js</file>
     <file>ShellService.js</file>
     <file>ShellIface.xml</file>
+    <file>WaylandLegacyWorkaround.js</file>
     <file>Dock.js</file>
     <file>stylesheet.css</file>
   </gresource>

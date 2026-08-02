@@ -1,19 +1,28 @@
+import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
-import {APP_ID, SHELL_DEST, SHELL_PATH} from './Const.js';
+import {APP_ID, DBUS_DEST, DBUS_IFACE, DBUS_PATH, SHELL_DEST, SHELL_PATH} from './Const.js';
 
 /**
  * Session bus org.roojs.RooTerm.Shell — Register / Show / Hide / Toggle
  * and Meta window slots for main / preferences / connection.
+ *
+ * Hide is Meta minimize (keeps slots alive). Main slides then minimizes.
+ * skip_taskbar is cleared briefly around minimize (GNOME 48: app D-Bus
+ * SkipTaskbar; 49+: Meta show/hide_from_window_list) so overview stays clear
+ * without blocking minimize. SkipTaskbar is always async (never call_sync).
  */
 export class ShellService {
     constructor(extensionPath) {
         this.extensionPath = extensionPath;
-        this.mainWin = null;
-        this.prefsWin = null;
-        this.connectionWin = null;
+        this.win = {
+            main: false,
+            preferences: false,
+            connection: false,
+        };
         this.waylandPending = [];
         this.export = null;
         this.nameId = 0;
@@ -38,9 +47,9 @@ export class ShellService {
     }
 
     disable() {
-        this.mainWin = null;
-        this.prefsWin = null;
-        this.connectionWin = null;
+        this.win.main = false;
+        this.win.preferences = false;
+        this.win.connection = false;
         this.waylandPending = [];
         if (this.nameId) {
             Gio.DBus.session.unown_name(this.nameId);
@@ -80,60 +89,105 @@ export class ShellService {
     }
 
     Show(role) {
-        var win = this.winForRole(role);
-        if (!win) {
+        var self = this;
+        if (!this.win[role]) {
             console.error('rooterm: Show missing role=' + role);
             return;
         }
-        if (win.minimized) {
-            win.unminimize();
+        this.win[role].rootermHiding = false;
+        this.win[role].rootermReadyToMinimize = false;
+        if (this.win[role].rootermBracketId) {
+            GLib.source_remove(this.win[role].rootermBracketId);
+            this.win[role].rootermBracketId = 0;
         }
+        if (this.win[role].minimized) {
+            var showActor = this.win[role].get_compositor_private();
+            if (showActor && Main.wm && typeof Main.wm.skipNextEffect === 'function') {
+                Main.wm.skipNextEffect(showActor);
+            }
+            this.win[role].unminimize();
+        }
+        // Restore skip_taskbar after show (async).
+        Gio.DBus.session.call(
+            DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'SkipTaskbar',
+            new GLib.Variant('(sb)', [role, true]),
+            null, Gio.DBusCallFlags.NONE, -1, null,
+            function(conn, res) {
+                try {
+                    Gio.DBus.session.call_finish(res);
+                } catch (e) {
+                    console.error('rooterm: SkipTaskbar true role=' + role + ': ' + e);
+                }
+                if (self.win[role]
+                        && typeof self.win[role].hide_from_window_list === 'function') {
+                    self.win[role].hide_from_window_list();
+                }
+            }
+        );
         if (role !== 'preferences' && role !== 'connection') {
-            this.showMain(win);
+            var actor = this.win[role].get_compositor_private();
+            if (actor) {
+                actor.remove_all_transitions();
+                actor.opacity = 255;
+                actor.show();
+                var height = Math.max(this.win[role].get_frame_rect().height, 1);
+                actor.translation_y = -height;
+                this.showMain();
+                actor.ease({
+                    translation_y: 0,
+                    duration: 180,
+                    mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
+                    onStopped: function() {
+                        actor.translation_y = 0;
+                        actor.opacity = 255;
+                    },
+                });
+                return;
+            }
+            this.showMain();
             return;
         }
-        if (this.mainWin) {
-            this.mainWin.unmake_above();
+        if (this.win.main) {
+            this.win.main.unmake_above();
         }
-        if (!win.rootermCentered) {
-            var mon = win.get_monitor();
+        if (!this.win[role].rootermCentered) {
+            var mon = this.win[role].get_monitor();
             if (mon < 0) {
                 mon = Main.layoutManager.primaryIndex;
             }
             var area = Main.layoutManager.getWorkAreaForMonitor(mon);
-            var frame = win.get_frame_rect();
-            win.rootermCentered = true;
-            win.move_frame(
+            var frame = this.win[role].get_frame_rect();
+            this.win[role].rootermCentered = true;
+            this.win[role].move_frame(
                 true,
                 area.x + Math.floor((area.width - frame.width) / 2),
                 area.y + Math.floor((area.height - frame.height) / 2)
             );
         }
-        win.make_above();
-        win.raise();
+        this.win[role].make_above();
+        this.win[role].raise();
         try {
-            Main.activateWindow(win);
+            Main.activateWindow(this.win[role]);
         } catch (e) {
-            win.activate(global.get_current_time());
+            this.win[role].activate(global.get_current_time());
         }
-        console.error('rooterm: Show role=' + role + ' id=' + win.get_id()
-            + ' minimized=' + win.minimized);
+        console.error('rooterm: Show role=' + role + ' id=' + this.win[role].get_id()
+            + ' minimized=' + this.win[role].minimized);
     }
 
     /**
      * Show main underbar; yield stacking if prefs/connection are open.
      */
-    showMain(win) {
-        var front = (this.connectionWin && !this.connectionWin.minimized)
-            ? this.connectionWin
-            : (this.prefsWin && !this.prefsWin.minimized)
-                ? this.prefsWin
+    showMain() {
+        var front = (this.win.connection && !this.win.connection.minimized)
+            ? this.win.connection
+            : (this.win.preferences && !this.win.preferences.minimized)
+                ? this.win.preferences
                 : false;
-        // Main first, then dialog on top (keep terminal out of focus).
-        win.make_above();
-        win.raise();
+        this.win.main.make_above();
+        this.win.main.raise();
         if (front) {
-            win.unmake_above();
+            this.win.main.unmake_above();
             front.make_above();
             front.raise();
             try {
@@ -141,93 +195,178 @@ export class ShellService {
             } catch (e) {
                 front.activate(global.get_current_time());
             }
-            console.error('rooterm: Show role=main id=' + win.get_id()
-                + ' minimized=' + win.minimized + ' under-dialog');
+            console.error('rooterm: Show role=main id=' + this.win.main.get_id()
+                + ' minimized=' + this.win.main.minimized + ' under-dialog');
             return;
         }
         try {
-            Main.activateWindow(win);
+            Main.activateWindow(this.win.main);
         } catch (e) {
-            win.activate(global.get_current_time());
+            this.win.main.activate(global.get_current_time());
         }
-        console.error('rooterm: Show role=main id=' + win.get_id()
-            + ' minimized=' + win.minimized);
+        console.error('rooterm: Show role=main id=' + this.win.main.get_id()
+            + ' minimized=' + this.win.main.minimized);
     }
 
     Hide(role) {
-        var win = this.winForRole(role);
-        if (!win) {
+        var self = this;
+        if (!this.win[role]) {
             console.error('rooterm: Hide missing role=' + role);
             return;
         }
-        win.minimize();
-        console.error('rooterm: Hide role=' + role + ' id=' + win.get_id()
-            + ' minimized=' + win.minimized);
+        var actor = this.win[role].get_compositor_private();
+        // Main: slide off-screen first, then re-enter to minimize.
+        if (role !== 'preferences' && role !== 'connection'
+                && actor && !this.win[role].rootermReadyToMinimize) {
+            this.win[role].rootermHiding = true;
+            actor.remove_all_transitions();
+            var height = Math.max(this.win[role].get_frame_rect().height, 1);
+            actor.ease({
+                translation_y: -height,
+                duration: 180,
+                mode: Clutter.AnimationMode.EASE_IN_CUBIC,
+                onStopped: function() {
+                    if (!self.win[role] || !self.win[role].rootermHiding) {
+                        return;
+                    }
+                    self.win[role].rootermHiding = false;
+                    actor.opacity = 0;
+                    self.win[role].rootermReadyToMinimize = true;
+                    self.Hide(role);
+                },
+            });
+            return;
+        }
+        this.win[role].rootermReadyToMinimize = false;
+        if (this.win[role].rootermBracketId) {
+            GLib.source_remove(this.win[role].rootermBracketId);
+            this.win[role].rootermBracketId = 0;
+        }
+        // Clear skip_taskbar → idle → minimize → restore skip (async only).
+        Gio.DBus.session.call(
+            DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'SkipTaskbar',
+            new GLib.Variant('(sb)', [role, false]),
+            null, Gio.DBusCallFlags.NONE, -1, null,
+            function(conn, res) {
+                try {
+                    Gio.DBus.session.call_finish(res);
+                } catch (e) {
+                    console.error('rooterm: SkipTaskbar false role='
+                        + role + ': ' + e);
+                }
+                if (!self.win[role]) {
+                    return;
+                }
+                if (typeof self.win[role].show_in_window_list === 'function') {
+                    self.win[role].show_in_window_list();
+                }
+                self.win[role].rootermBracketId = GLib.timeout_add(
+                    GLib.PRIORITY_DEFAULT, 50, function() {
+                        self.finishHide(role, actor);
+                        return GLib.SOURCE_REMOVE;
+                    }
+                );
+            }
+        );
+    }
+
+    /**
+     * After skip_taskbar is cleared: minimize (no WM effect), restore skip,
+     * and put main back above when both dialogs are hidden.
+     */
+    finishHide(role, actor) {
+        var self = this;
+        if (!this.win[role]) {
+            return;
+        }
+        this.win[role].rootermBracketId = 0;
+        if (actor && Main.wm && typeof Main.wm.skipNextEffect === 'function') {
+            Main.wm.skipNextEffect(actor);
+        }
+        this.win[role].minimize();
+        if (actor) {
+            actor.translation_y = 0;
+            actor.opacity = 255;
+        }
+        Gio.DBus.session.call(
+            DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'SkipTaskbar',
+            new GLib.Variant('(sb)', [role, true]),
+            null, Gio.DBusCallFlags.NONE, -1, null,
+            function(conn, res) {
+                try {
+                    Gio.DBus.session.call_finish(res);
+                } catch (e) {
+                    console.error('rooterm: SkipTaskbar true role='
+                        + role + ': ' + e);
+                }
+                if (self.win[role]
+                        && typeof self.win[role].hide_from_window_list === 'function') {
+                    self.win[role].hide_from_window_list();
+                }
+            }
+        );
+        console.error('rooterm: Hide role=' + role + ' id=' + this.win[role].get_id()
+            + ' minimized=' + this.win[role].minimized);
         if (role !== 'preferences' && role !== 'connection') {
             return;
         }
-        if ((this.prefsWin && !this.prefsWin.minimized)
-                || (this.connectionWin && !this.connectionWin.minimized)
-                || !this.mainWin || this.mainWin.minimized) {
+        if ((this.win.preferences && !this.win.preferences.minimized)
+                || (this.win.connection && !this.win.connection.minimized)
+                || !this.win.main || this.win.main.minimized) {
             return;
         }
-        this.mainWin.make_above();
+        this.win.main.make_above();
     }
 
     Toggle(role) {
-        var win = this.winForRole(role);
-        if (!win) {
+        if (!this.win[role]) {
             console.error('rooterm: Toggle missing role=' + role);
             return;
         }
-        if (win.minimized) {
+        if (this.win[role].minimized || this.win[role].rootermHiding) {
             this.Show(role);
             return;
         }
         this.Hide(role);
     }
 
-    winForRole(role) {
-        if (role === 'main') {
-            return this.mainWin;
-        }
-        if (role === 'preferences') {
-            return this.prefsWin;
-        }
-        if (role === 'connection') {
-            return this.connectionWin;
-        }
-        return null;
-    }
-
     storeRole(role, win) {
         var self = this;
-        if (role === 'main') {
-            this.mainWin = win;
-        } else if (role === 'preferences') {
-            this.prefsWin = win;
-        } else if (role === 'connection') {
-            this.connectionWin = win;
-        } else {
+        if (!(role in this.win)) {
             console.error('rooterm: storeRole bad role=' + role);
             return;
         }
-        console.error('rooterm: stored role=' + role + ' id=' + win.get_id()
-            + ' title=' + (win.get_title() || ''));
-        if (!win.rootermSlotHooked) {
-            win.rootermSlotHooked = true;
-            win.connect('unmanaged', function() {
-                if (self.mainWin === win) {
-                    self.mainWin = null;
+        this.win[role] = win;
+        console.error('rooterm: stored role=' + role + ' id=' + this.win[role].get_id()
+            + ' title=' + (this.win[role].get_title() || ''));
+        Gio.DBus.session.call(
+            DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'SkipTaskbar',
+            new GLib.Variant('(sb)', [role, true]),
+            null, Gio.DBusCallFlags.NONE, -1, null,
+            function(conn, res) {
+                try {
+                    Gio.DBus.session.call_finish(res);
+                } catch (e) {
+                    console.error('rooterm: SkipTaskbar true role=' + role + ': ' + e);
                 }
-                if (self.prefsWin === win) {
-                    self.prefsWin = null;
+                if (self.win[role]
+                        && typeof self.win[role].hide_from_window_list === 'function') {
+                    self.win[role].hide_from_window_list();
                 }
-                if (self.connectionWin === win) {
-                    self.connectionWin = null;
+            }
+        );
+        if (!this.win[role].rootermSlotHooked) {
+            this.win[role].rootermSlotHooked = true;
+            this.win[role].connect('unmanaged', function() {
+                if (self.win[role] === win) {
+                    self.win[role] = false;
                 }
                 console.error('rooterm: unmanaged cleared slot id=' + win.get_id());
             });
+        }
+        // Prefs/connection primed for Register; minimize until Show.
+        if (role === 'preferences' || role === 'connection') {
+            this.Hide(role);
         }
     }
 
@@ -235,7 +374,7 @@ export class ShellService {
         var want = parseInt(hex, 16);
         if (isNaN(want)) {
             console.error('rooterm: resolveX11 bad hex=' + hex);
-            return null;
+            return false;
         }
         var actors = global.get_window_actors();
         for (var i = 0; i < actors.length; i++) {
@@ -248,7 +387,7 @@ export class ShellService {
                 return win;
             }
         }
-        return null;
+        return false;
     }
 
     isRooTerm(win) {
@@ -274,7 +413,8 @@ export class ShellService {
             if (!win || win.minimized || !this.isRooTerm(win)) {
                 continue;
             }
-            if (win === this.mainWin || win === this.prefsWin || win === this.connectionWin) {
+            if (win === this.win.main || win === this.win.preferences
+                    || win === this.win.connection) {
                 continue;
             }
             // Skip tiny surfaces (GTK map noise) so they do not steal pending roles.

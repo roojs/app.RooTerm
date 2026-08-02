@@ -9,6 +9,7 @@ import {DBUS_DEST, DBUS_PATH, DBUS_IFACE} from './Const.js';
 import {Dock} from './Dock.js';
 import {Indicator} from './Indicator.js';
 import {ShellService} from './ShellService.js';
+import {WaylandLegacyWorkaround} from './WaylandLegacyWorkaround.js';
 
 export default class RooTermExtension extends Extension {
     enable() {
@@ -20,6 +21,8 @@ export default class RooTermExtension extends Extension {
         this.shell = new ShellService(this.path);
         this.shell.enable();
         this.dock = new Dock(this.shell);
+        // GNOME 48 Wayland Quit+respawn / hide-from-overview — patches only.
+        new WaylandLegacyWorkaround().install(this.shell, this.dock);
 
         this.indicator = new Indicator(this);
 

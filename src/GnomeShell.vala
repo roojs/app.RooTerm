@@ -491,6 +491,7 @@ After reload, click OK to switch this window to the drop-down. Then $(key) and t
 				"Indicator.js",
 				"ShellService.js",
 				"ShellIface.xml",
+				"WaylandLegacyWorkaround.js",
 				"Dock.js",
 				"stylesheet.css",
 				"schemas/org.gnome.shell.extensions.rooterm.gschema.xml"

@@ -7,7 +7,7 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {DBUS_DEST, DBUS_PATH, DBUS_IFACE} from './Const.js';
 
 /**
- * Underbar geometry for stored {@link ShellService.mainWin}; dialog raise
+ * Underbar geometry for stored {@link ShellService.win}.main; dialog raise
  * for stored prefs / connection slots.
  */
 export class Dock {
@@ -50,7 +50,7 @@ export class Dock {
         if (!this.isDockMode()) {
             return;
         }
-        var main = this.shell.mainWin;
+        var main = this.shell.win.main;
         if (main && !main.minimized) {
             this.dockMain(main);
         }
@@ -64,17 +64,17 @@ export class Dock {
         if (!win || win.minimized) {
             return;
         }
-        if (win === this.shell.mainWin) {
+        if (win === this.shell.win.main) {
             if (this.isDockMode()) {
                 this.dockMain(win);
                 this.raiseOpenDialogs();
             }
             return;
         }
-        if (win === this.shell.prefsWin || win === this.shell.connectionWin) {
+        if (win === this.shell.win.preferences || win === this.shell.win.connection) {
             this.raiseDialog(win);
-            if (this.shell.mainWin) {
-                this.shell.mainWin.unmake_above();
+            if (this.shell.win.main) {
+                this.shell.win.main.unmake_above();
             }
         }
     }
@@ -100,20 +100,12 @@ export class Dock {
         }
     }
 
-    dialogOpen() {
-        return (this.shell.prefsWin && !this.shell.prefsWin.minimized)
-            || (this.shell.connectionWin && !this.shell.connectionWin.minimized);
-    }
-
     raiseOpenDialogs() {
-        if (this.shell.prefsWin && !this.shell.prefsWin.minimized) {
-            this.raiseDialog(this.shell.prefsWin);
+        if (this.shell.win.preferences && !this.shell.win.preferences.minimized) {
+            this.raiseDialog(this.shell.win.preferences);
         }
-        if (this.shell.connectionWin && !this.shell.connectionWin.minimized) {
-            this.raiseDialog(this.shell.connectionWin);
-        }
-        if (this.dialogOpen() && this.shell.mainWin) {
-            this.shell.mainWin.unmake_above();
+        if (this.shell.win.connection && !this.shell.win.connection.minimized) {
+            this.raiseDialog(this.shell.win.connection);
         }
     }
 
@@ -121,8 +113,8 @@ export class Dock {
      * Preferences / Connection: centre once, keep above main.
      */
     raiseDialog(win) {
-        if (this.shell.mainWin) {
-            this.shell.mainWin.unmake_above();
+        if (this.shell.win.main) {
+            this.shell.win.main.unmake_above();
         }
         if (!win.rootermCentered) {
             var mon = win.get_monitor();
@@ -208,7 +200,8 @@ export class Dock {
                 self.dockWindow(win);
             });
         }
-        if (this.dialogOpen()) {
+        if ((this.shell.win.preferences && !this.shell.win.preferences.minimized)
+                || (this.shell.win.connection && !this.shell.win.connection.minimized)) {
             win.unmake_above();
             win.stick();
             return;
