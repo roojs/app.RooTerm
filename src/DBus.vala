@@ -41,6 +41,12 @@ namespace RooTerm
 		public Application application;
 
 		/**
+		 * True after the user confirms quit (or quit with no open terminals).
+		 * Lets {@link MainWindow} ``close_request`` allow destroy without a second dialog.
+		 */
+		public bool quitting = false;
+
+		/**
 		 * Owns the session-bus name and registers this object.
 		 *
 		 * @param application Owning app
@@ -148,11 +154,46 @@ namespace RooTerm
 		}
 
 		/**
-		 * Quit the application (Shell panel / ``rooterm --quit``).
+		 * Quit the application (Shell panel / ``rooterm --quit`` / VTE menu).
+		 * Always confirms when the main window exists (a terminal is always open).
 		 */
 		public void quit()
 		{
-			this.application.quit();
+			if (this.quitting) {
+				this.application.quit();
+				return;
+			}
+			var window = this.application.window;
+			if (window == null) {
+				this.quitting = true;
+				this.application.quit();
+				return;
+			}
+			var n = 0;
+			for (var child = window.host_stack.pages.get_first_child();
+					child != null; child = child.get_next_sibling()) {
+				var page = child as Host.Page;
+				if (page == null) {
+					continue;
+				}
+				n += page.tab_view.n_pages;
+			}
+			var alert = new Adw.AlertDialog("Quit Roo Term?",
+				n == 1 ? "There is 1 open terminal."
+					: "There are " + n.to_string() + " open terminals.");
+			alert.add_response("cancel", "Cancel");
+			alert.add_response("quit", "Quit");
+			alert.set_response_appearance("quit", Adw.ResponseAppearance.DESTRUCTIVE);
+			alert.default_response = "cancel";
+			alert.close_response = "cancel";
+			alert.response.connect((response) => {
+				if (response != "quit") {
+					return;
+				}
+				this.quitting = true;
+				this.application.quit();
+			});
+			alert.present(window);
 		}
 
 		/**

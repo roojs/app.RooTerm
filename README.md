@@ -27,6 +27,20 @@ Screenshot coming later.
 - **Local shells** — local PTY tabs alongside SSH hosts
 - **sudo after login** — optional `sudo -i` (and LXC-host helpers) on connect
 
+## Secrets and SSH keys
+
+RooTerm encourages **passphrased** SSH identities rather than unprotected private
+keys on disk. When you use **Set up SSH key**, the app creates (or reuses)
+`~/.ssh/id_ed25519_rooterm` with a passphrase you enter twice, then stores that
+passphrase in **libsecret** (GNOME Keyring / Secret Service), keyed by the key
+path. Connection passwords go in the keyring the same way (by connection UUID).
+`connections.json` never holds secrets.
+
+That keeps the private key encrypted at rest while still letting RooTerm unlock
+it for login and `ssh-copy-id` without retyping every time. If an existing
+identity has **no** passphrase, Edit connection can offer **Replace with
+passphrased key** so you can move to the same pattern.
+
 ## Dependencies (Debian / Ubuntu)
 
 Build (matches `meson.build` minimums: GTK ≥ 4.14, Libadwaita ≥ 1.5,
@@ -75,14 +89,37 @@ tree is enough.
 
 **Do not** call `valac` directly — always build with Meson/Ninja.
 
-### Debian package
+### Packaging / releases
+
+GitHub Actions (see [`.github/workflows/release.yml`](.github/workflows/release.yml))
+builds three package formats in parallel on `v*` tags (and via workflow
+dispatch), then a managing job attaches them to the GitHub Release:
+
+| Artifact | Job | Config |
+|----------|-----|--------|
+| `.deb` (amd64) | `build-debian` | [`debian/`](debian/) |
+| `.rpm` (Fedora 42) | `build-rpm` | [`packaging/rpm/rooterm.spec`](packaging/rpm/rooterm.spec) |
+| AppImage (x86_64 + aarch64) | `build-appimage` | [`sqgipkg.json`](sqgipkg.json) |
+
+Local Debian package:
 
 ```bash
 dpkg-buildpackage -us -uc -b
 ```
 
-GitHub Actions builds `.deb` artifacts on `v*` tags (and via workflow
-dispatch) — see [`.github/workflows/release.yml`](.github/workflows/release.yml).
+Local RPM (Fedora / `rpmbuild`):
+
+```bash
+./scripts/ci/build-rpm.sh
+```
+
+Local AppImages need [sqgi](https://github.com/supercamel/sqgi) / `sqgipkg`
+installed, then:
+
+```bash
+sqgipkg --target appimage --appimage-arch x86_64
+sqgipkg --target appimage --appimage-arch aarch64
+```
 
 ## Config paths
 

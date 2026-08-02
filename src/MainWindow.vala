@@ -194,6 +194,27 @@ namespace RooTerm
 				kind = Host.ConnectionKind.LOCAL
 			};
 			this.config.tree.append(null, this.localhost);
+			var has_group = false;
+			foreach (var conn in this.config.by_uuid.values) {
+				if (!conn.deleted && conn.kind == Host.ConnectionKind.GROUP) {
+					has_group = true;
+					break;
+				}
+			}
+			if (!has_group) {
+				var all = new Host.Connection() {
+					uuid = GLib.Uuid.string_random(),
+					name = "All",
+					kind = Host.ConnectionKind.GROUP
+				};
+				this.config.by_uuid.set(all.uuid, all);
+				this.config.tree.append(null, all);
+				try {
+					this.config.save();
+				} catch (GLib.Error e) {
+					GLib.warning("config save failed: %s", e.message);
+				}
+			}
 			this.config.tree.sort((a, b) => {
 				if (a.kind == Host.ConnectionKind.LOCAL) {
 					return -1;
@@ -414,7 +435,10 @@ namespace RooTerm
 
 			this.close_request.connect(() => {
 				if (!this.is_docked) {
-					((Application) this.application).quit();
+					if (this.dbus.quitting) {
+						return false;
+					}
+					this.dbus.quit();
 					return true;
 				}
 				if (this.sessions.close_current()) {

@@ -1,4 +1,10 @@
 /build/
+/build-linux-*/
+/dist-linux-*/
+/.sqgipkg/
+/.rpmbuild/
+/.ci-cache/
+/artifacts/
 /.deps/
 *.debug.log
 *~

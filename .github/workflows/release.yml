@@ -1,6 +1,7 @@
 name: Release build
 
-# Builds a Debian .deb (amd64) on Ubuntu and publishes it for tags like `v0.1.0`.
+# Parallel package jobs (Debian, RPM, AppImage) plus a managing publish job
+# that attaches artifacts to the GitHub Release for tags like `v0.1.0`.
 # Also runnable via workflow_dispatch (artifact upload only when untagged).
 
 run-name: Release build · ${{ github.ref_name }}
@@ -10,12 +11,20 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      refresh_cache:
+        description: Rebuild sqgipkg / Meson caches from scratch
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
+env:
+  APPIMAGE_EXTRACT_AND_RUN: '1'
+
 jobs:
-  build:
+  build-debian:
     name: Build Debian package
     runs-on: ubuntu-24.04
     steps:
@@ -39,7 +48,6 @@ jobs:
         run: |
           set -euo pipefail
           ver="${GITHUB_REF_NAME#v}"
-          # Keep Debian revision; replace upstream version in the top entry.
           if head -1 debian/changelog | grep -q "^rooterm ("; then
             sed -i "1s/^rooterm ([^)]*)/rooterm (${ver}-1)/" debian/changelog
           fi
@@ -56,18 +64,163 @@ jobs:
           cp ../rooterm_*.deb artifacts/
           ls -lh artifacts
 
-      - name: Upload build artifacts
+      - name: Upload Debian artifacts
         uses: actions/upload-artifact@v4
         with:
           name: rooterm-deb
           path: artifacts/*
 
-      - name: Publish release assets
-        if: startsWith(github.ref, 'refs/tags/')
+  build-rpm:
+    name: Build RPM package
+    runs-on: ubuntu-24.04
+    container:
+      image: fedora:42
+    steps:
+      # Fedora container image has no git; checkout needs it.
+      - name: Install git
+        run: dnf -y install --setopt=install_weak_deps=False git-core ca-certificates
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build .rpm
+        run: |
+          set -euo pipefail
+          chmod +x scripts/ci/build-rpm.sh
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            ./scripts/ci/build-rpm.sh "${GITHUB_REF_NAME#v}"
+          else
+            ./scripts/ci/build-rpm.sh
+          fi
+
+      - name: Upload RPM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rooterm-rpm
+          path: artifacts/*.rpm
+
+  build-appimage:
+    name: Build AppImages
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout RooTerm
+        uses: actions/checkout@v4
+        with:
+          path: RooTerm
+
+      - name: Restore sqgipkg dependency cache
+        uses: actions/cache@v4
+        with:
+          path: RooTerm/.sqgipkg
+          key: sqgipkg-deps-v1-${{ inputs.refresh_cache && github.run_id || 'stable' }}-${{ hashFiles('RooTerm/sqgipkg.json', 'RooTerm/scripts/release/sqgi.revision') }}
+          restore-keys: |
+            sqgipkg-deps-v1-stable-
+
+      - name: Restore sqgipkg Meson build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            RooTerm/build-linux-x86_64
+            RooTerm/build-linux-aarch64
+          key: sqgipkg-meson-v1-${{ inputs.refresh_cache && github.run_id || 'stable' }}-${{ hashFiles('RooTerm/**/*.vala', 'RooTerm/**/meson.build', 'RooTerm/meson.build', 'RooTerm/sqgipkg.json') }}
+          restore-keys: |
+            sqgipkg-meson-v1-stable-
+
+      - name: Install host build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build pkg-config git file ca-certificates \
+            wget curl meson valac gobject-introspection \
+            libglib2.0-dev libgirepository1.0-dev \
+            gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
+            qemu-user-static binfmt-support squashfs-tools \
+            desktop-file-utils
+
+      - name: Read sqgi revision
+        id: sqgi
+        working-directory: RooTerm
+        run: |
+          rev="$(grep -v '^[[:space:]]*#' scripts/release/sqgi.revision | grep -v '^[[:space:]]*$' | head -n1 | tr -d '[:space:]')"
+          if [ -z "$rev" ]; then
+            echo "Missing sqgi revision in scripts/release/sqgi.revision" >&2
+            exit 1
+          fi
+          echo "rev=$rev" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout sqgi (runtime + sqgipkg)
+        uses: actions/checkout@v4
+        with:
+          repository: supercamel/sqgi
+          path: sqgi
+          ref: ${{ steps.sqgi.outputs.rev }}
+
+      - name: Restore sqgi build cache
+        uses: actions/cache@v4
+        with:
+          path: sqgi/build
+          key: sqgi-build-v1-${{ hashFiles('RooTerm/scripts/release/sqgi.revision') }}
+          restore-keys: |
+            sqgi-build-v1-
+
+      - name: Build and install sqgi
+        run: |
+          cmake -S sqgi -B sqgi/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSQ_ENABLE_JIT=ON
+          cmake --build sqgi/build
+          sudo cmake --install sqgi/build --prefix /usr/local
+          sudo ldconfig
+
+      - name: Build Linux x86_64 AppImage
+        working-directory: RooTerm
+        run: |
+          chmod +x scripts/release/meson-sqgipkg-setup.sh
+          sqgipkg --target appimage --appimage-arch x86_64 --sqgi-source-dir "$GITHUB_WORKSPACE/sqgi"
+
+      - name: Build Linux aarch64 AppImage
+        working-directory: RooTerm
+        run: |
+          sqgipkg --target appimage --appimage-arch aarch64 --sqgi-source-dir "$GITHUB_WORKSPACE/sqgi"
+
+      - name: Collect AppImage artifacts
+        working-directory: RooTerm
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          cp dist-linux-x86_64/RooTerm.AppImage artifacts/RooTerm-x86_64.AppImage
+          cp dist-linux-aarch64/RooTerm.AppImage artifacts/RooTerm-aarch64.AppImage
+          ls -lh artifacts
+
+      - name: Upload AppImage artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rooterm-appimage
+          path: RooTerm/artifacts/*
+
+  publish:
+    name: Publish release assets
+    needs: [build-debian, build-rpm, build-appimage]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          ls -lh artifacts
+          ver="${GITHUB_REF_NAME#v}"
+          if head -1 debian/changelog | grep -q "^rooterm ("; then
+            sed -i "1s/^rooterm ([^)]*)/rooterm (${ver}-1)/" debian/changelog
+          fi
           notes="$(sed -n '/^  \*/,/^ -- /p' debian/changelog | sed '$d')"
           gh release create "$GITHUB_REF_NAME" artifacts/* \
             --repo "$GITHUB_REPOSITORY" \

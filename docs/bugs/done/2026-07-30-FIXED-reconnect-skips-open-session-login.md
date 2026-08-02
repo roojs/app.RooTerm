@@ -31,7 +31,7 @@
 - **ℹ️** EXITED hint text tells the user **Enter to reconnect** (`SshTerminal` `child_exited`).
 - **✔️** {@link SshTerminal.reconnect} only resets stream marks and calls `this.spawn()` — no job.
 - **ℹ️** Already flagged as **💩** in `docs/plans/0.5-DONE-dialog-terminal-workflows.md` (dead-tab reconnect still only `spawn()`).
-- **🚫** Not a feature gap for “delete connection closes sessions” (`docs/plans/0.6-…`) — wrong place for this fix.
+- **🚫** Not a feature gap for “delete connection closes sessions” (`docs/plans/0.6-DONE-…`) — wrong place for this fix.
 
 ---
 

@@ -241,7 +241,7 @@ namespace RooTerm
 			}
 
 			if (opt_quit) {
-				this.quit();
+				this.dbus.quit();
 				return 0;
 			}
 

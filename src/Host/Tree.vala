@@ -244,6 +244,7 @@ namespace RooTerm.Host
 					}
 					picked = picked.get_parent();
 				}
+				this.menu.popup_for(null, x, y);
 			});
 			this.list_view.add_controller(menu_click);
 			this.list_view.activate.connect((pos) => {
