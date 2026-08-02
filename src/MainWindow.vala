@@ -112,6 +112,7 @@ namespace RooTerm
 			} catch (GLib.Error e) {
 				GLib.warning("config load failed: %s", e.message);
 				config = new Config();
+				config.tree.config = config;
 			}
 
 			var monitors = Gdk.Display.get_default().get_monitors();
@@ -209,11 +210,7 @@ namespace RooTerm
 				};
 				this.config.by_uuid.set(all.uuid, all);
 				this.config.tree.append(null, all);
-				try {
-					this.config.save();
-				} catch (GLib.Error e) {
-					GLib.warning("config save failed: %s", e.message);
-				}
+				this.config.save();
 			}
 			this.config.tree.sort((a, b) => {
 				if (a.kind == Host.ConnectionKind.LOCAL) {
@@ -449,7 +446,25 @@ namespace RooTerm
 				return true;
 			});
 
-			var term = this.sessions.open_local(this.localhost);
+			var restore = new Gee.ArrayList<Host.Connection>();
+			foreach (var conn in this.config.by_uuid.values) {
+				if (conn.kind != Host.ConnectionKind.LOCAL_PATH) {
+					continue;
+				}
+				restore.add(conn);
+			}
+			Terminal.Local? term = null;
+			foreach (var conn in restore) {
+				this.config.by_uuid.unset(conn.uuid);
+				if (!GLib.FileUtils.test(conn.cwd, GLib.FileTest.IS_DIR)) {
+					continue;
+				}
+				term = this.sessions.open_local(this.localhost, conn.cwd);
+			}
+			if (term == null) {
+				term = this.sessions.open_local(this.localhost);
+			}
+			this.config.save();
 			// After Application add_window + present: focus, prime Shell roles, dock cue.
 			GLib.Idle.add(() => {
 				this.host_tree.select(term.connection);

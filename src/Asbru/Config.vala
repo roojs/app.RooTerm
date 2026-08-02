@@ -233,6 +233,7 @@ namespace RooTerm.Asbru
 		public RooTerm.Config to_config()
 		{
 			var config = new RooTerm.Config();
+			config.tree.config = config;
 			config.terminal_font = this.terminal_font;
 			foreach (var conn in this.by_uuid.values) {
 				if (conn.auth == "publickey") {

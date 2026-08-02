@@ -101,7 +101,7 @@ namespace RooTerm.Session
 			if (this.by_uuid.has_key(connection.uuid)) {
 				page = this.by_uuid.get(connection.uuid);
 			} else {
-				page = new Host.Page(connection, this.tree);
+				page = new Host.Page(connection, this.tree, this.config);
 				page.empty.connect(() => {
 					this.close(page);
 				});
@@ -182,7 +182,7 @@ namespace RooTerm.Session
 			if (this.by_uuid.has_key(connection.uuid)) {
 				page = this.by_uuid.get(connection.uuid);
 			} else {
-				page = new Host.Page(connection, this.tree);
+				page = new Host.Page(connection, this.tree, this.config);
 				page.empty.connect(() => {
 					this.close(page);
 				});

@@ -42,6 +42,10 @@ namespace RooTerm.Host
 			set;
 			default = new TreeNodesFlat();
 		}
+		/**
+		 * Owning config (set on {@link Config.tree} only); used to save on expand.
+		 */
+		public weak RooTerm.Config? config;
 
 		/**
 		 * Number of rows (Vala ``foreach`` / index access).
@@ -142,6 +146,13 @@ namespace RooTerm.Host
 			add_to.items_changed(position, 0, 1);
 			conn.parent = parent;
 			conn.parent_uuid = parent == null ? "" : parent.uuid;
+			if (this.config != null
+				&& (conn.kind == ConnectionKind.GROUP || conn.lxc_host)
+				&& conn.expand_save_sid == 0) {
+				conn.expand_save_sid = conn.notify["expanded"].connect(() => {
+					this.config.save();
+				});
+			}
 			if (conn.deleted || conn.kind == ConnectionKind.GROUP) {
 				return;
 			}
@@ -156,6 +167,10 @@ namespace RooTerm.Host
 		 */
 		public void remove(Connection conn)
 		{
+			if (conn.expand_save_sid != 0) {
+				conn.disconnect(conn.expand_save_sid);
+				conn.expand_save_sid = 0;
+			}
 			var add_to = conn.parent == null ? this : conn.parent.children;
 			var pos = 0u;
 			if (add_to.find(conn, out pos)) {

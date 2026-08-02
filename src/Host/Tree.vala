@@ -87,7 +87,7 @@ namespace RooTerm.Host
 			this.tree_model = new Gtk.TreeListModel(
 				window.config.tree,
 				false,
-				true,
+				false,
 				(item) => {
 					var conn = item as Connection;
 					if (conn == null) {
@@ -168,7 +168,19 @@ namespace RooTerm.Host
 				var expander = (Gtk.TreeExpander) list_item.child;
 				var row_box = (Gtk.Box) expander.child;
 				var mark_box = (Gtk.Box) row_box.get_last_child();
-				var conn = (Connection) ((Gtk.TreeListRow) list_item.item).item;
+				var list_row = (Gtk.TreeListRow) list_item.item;
+				var conn = (Connection) list_row.item;
+				if (conn.kind == ConnectionKind.LOCAL) {
+					list_row.expanded = true;
+				} else if ((conn.kind == ConnectionKind.GROUP || conn.lxc_host)
+					&& conn.expand_binding == null) {
+					conn.expand_binding = conn.bind_property(
+						"expanded",
+						list_row,
+						"expanded",
+						GLib.BindingFlags.SYNC_CREATE | GLib.BindingFlags.BIDIRECTIONAL
+					);
+				}
 				var old_sid = mark_box.get_data<ulong>("sessions-sid");
 				if (old_sid != 0) {
 					mark_box.get_data<GLib.ListStore>("sessions").disconnect(old_sid);
@@ -208,6 +220,12 @@ namespace RooTerm.Host
 				var list_item = (Gtk.ListItem) obj;
 				var expander = (Gtk.TreeExpander) list_item.child;
 				var mark_box = (Gtk.Box) ((Gtk.Box) expander.child).get_last_child();
+				var list_row = list_item.item as Gtk.TreeListRow;
+				var unbound = list_row != null ? list_row.item as Connection : null;
+				if (unbound != null && unbound.expand_binding != null) {
+					unbound.expand_binding.unbind();
+					unbound.expand_binding = null;
+				}
 				var sid = mark_box.get_data<ulong>("sessions-sid");
 				if (sid != 0) {
 					mark_box.get_data<GLib.ListStore>("sessions").disconnect(sid);

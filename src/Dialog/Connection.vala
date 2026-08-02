@@ -590,11 +590,7 @@ namespace RooTerm.Dialog
 			this.setup_key_btn.visible = false;
 			this.auth_key.visible = true;
 			this.auth_key.active = true;
-			try {
-				this.window.config.save();
-			} catch (GLib.Error e) {
-				GLib.warning("config save failed: %s", e.message);
-			}
+			this.window.config.save();
 			this.pass_box.visible = this.auth_password.active || this.sudo_check.active;
 			this.pass_label.label = this.auth_key.active && this.sudo_check.active
 				? "Password (required for sudo)"
@@ -724,11 +720,7 @@ namespace RooTerm.Dialog
 			this.auth_key.active = true;
 			this.upgrade_key_btn.visible = false;
 			this.retire_key_btn.visible = true;
-			try {
-				this.window.config.save();
-			} catch (GLib.Error e) {
-				GLib.warning("config save failed: %s", e.message);
-			}
+			this.window.config.save();
 			GLib.debug("key replaced new=%s old=%s name=%s",
 				job.installed_identity, old_identity, this.target.name);
 			var done = new Adw.AlertDialog(
@@ -803,11 +795,7 @@ namespace RooTerm.Dialog
 			}
 			this.target.retire_key = "";
 			this.retire_key_btn.visible = false;
-			try {
-				this.window.config.save();
-			} catch (GLib.Error e) {
-				GLib.warning("config save failed: %s", e.message);
-			}
+			this.window.config.save();
 			GLib.debug("retire_key cleared name=%s", this.target.name);
 			this.window.dbus.call("Show", new GLib.Variant("(s)", "connection"));
 		}
@@ -912,11 +900,7 @@ namespace RooTerm.Dialog
 				this.window.config.by_uuid.set(this.target.uuid, this.target);
 				this.window.config.tree.append(this.parent_group, this.target);
 			}
-			try {
-				this.window.config.save();
-			} catch (GLib.Error e) {
-				GLib.warning("config save failed: %s", e.message);
-			}
+			this.window.config.save();
 
 			if (this.target.auth == "ssh_key" && this.target.retire_key.length == 0
 					&& this.key_open()) {

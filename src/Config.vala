@@ -164,6 +164,7 @@ namespace RooTerm
 			parser.load_from_file(path);
 			var config = (Config) Json.gobject_deserialize(typeof(Config), parser.get_root());
 			config.path = path;
+			config.tree.config = config;
 			foreach (var conn in config.connections) {
 				if (conn.uuid.length == 0) {
 					continue;
@@ -173,6 +174,9 @@ namespace RooTerm
 			}
 			foreach (var conn in config.by_uuid.values) {
 				if (conn.deleted) {
+					continue;
+				}
+				if (conn.kind == Host.ConnectionKind.LOCAL_PATH) {
 					continue;
 				}
 				Host.Connection? parent = null;
@@ -253,10 +257,9 @@ namespace RooTerm
 
 		/**
 		 * Write the current tree to {@link path} (no passwords).
-		 *
-		 * @throws GLib.Error On write failure
+		 * Write failures log a warning only.
 		 */
-		public void save() throws GLib.Error
+		public void save()
 		{
 			this.connections.clear();
 			var ordered = new Gee.ArrayList<Host.Connection>();
@@ -273,7 +276,12 @@ namespace RooTerm
 			generator.set_root(Json.gobject_serialize(this));
 			generator.pretty = true;
 			generator.indent = 2;
-			generator.to_file(this.path);
+			try {
+				generator.to_file(this.path);
+			} catch (GLib.Error e) {
+				GLib.warning("config save failed: %s", e.message);
+				return;
+			}
 			GLib.debug("saved connections=%d to %s", this.by_uuid.size, this.path);
 		}
 	}

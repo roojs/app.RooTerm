@@ -360,11 +360,7 @@ namespace RooTerm.Dialog
 			if (this.toggle_btn.label != "Press a key…" && this.toggle_btn.label.length > 0) {
 				this.window.config.toggle_key = this.toggle_btn.label;
 			}
-			try {
-				this.window.config.save();
-			} catch (GLib.Error e) {
-				GLib.warning("config save failed: %s", e.message);
-			}
+			this.window.config.save();
 			var app = this.window.application as RooTerm.Application;
 			if (app == null) {
 				return;

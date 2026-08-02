@@ -29,6 +29,7 @@ namespace RooTerm.Host
 	{
 		public Connection connection;
 		public TreeNodes tree;
+		public RooTerm.Config config;
 		public Adw.TabView tab_view;
 		public TabBar tab_bar;
 		/**
@@ -56,8 +57,9 @@ namespace RooTerm.Host
 		 *
 		 * @param connection Host this page belongs to
 		 * @param tree Root host tree (gateway for Localhost path children)
+		 * @param config App config (persist local path rows)
 		 */
-		public Page(Connection connection, TreeNodes tree)
+		public Page(Connection connection, TreeNodes tree, RooTerm.Config config)
 		{
 			Object(
 				orientation: Gtk.Orientation.VERTICAL,
@@ -67,6 +69,7 @@ namespace RooTerm.Host
 			);
 			this.connection = connection;
 			this.tree = tree;
+			this.config = config;
 			this.add_css_class("vte-path");
 			this.tab_view = new Adw.TabView() {
 				hexpand = true,
@@ -92,6 +95,8 @@ namespace RooTerm.Host
 				if (term.connection.kind == ConnectionKind.LOCAL_PATH) {
 					term.connection.sessions.remove_all();
 					this.tree.remove(term.connection);
+					this.config.by_uuid.unset(term.connection.uuid);
+					this.config.save();
 				} else {
 					this.connection.sessions.remove(at);
 				}
@@ -123,6 +128,15 @@ namespace RooTerm.Host
 				if (term.connection.kind == ConnectionKind.LOCAL_PATH && term.connection.name != text) {
 					term.connection.name = text;
 				}
+				if (term.connection.kind == ConnectionKind.LOCAL_PATH) {
+					var local = (Terminal.Local) term;
+					if ((local.peer_user.length == 0
+							|| local.peer_user == GLib.Environment.get_user_name())
+						&& term.connection.cwd != term.cwd) {
+						term.connection.cwd = term.cwd;
+						this.config.save();
+					}
+				}
 				this.changed();
 			});
 			var tab = this.tab_view.append(term);
@@ -133,11 +147,15 @@ namespace RooTerm.Host
 				var row = new Connection() {
 					uuid = GLib.Uuid.string_random(),
 					name = term.label(),
-					kind = ConnectionKind.LOCAL_PATH
+					cwd = term.cwd.length > 0 ? term.cwd : GLib.Environment.get_home_dir(),
+					kind = ConnectionKind.LOCAL_PATH,
+					parent_uuid = this.connection.uuid
 				};
 				term.connection = row;
 				row.sessions.append(term);
+				this.config.by_uuid.set(row.uuid, row);
 				this.tree.append(this.connection, row);
+				this.config.save();
 			} else {
 				this.connection.sessions.append(term);
 			}

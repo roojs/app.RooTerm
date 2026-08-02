@@ -233,7 +233,7 @@ namespace RooTerm
 					// Settings-only; no window required (no throwaway parent).
 					new GnomeShell(this.window).ensure_toggle_binding(opt_toggle_key);
 				} catch (GLib.Error e) {
-					GLib.warning("toggle-key save failed: %s", e.message);
+					GLib.warning("toggle-key failed: %s", e.message);
 				}
 				if (!opt_toggle && !opt_quit) {
 					return 0;

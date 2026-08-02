@@ -126,11 +126,7 @@ namespace RooTerm.Host
 					};
 					this.window.config.by_uuid.set(conn.uuid, conn);
 					this.window.config.tree.append(null, conn);
-					try {
-						this.window.config.save();
-					} catch (GLib.Error e) {
-						GLib.warning("config save failed: %s", e.message);
-					}
+					this.window.config.save();
 				});
 				alert.present(this.window);
 			});
@@ -190,11 +186,7 @@ namespace RooTerm.Host
 							Posix.kill(pid, Posix.Signal.TERM);
 						}
 					}
-					try {
-						this.window.config.save();
-					} catch (GLib.Error e) {
-						GLib.warning("config save failed: %s", e.message);
-					}
+					this.window.config.save();
 				});
 				alert.present(this.window);
 			});

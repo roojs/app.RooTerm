@@ -42,6 +42,22 @@ namespace RooTerm.Host
 		public string uuid { get; set; default = ""; }
 		public string name { get; set; default = ""; }
 		/**
+		 * Absolute working directory for {@link ConnectionKind.LOCAL_PATH} restore.
+		 * Empty for other kinds.
+		 */
+		public string cwd { get; set; default = ""; }
+		/**
+		 * Whether this row is expanded in the host tree.
+		 * Default true matches previous TreeListModel autoexpand.
+		 * Used for groups and LXC hosts only; Localhost always expanded on bind.
+		 */
+		public bool expanded { get; set; default = true; }
+
+		/** Active row↔expanded binding from {@link Tree}; not serialized. */
+		public GLib.Binding? expand_binding;
+		/** ``notify["expanded"]`` → save from {@link TreeNodes}; not serialized. */
+		public ulong expand_save_sid;
+		/**
 		 * Search / filter label (parent prefix for LXC children); not stored / not JSON.
 		 */
 		public string search_name {
@@ -348,11 +364,7 @@ namespace RooTerm.Host
 			foreach (var child in gone) {
 				window.config.tree.remove(child);
 			}
-			try {
-				window.config.save();
-			} catch (GLib.Error e) {
-				GLib.warning("config save failed: %s", e.message);
-			}
+			window.config.save();
 		}
 	}
 }
