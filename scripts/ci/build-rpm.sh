@@ -12,13 +12,8 @@ if [ "$#" -ge 1 ] && [ -n "$1" ]; then
 elif [ -n "${GITHUB_REF_NAME:-}" ] && [[ "${GITHUB_REF:-}" == refs/tags/v* ]]; then
   ver="${GITHUB_REF_NAME#v}"
 else
-  ver="$(python3 - <<'PY'
-import re
-text = open("meson.build", encoding="utf-8").read()
-m = re.search(r"project\(\s*'rooterm'.*?version:\s*'([^']+)'", text, re.S)
-print(m.group(1) if m else "", end="")
-PY
-)"
+  # Prefer sed over python3 — Fedora container may not have Python yet.
+  ver="$(sed -n "s/.*version:[[:space:]]*'\\([^']*\\)'.*/\\1/p" meson.build | head -1)"
 fi
 if [ -z "$ver" ]; then
   echo "Could not determine package version" >&2
@@ -36,7 +31,7 @@ run_root() {
 }
 
 run_root dnf -y install \
-  rpm-build rpmdevtools python3 \
+  rpm-build rpmdevtools \
   meson ninja-build gcc pkgconf-pkg-config vala desktop-file-utils \
   gtk4-devel libadwaita-devel vte291-gtk4-devel \
   libgee-devel libgcrypt-devel libyaml-devel \

@@ -37,9 +37,14 @@ path. Connection passwords go in the keyring the same way (by connection UUID).
 `connections.json` never holds secrets.
 
 That keeps the private key encrypted at rest while still letting RooTerm unlock
-it for login and `ssh-copy-id` without retyping every time. If an existing
-identity has **no** passphrase, Edit connection can offer **Replace with
-passphrased key** so you can move to the same pattern.
+it for login and `ssh-copy-id` without retyping every time.
+
+Upgrading from a plain **password** login is straightforward: open the
+connection, use **Set up SSH key**, and RooTerm creates or reuses the shared
+passphrased identity, installs it on the host (using the stored password once),
+and switches the connection to key auth. If you already use an identity with
+**no** passphrase, Edit connection can offer **Replace with passphrased key**
+so you can move to the same pattern.
 
 ## Dependencies (Debian / Ubuntu)
 
