@@ -155,11 +155,14 @@ namespace RooTerm
 
 		/**
 		 * Quit the application (Shell panel / ``rooterm --quit`` / VTE menu).
-		 * Always confirms when the main window exists (a terminal is always open).
+		 * Confirms when the main window exists, unless ``force`` (WaylandClient handoff).
+		 *
+		 * @param force Skip the confirm dialog and quit immediately
 		 */
-		public void quit()
+		public void quit(bool force = false)
 		{
-			if (this.quitting) {
+			if (this.quitting || force) {
+				this.quitting = true;
 				this.application.quit();
 				return;
 			}
@@ -203,7 +206,7 @@ namespace RooTerm
 		 * sets it again so overview and Alt-Tab stay clear. On GNOME 48, Meta
 		 * has no hide_from_window_list for ordinary app windows.
 		 *
-		 * @param role ``main`` / ``preferences`` / ``connection``
+		 * @param role ``main`` / ``preferences``
 		 * @param skip True to hide from task lists
 		 */
 		public void skip_taskbar(string role, bool skip)
@@ -219,10 +222,6 @@ namespace RooTerm
 
 				case "preferences":
 					target = this.application.window.preferences_editor;
-					break;
-
-				case "connection":
-					target = this.application.window.connection_editor;
 					break;
 
 				default:

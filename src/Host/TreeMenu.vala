@@ -94,7 +94,7 @@ namespace RooTerm.Host
 					return;
 				}
 				this.window.connection_editor.fill(null, this.target);
-				this.window.dbus.call("Show", new GLib.Variant("(s)", "connection"));
+				this.window.connection_editor.present();
 			});
 			group.add_action(add_connection);
 			var add_group = new GLib.SimpleAction("add-group", null);
@@ -137,7 +137,7 @@ namespace RooTerm.Host
 					return;
 				}
 				this.window.connection_editor.fill(this.target, null);
-				this.window.dbus.call("Show", new GLib.Variant("(s)", "connection"));
+				this.window.connection_editor.present();
 			});
 			group.add_action(edit_connection);
 			var refresh_containers = new GLib.SimpleAction("refresh-containers", null);

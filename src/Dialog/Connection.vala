@@ -20,10 +20,9 @@ namespace RooTerm.Dialog
 {
 	/**
 	 * Add / edit a host {@link Host.Connection}: Basic + Port forwarding.
-	 * Standalone {@link Adw.Window} (not a sheet of the drop-down) so hide/show
-	 * of the main window does not bury or strand the editor — same pattern as
-	 * {@link Preferences}. One instance is kept on
-	 * {@link RooTerm.MainWindow.connection_editor} ({@link fill} + present).
+	 * Transient of {@link RooTerm.MainWindow}: GTK show/hide (not a Shell role).
+	 * One instance on {@link RooTerm.MainWindow.connection_editor}
+	 * ({@link fill} + {@link present}).
 	 */
 	public class Connection : Adw.Window
 	{
@@ -72,21 +71,15 @@ namespace RooTerm.Dialog
 		{
 			Object(
 				application: window.application,
+				transient_for: window,
 				title: "Connection",
 				resizable: false,
-				hide_on_close: false,
+				hide_on_close: true,
 				default_width: 560,
 				default_height: 520
 			);
 			this.add_css_class("floating-dialog");
 			this.window = window;
-			this.map.connect(() => {
-				this.window.shell.register(this, "connection");
-			});
-			this.close_request.connect(() => {
-				this.window.dbus.call("Hide", new GLib.Variant("(s)", "connection"));
-				return true;
-			});
 			this.target = new Host.Connection();
 
 			this.name_entry = new Gtk.Entry() { hexpand = true };
@@ -168,7 +161,7 @@ namespace RooTerm.Dialog
 					} catch (Jobs.Error e) {
 						GLib.warning("fetch hosts failed name=%s: %s", this.target.name, e.message);
 					}
-					this.window.dbus.call("Show", new GLib.Variant("(s)", "connection"));
+					this.present();
 				});
 			});
 			this.setup_key_btn.clicked.connect(() => {
@@ -580,7 +573,7 @@ namespace RooTerm.Dialog
 				job.terminal.close_in(ok ? 0 : 30);
 			}
 			if (!ok) {
-				this.window.dbus.call("Show", new GLib.Variant("(s)", "connection"));
+				this.present();
 				return;
 			}
 			this.pending_key_identity = job.installed_identity.length > 0
@@ -597,7 +590,7 @@ namespace RooTerm.Dialog
 				: "Password";
 			GLib.debug("ssh key installed identity=%s name=%s",
 				this.target.public_key, this.target.name);
-			this.window.dbus.call("Show", new GLib.Variant("(s)", "connection"));
+			this.present();
 		}
 
 		/**
@@ -708,7 +701,7 @@ namespace RooTerm.Dialog
 				job.terminal.close_in(ok ? 0 : 30);
 			}
 			if (!ok) {
-				this.window.dbus.call("Show", new GLib.Variant("(s)", "connection"));
+				this.present();
 				return;
 			}
 			this.target.auth = "ssh_key";
@@ -732,7 +725,7 @@ namespace RooTerm.Dialog
 			done.default_response = "ok";
 			done.close_response = "ok";
 			done.response.connect(() => {
-				this.window.dbus.call("Show", new GLib.Variant("(s)", "connection"));
+				this.present();
 			});
 			done.present(this.window);
 		}
@@ -790,14 +783,14 @@ namespace RooTerm.Dialog
 				job.terminal.close_in(ok ? 0 : 30);
 			}
 			if (!ok) {
-				this.window.dbus.call("Show", new GLib.Variant("(s)", "connection"));
+				this.present();
 				return;
 			}
 			this.target.retire_key = "";
 			this.retire_key_btn.visible = false;
 			this.window.config.save();
 			GLib.debug("retire_key cleared name=%s", this.target.name);
-			this.window.dbus.call("Show", new GLib.Variant("(s)", "connection"));
+			this.present();
 		}
 
 		/**

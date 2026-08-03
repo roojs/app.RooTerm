@@ -102,11 +102,8 @@ install_data(
   install_dir: get_option('datadir') / 'icons' / 'hicolor' / 'scalable' / 'apps',
 )
 
-install_subdir(
-  'resources/extension',
-  install_dir: get_option('datadir') / 'gnome-shell' / 'extensions' / 'rooterm@roojs.com',
-  strip_directory: true,
-)
+# Shell extension is installed per-user by GnomeShell.ensure from GResource —
+# do not ship a system copy under datadir/gnome-shell/extensions.
 
 desktop_conf = configuration_data()
 desktop_conf.set('bindir', get_option('prefix') / get_option('bindir'))

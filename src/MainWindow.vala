@@ -56,7 +56,7 @@ namespace RooTerm
 		 */
 		public bool block_toggle = false;
 		/**
-		 * Shared add/edit connection window (Shell Show/Hide).
+		 * Shared add/edit connection window (transient of main; GTK show/hide).
 		 */
 		public Dialog.Connection connection_editor;
 		/**
@@ -145,10 +145,8 @@ namespace RooTerm
 				() => {
 					this.shell.register(this, "main");
 					this.shell.register(this.preferences_editor, "preferences");
-					this.shell.register(this.connection_editor, "connection");
-					// Shell reload remaps dialogs; re-hide after Register (prime timeout is once).
+					// Shell reload remaps prefs; re-hide after Register (prime timeout is once).
 					this.dbus.call("Hide", new GLib.Variant("(s)", "preferences"));
-					this.dbus.call("Hide", new GLib.Variant("(s)", "connection"));
 				},
 				() => {
 				}
@@ -264,7 +262,7 @@ namespace RooTerm
 						return;
 					}
 					this.connection_editor.fill(conn, null);
-					this.dbus.call("Show", new GLib.Variant("(s)", "connection"));
+					this.connection_editor.present();
 				});
 				alert.present(this);
 			});
@@ -465,15 +463,13 @@ namespace RooTerm
 				term = this.sessions.open_local(this.localhost);
 			}
 			this.config.save();
-			// After Application add_window + present: focus, prime Shell roles, dock cue.
+			// After Application add_window + present: focus, prime Shell prefs, dock cue.
 			GLib.Idle.add(() => {
 				this.host_tree.select(term.connection);
 				this.sessions.focus();
 				this.preferences_editor.present();
-				this.connection_editor.present();
 				GLib.Timeout.add(400, () => {
 					this.dbus.call("Hide", new GLib.Variant("(s)", "preferences"));
-					this.dbus.call("Hide", new GLib.Variant("(s)", "connection"));
 					return GLib.Source.REMOVE;
 				});
 				this.shell.ensure(() => {

@@ -45,16 +45,16 @@ sudo meson install -C build
 ```
 
 Installs `/usr/bin/rooterm`, `/usr/share/applications/org.roojs.rooterm.desktop`,
-`/usr/share/icons/hicolor/scalable/apps/org.roojs.rooterm.svg`, and the Shell
-extension under `/usr/share/gnome-shell/extensions/rooterm@roojs.com/`.
+and `/usr/share/icons/hicolor/scalable/apps/org.roojs.rooterm.svg`.
 
 **Do not** install the app binary to `~/.local` — use `/usr` only.
 
 ### Shell extension
 
-Bundled under `resources/extension/` and installed by the app
-(`GnomeShell.ensure` → user extensions dir + enable). System package installs
-also place a copy under `/usr/share/gnome-shell/extensions/` via meson.
+Bundled under `resources/extension/` and installed by the app only
+(`GnomeShell.ensure` → `~/.local/share/gnome-shell/extensions/rooterm@roojs.com`
++ enable). Meson does **not** install a system copy under
+`/usr/share/gnome-shell/extensions/`.
 
 On GNOME Wayland, a **new** or **upgraded** extension often needs a session
 restart once before Shell runs the new `extension.js`.

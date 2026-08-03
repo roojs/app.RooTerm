@@ -8,7 +8,7 @@ import {DBUS_DEST, DBUS_PATH, DBUS_IFACE} from './Const.js';
 
 /**
  * Underbar geometry for stored {@link ShellService.win}.main; dialog raise
- * for stored prefs / connection slots.
+ * for the stored preferences slot.
  */
 export class Dock {
     constructor(shell) {
@@ -71,7 +71,7 @@ export class Dock {
             }
             return;
         }
-        if (win === this.shell.win.preferences || win === this.shell.win.connection) {
+        if (win === this.shell.win.preferences) {
             this.raiseDialog(win);
             if (this.shell.win.main) {
                 this.shell.win.main.unmake_above();
@@ -104,13 +104,10 @@ export class Dock {
         if (this.shell.win.preferences && !this.shell.win.preferences.minimized) {
             this.raiseDialog(this.shell.win.preferences);
         }
-        if (this.shell.win.connection && !this.shell.win.connection.minimized) {
-            this.raiseDialog(this.shell.win.connection);
-        }
     }
 
     /**
-     * Preferences / Connection: centre once, keep above main.
+     * Preferences: centre once, keep above main.
      */
     raiseDialog(win) {
         if (this.shell.win.main) {
@@ -200,8 +197,7 @@ export class Dock {
                 self.dockWindow(win);
             });
         }
-        if ((this.shell.win.preferences && !this.shell.win.preferences.minimized)
-                || (this.shell.win.connection && !this.shell.win.connection.minimized)) {
+        if (this.shell.win.preferences && !this.shell.win.preferences.minimized) {
             win.unmake_above();
             win.stick();
             return;

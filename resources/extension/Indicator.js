@@ -1,5 +1,6 @@
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import St from 'gi://St';
 
@@ -44,7 +45,8 @@ class Indicator extends PanelMenu.Button {
         quitItem.connect('activate', function() {
             Gio.DBus.session.call(
                 DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'Quit',
-                null, null, Gio.DBusCallFlags.NONE, 2000, null,
+                new GLib.Variant('(b)', [false]),
+                null, Gio.DBusCallFlags.NONE, 2000, null,
                 self.extension.onDBusFinished.bind(self.extension, 'Quit')
             );
         });

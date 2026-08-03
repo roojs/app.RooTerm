@@ -8,7 +8,7 @@ import {APP_ID, DBUS_DEST, DBUS_IFACE, DBUS_PATH, SHELL_DEST, SHELL_PATH} from '
 
 /**
  * Session bus org.roojs.RooTerm.Shell — Register / Show / Hide / Toggle
- * and Meta window slots for main / preferences / connection.
+ * and Meta window slots for main / preferences.
  *
  * Hide is Meta minimize (keeps slots alive). Main slides then minimizes.
  * skip_taskbar is cleared briefly around minimize (GNOME 48: app D-Bus
@@ -21,7 +21,6 @@ export class ShellService {
         this.win = {
             main: false,
             preferences: false,
-            connection: false,
         };
         this.waylandPending = [];
         this.export = null;
@@ -49,7 +48,6 @@ export class ShellService {
     disable() {
         this.win.main = false;
         this.win.preferences = false;
-        this.win.connection = false;
         this.waylandPending = [];
         if (this.nameId) {
             Gio.DBus.session.unown_name(this.nameId);
@@ -124,7 +122,7 @@ export class ShellService {
                 }
             }
         );
-        if (role !== 'preferences' && role !== 'connection') {
+        if (role !== 'preferences') {
             var actor = this.win[role].get_compositor_private();
             if (actor) {
                 actor.remove_all_transitions();
@@ -176,14 +174,12 @@ export class ShellService {
     }
 
     /**
-     * Show main underbar; yield stacking if prefs/connection are open.
+     * Show main underbar; yield stacking if preferences is open.
      */
     showMain() {
-        var front = (this.win.connection && !this.win.connection.minimized)
-            ? this.win.connection
-            : (this.win.preferences && !this.win.preferences.minimized)
-                ? this.win.preferences
-                : false;
+        var front = (this.win.preferences && !this.win.preferences.minimized)
+            ? this.win.preferences
+            : false;
         this.win.main.make_above();
         this.win.main.raise();
         if (front) {
@@ -216,7 +212,7 @@ export class ShellService {
         }
         var actor = this.win[role].get_compositor_private();
         // Main: slide off-screen first, then re-enter to minimize.
-        if (role !== 'preferences' && role !== 'connection'
+        if (role !== 'preferences'
                 && actor && !this.win[role].rootermReadyToMinimize) {
             this.win[role].rootermHiding = true;
             actor.remove_all_transitions();
@@ -272,7 +268,7 @@ export class ShellService {
 
     /**
      * After skip_taskbar is cleared: minimize (no WM effect), restore skip,
-     * and put main back above when both dialogs are hidden.
+     * and put main back above when preferences is hidden.
      */
     finishHide(role, actor) {
         var self = this;
@@ -307,11 +303,10 @@ export class ShellService {
         );
         console.error('rooterm: Hide role=' + role + ' id=' + this.win[role].get_id()
             + ' minimized=' + this.win[role].minimized);
-        if (role !== 'preferences' && role !== 'connection') {
+        if (role !== 'preferences') {
             return;
         }
         if ((this.win.preferences && !this.win.preferences.minimized)
-                || (this.win.connection && !this.win.connection.minimized)
                 || !this.win.main || this.win.main.minimized) {
             return;
         }
@@ -364,8 +359,8 @@ export class ShellService {
                 console.error('rooterm: unmanaged cleared slot id=' + win.get_id());
             });
         }
-        // Prefs/connection primed for Register; minimize until Show.
-        if (role === 'preferences' || role === 'connection') {
+        // Prefs primed for Register; minimize until Show.
+        if (role === 'preferences') {
             this.Hide(role);
         }
     }
@@ -413,8 +408,7 @@ export class ShellService {
             if (!win || win.minimized || !this.isRooTerm(win)) {
                 continue;
             }
-            if (win === this.win.main || win === this.win.preferences
-                    || win === this.win.connection) {
+            if (win === this.win.main || win === this.win.preferences) {
                 continue;
             }
             // Skip tiny surfaces (GTK map noise) so they do not steal pending roles.
