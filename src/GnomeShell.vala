@@ -212,6 +212,8 @@ namespace RooTerm
 			if (bundled > 0 && installed < bundled) {
 				try {
 					this.install(data_home, user_dir);
+					// Schema was just compiled; default source is still cached.
+					this.ensure_toggle_binding(Config.load().toggle_key);
 				} catch (GLib.Error e) {
 					GLib.warning("Shell extension install failed: %s", e.message);
 					this.alert(
@@ -463,13 +465,37 @@ After reload, click OK to switch this window to the drop-down. Then $(key) and t
 				}
 			}
 			// Extension schema: panel tooltip only (no wm grab).
-			try {
-				var ext = new GLib.Settings("org.gnome.shell.extensions.rooterm");
-				string[] keys = { key };
-				ext.set_strv("toggle", keys);
-			} catch (GLib.Error e) {
-				GLib.debug("extension toggle label: %s", e.message);
+			// Missing schema is a GLib critical (not a thrown Error) — look up first.
+			GLib.SettingsSchemaSource? source = GLib.SettingsSchemaSource.get_default();
+			var schema = source != null
+				? source.lookup("org.gnome.shell.extensions.rooterm", true)
+				: null;
+			if (schema == null) {
+				var data_home = GLib.Environment.get_variable("XDG_DATA_HOME");
+				if (data_home == null || data_home == "") {
+					data_home = GLib.Path.build_filename(
+						GLib.Environment.get_home_dir(), ".local", "share"
+					);
+				}
+				var glib_schemas = GLib.Path.build_filename(data_home, "glib-2.0", "schemas");
+				if (GLib.FileUtils.test(glib_schemas, GLib.FileTest.IS_DIR)) {
+					try {
+						source = new GLib.SettingsSchemaSource.from_directory(
+							glib_schemas, source, true
+						);
+						schema = source.lookup("org.gnome.shell.extensions.rooterm", true);
+					} catch (GLib.Error e) {
+						GLib.debug("extension toggle label schemas: %s", e.message);
+					}
+				}
 			}
+			if (schema == null) {
+				GLib.debug("extension toggle label: schema not installed yet");
+				return;
+			}
+			var ext = new GLib.Settings.full(schema, null, null);
+			string[] keys = { key };
+			ext.set_strv("toggle", keys);
 		}
 
 		/**
