@@ -1,6 +1,6 @@
 Name:           rooterm
 Version:        %{?rooterm_version}%{!?rooterm_version:0.1.0}
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        SSH host manager and terminal for GNOME
 License:        LGPLv3+
 URL:            https://github.com/roojs/app.RooTerm
@@ -47,8 +47,10 @@ passwords, optional Guake-style drop-down via a GNOME Shell extension,
 %{_bindir}/rooterm
 %{_datadir}/applications/org.roojs.rooterm.desktop
 %{_datadir}/icons/hicolor/scalable/apps/org.roojs.rooterm.svg
-%{_datadir}/gnome-shell/extensions/rooterm@roojs.com/
 
 %changelog
+* Tue Aug 04 2026 Alan Knowles <alan@roojs.com> - 0.1.0-2
+- Drop system GNOME Shell extension path; app installs per-user from GResource.
+
 * Sat Aug 01 2026 Alan Knowles <alan@roojs.com> - 0.1.0-1
 - Initial RPM packaging.

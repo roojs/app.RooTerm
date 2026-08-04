@@ -52,6 +52,20 @@ namespace RooTerm.Jobs
 		 */
 		protected virtual async void login() throws Error
 		{
+			if (this.connection.auth == "manual") {
+				while (!yield this.expect(State.WAIT_SHELL_PROMPT, 30000)) {
+					switch (this.current_state) {
+						case State.WAIT_HOST_CONFIRM:
+						case State.WAIT_VERIFICATION_CODE:
+						case State.WAIT_SSH_PASSWORD:
+							continue;
+						default:
+							throw new Error.TIMEOUT("login shell timeout name=%s".printf(
+								this.connection.name));
+					}
+				}
+				return;
+			}
 			while (!yield this.expect(State.WAIT_SSH_PASSWORD, 30000)) {
 				switch (this.current_state) {
 					case State.WAIT_SHELL_PROMPT:

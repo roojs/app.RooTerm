@@ -189,12 +189,15 @@ namespace RooTerm
 				css,
 				Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
 			);
-			this.localhost = new Host.Connection() {
-				uuid = "localhost",
-				name = "Localhost",
-				kind = Host.ConnectionKind.LOCAL
-			};
-			this.tree.append(null, this.localhost);
+			if (!this.tree.by_uuid.has_key("localhost")) {
+				this.tree.append(null, new Host.Connection() {
+					uuid = "localhost",
+					name = "Localhost",
+					kind = Host.ConnectionKind.LOCAL
+				});
+				this.tree.save();
+			}
+			this.localhost = this.tree.by_uuid.get("localhost");
 			var has_group = false;
 			foreach (var conn in this.tree.by_uuid.values) {
 				if (!conn.deleted && conn.kind == Host.ConnectionKind.GROUP) {

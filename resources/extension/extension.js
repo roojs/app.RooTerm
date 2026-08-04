@@ -156,6 +156,7 @@ export default class RooTermExtension extends Extension {
             if (method !== 'Toggle') {
                 return;
             }
+            // Last resort if D-Bus Toggle failed (app not on bus yet).
             try {
                 GLib.spawn_command_line_async('rooterm --toggle');
             } catch (spawnErr) {

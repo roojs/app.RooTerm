@@ -22,6 +22,8 @@ export class WaylandLegacyWorkaround {
         this.watchId = 0;
         this.dockMode = true;
         this.dockModeWatchId = 0;
+        this.hideAfterShowId = 0;
+        this.spawnRetryId = 0;
     }
 
     /**
@@ -121,7 +123,12 @@ export class WaylandLegacyWorkaround {
                 }
             }
             origShow(role);
-            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, function() {
+            if (self.hideAfterShowId) {
+                GLib.source_remove(self.hideAfterShowId);
+                self.hideAfterShowId = 0;
+            }
+            self.hideAfterShowId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, function() {
+                self.hideAfterShowId = 0;
                 self.hideFromList(self.shell.win[role]);
                 return GLib.SOURCE_REMOVE;
             });
@@ -179,6 +186,14 @@ export class WaylandLegacyWorkaround {
         this.client = null;
         this.pending = false;
         this.spawnTries = 0;
+        if (this.hideAfterShowId) {
+            GLib.source_remove(this.hideAfterShowId);
+            this.hideAfterShowId = 0;
+        }
+        if (this.spawnRetryId) {
+            GLib.source_remove(this.spawnRetryId);
+            this.spawnRetryId = 0;
+        }
         if (this.watchId) {
             Gio.DBus.session.unwatch_name(this.watchId);
             this.watchId = 0;
@@ -304,7 +319,12 @@ export class WaylandLegacyWorkaround {
                 this.pending = false;
                 return;
             }
-            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 200, function() {
+            if (this.spawnRetryId) {
+                GLib.source_remove(this.spawnRetryId);
+                this.spawnRetryId = 0;
+            }
+            this.spawnRetryId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 200, function() {
+                self.spawnRetryId = 0;
                 self.spawnOwned();
                 return GLib.SOURCE_REMOVE;
             });

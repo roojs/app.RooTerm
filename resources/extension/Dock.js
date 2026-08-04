@@ -30,6 +30,7 @@ export class Dock {
         var self = this;
         if (this.dockTimeoutId) {
             GLib.source_remove(this.dockTimeoutId);
+            this.dockTimeoutId = 0;
         }
         this.dockTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, function() {
             self.dockTimeoutId = 0;

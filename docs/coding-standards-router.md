@@ -78,6 +78,7 @@ Answer each question for your task. **Yes** → add the section slug(s).
 | Run subprocesses, async I/O, or permission flows? | `try-catch-scope`, `file-info-try-catch`, `defensive-code-null-checks` |
 | Add `using` namespace imports? | `using-statements` |
 | Write long lines (calls, concatenation, docblocks)? | `line-length-breaking` |
+| Edit **`resources/extension/**`** (GNOME Shell / GJS)? | *(full read)* `docs/coding-standards-gnome-shell.md` |
 
 ---
 
@@ -131,6 +132,7 @@ is authoritative. Hints below are for humans only.
 | Docblocks / Valadoc markup | `docs/code-documentation.md` |
 | Plans in `docs/plans/*` | `docs/guide-to-writing-plans.md` |
 | Bug fixes | `docs/bug-fix-process.md` |
+| GNOME Shell extension (`resources/extension/**`) | `docs/coding-standards-gnome-shell.md` — also `.cursor/rules/gnome-shell-extension.mdc` |
 
 ---
 
