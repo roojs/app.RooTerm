@@ -144,6 +144,11 @@ namespace RooTerm.Host
 			pick.add_css_class("host-tab-pick");
 			pick.clicked.connect(() => {
 				this.view.selected_page = page;
+				var term = (Terminal.Base) page.child;
+				GLib.Idle.add(() => {
+					term.terminal.grab_focus();
+					return false;
+				});
 			});
 			var close = new Gtk.Button.from_icon_name("window-close-symbolic") {
 				has_frame = false,
