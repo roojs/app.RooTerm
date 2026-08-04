@@ -22,7 +22,7 @@ namespace RooTerm.Host
 	 * One host: {@link Adw.TabView} of {@link Terminal.Base}s with a {@link TabBar}
 	 * at the bottom (always shown). Localhost children are {@link ConnectionKind.LOCAL_PATH}
 	 * rows owned by each local tab’s {@link Terminal.Base.connection}.
-	 * Tab-strip ``+`` runs ``win.new-terminal`` (same as Ctrl+Shift+T).
+	 * Tab-strip ``+`` / blank double-click run ``win.new-terminal`` (same as Ctrl+Shift+T).
 	 * Open terminals live on {@link Connection.sessions} for the host tree.
 	 */
 	public class Page : Gtk.Box

@@ -57,19 +57,14 @@ vte-terminal {
 }
 
 /* Bottom host tab strip (Host.TabBar — not Adw.TabBar).
- * Equal-share hexpand, max 30% each; cramp/shrink with ellipsis — no scrollbar. */
+ * Width: Vala tab_width property (bound to each .host-tab width-request).
+ * Do not use CSS max-width — GTK has no such property. */
 .host-tabbar {
 	min-height: 28px;
 	padding: 2px 4px;
 }
 
-.host-tabbar-tabs {
-	min-width: 0;
-}
-
 .host-tab {
-	min-width: 0;
-	max-width: 30%;
 	min-height: 24px;
 	padding: 0 2px 0 4px;
 	border-radius: 4px;
@@ -84,10 +79,6 @@ vte-terminal {
 .host-tab-close {
 	min-height: 22px;
 	padding: 0 4px;
-}
-
-.host-tab-pick {
-	min-width: 0;
 }
 
 .host-tab-close {

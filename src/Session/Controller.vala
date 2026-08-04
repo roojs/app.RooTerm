@@ -124,9 +124,9 @@ namespace RooTerm.Session
 		}
 
 		/**
-		 * Open another tab like the focused one: SSH clone via {@link Jobs.OpenSession},
-		 * or local shell in the same cwd. Falls back to a new local shell in home
-		 * when nothing is focused.
+		 * Open another tab: SSH clone via {@link Jobs.OpenSession}, or a local
+		 * shell in the user home directory. Falls back to a new local shell in
+		 * home when nothing is focused.
 		 *
 		 * @param localhost Localhost connection for local / empty fallback
 		 * @param window Main window (for {@link Jobs.OpenSession})
@@ -158,12 +158,6 @@ namespace RooTerm.Session
 							term.connection.name, e.message);
 					}
 				});
-				return;
-			}
-			var local = term as Terminal.Local;
-			if (local != null) {
-				var dir = local.cwd.length > 0 ? local.cwd : local.start_cwd;
-				this.open_local(localhost, dir);
 				return;
 			}
 			this.open_local(localhost);
