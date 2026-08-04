@@ -24,8 +24,8 @@ namespace RooTerm.Host
 	 * Keeps the view; builds one row button per {@link Adw.TabPage} so width and
 	 * chrome are ordinary CSS instead of Adw's expand-tabs-only contract.
 	 *
-	 * Tabs stay a fixed width (``width_request``, no ``hexpand``); the strip scrolls
-	 * when there are too many. Titles ellipsize inside that width.
+	 * Tabs share the strip equally (``hexpand``), capped at 30% each. When there
+	 * are too many they cramp / shrink with ellipsized titles — no scrollbar.
 	 *
 	 * == Example ==
 	 *
@@ -60,17 +60,11 @@ namespace RooTerm.Host
 			this.view = view;
 			this.add_css_class("host-tabbar");
 
-			var scroll = new Gtk.ScrolledWindow() {
-				hexpand = true,
-				vscrollbar_policy = Gtk.PolicyType.NEVER,
-				hscrollbar_policy = Gtk.PolicyType.AUTOMATIC,
-				propagate_natural_height = true,
-				has_frame = false
+			this.tabs = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 2) {
+				hexpand = true
 			};
-			this.tabs = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 2);
 			this.tabs.add_css_class("host-tabbar-tabs");
-			scroll.set_child(this.tabs);
-			this.append(scroll);
+			this.append(this.tabs);
 			this.append(new Gtk.Button.from_icon_name("list-add-symbolic") {
 				tooltip_text = "Ctrl+Shift+T",
 				has_frame = false,
@@ -160,8 +154,7 @@ namespace RooTerm.Host
 				this.view.close_page(page);
 			});
 			var row = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 0) {
-				hexpand = false,
-				width_request = 280
+				hexpand = true
 			};
 			row.add_css_class("host-tab");
 			row.set_data("page", page);
