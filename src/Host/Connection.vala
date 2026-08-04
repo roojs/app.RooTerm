@@ -223,7 +223,6 @@ namespace RooTerm.Host
 				case "pass":
 				case "passphrase":
 				case "sessions":
-				case "children":
 				case "parent":
 				case "search-name":
 				case "has-children":
@@ -241,6 +240,15 @@ namespace RooTerm.Host
 					var arr = new Json.Array();
 					foreach (var fwd in this.forwards) {
 						arr.add_element(Json.gobject_serialize(fwd));
+					}
+					var node = new Json.Node(Json.NodeType.ARRAY);
+					node.take_array(arr);
+					return node;
+
+				case "children":
+					var arr = new Json.Array();
+					foreach (var child in this.children) {
+						arr.add_element(Json.gobject_serialize(child));
 					}
 					var node = new Json.Node(Json.NodeType.ARRAY);
 					node.take_array(arr);
@@ -274,6 +282,11 @@ namespace RooTerm.Host
 					}
 					value = Value(typeof(Gee.ArrayList));
 					value.set_object(this.forwards);
+					return true;
+
+				case "children":
+					value = Value(typeof(Host.TreeNodes));
+					value.set_object(this.children);
 					return true;
 
 				default:
@@ -346,8 +359,7 @@ namespace RooTerm.Host
 					kind = ConnectionKind.LXC,
 					lxc_name = name
 				};
-				window.config.by_uuid.set(child.uuid, child);
-				window.config.tree.append(this, child);
+				window.tree.append(this, child);
 				GLib.debug("containers_found add name=%s uuid=%s", name, child.uuid);
 			}
 			var gone = new Gee.ArrayList<Connection>();
@@ -362,9 +374,9 @@ namespace RooTerm.Host
 				gone.add(child);
 			}
 			foreach (var child in gone) {
-				window.config.tree.remove(child);
+				window.tree.remove(child);
 			}
-			window.config.save();
+			window.tree.save();
 		}
 	}
 }

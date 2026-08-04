@@ -40,12 +40,23 @@ namespace RooTerm.Asbru
 		public string terminal_font = "Monospace 9";
 
 		/**
+		 * Whether the default Ásbrú file ``~/.config/asbru/asbru.yml`` exists.
+		 */
+		public bool exists()
+		{
+			var p = this.path.length > 0 ? this.path : GLib.Path.build_filename(
+				GLib.Environment.get_home_dir(), ".config", "asbru", "asbru.yml"
+			);
+			return GLib.FileUtils.test(p, GLib.FileTest.IS_REGULAR);
+		}
+
+		/**
 		 * Load config from the default Ásbrú path or an override.
+		 * Failures log a warning and leave an empty map.
 		 *
 		 * @param config_path Optional path; empty uses ``~/.config/asbru/asbru.yml``
-		 * @throws GLib.Error On read / parse failure
 		 */
-		public void load(string config_path = "") throws GLib.Error
+		public void load(string config_path = "")
 		{
 			this.path = GLib.Path.build_filename(
 				GLib.Environment.get_home_dir(), ".config", "asbru", "asbru.yml"
@@ -54,14 +65,20 @@ namespace RooTerm.Asbru
 				this.path = config_path;
 			}
 
-			var bytes = GLib.File.new_for_path(this.path).load_bytes(null, null);
-			unowned uint8[] data = bytes.get_data();
-
-			var parser = Yaml.Parser();
-			parser.set_input_string(data);
-
 			this.by_uuid.clear();
 			this.roots.clear();
+
+			GLib.Bytes bytes;
+			try {
+				bytes = GLib.File.new_for_path(this.path).load_bytes(null, null);
+			} catch (GLib.Error e) {
+				GLib.warning("asbru load failed: %s", e.message);
+				return;
+			}
+
+			unowned uint8[] data = bytes.get_data();
+			var parser = Yaml.Parser();
+			parser.set_input_string(data);
 
 			var at_root = false;
 			var in_defaults = false;
@@ -222,19 +239,35 @@ namespace RooTerm.Asbru
 		}
 
 		/**
-		 * Build a RooTerm {@link RooTerm.Config} from this loaded tree.
+		 * Build a RooTerm {@link RooTerm.Config} from this loaded Ásbrú tree
+		 * (font + pending secrets). Host nest: {@link to_host_tree}.
 		 *
 		 * Passwords are queued on {@link RooTerm.Config.pending_secrets} for async
 		 * libsecret store after the UI main loop is running (sync store deadlocks
 		 * on the keyring ACL prompt).
 		 *
-		 * @return New RooTerm config ready to save
+		 * @return New config ready to save
 		 */
 		public RooTerm.Config to_config()
 		{
 			var config = new RooTerm.Config();
-			config.tree.config = config;
 			config.terminal_font = this.terminal_font;
+			foreach (var conn in this.by_uuid.values) {
+				if (conn.pass.length > 0) {
+					config.pending_secrets.set(conn.uuid, conn.pass);
+				}
+			}
+			return config;
+		}
+
+		/**
+		 * Build a host nest from Ásbrú rows (auth remap, forwards, nest).
+		 *
+		 * @return New tree ready to save / assign on the window
+		 */
+		public Host.TreeNodes to_host_tree()
+		{
+			var tree = new Host.TreeNodes();
 			foreach (var conn in this.by_uuid.values) {
 				if (conn.auth == "publickey") {
 					conn.auth = "ssh_key";
@@ -242,25 +275,21 @@ namespace RooTerm.Asbru
 				if (conn.auth == "userpass") {
 					conn.auth = "password";
 				}
-				if (conn.pass.length > 0) {
-					config.pending_secrets.set(conn.uuid, conn.pass);
-					conn.pass = "";
-				}
+				conn.pass = "";
 				conn.passphrase = "";
 				this.take_forwards(conn);
 				conn.children = new Host.TreeNodes();
-				config.by_uuid.set(conn.uuid, conn);
-				config.connections.add(conn);
+				tree.by_uuid.set(conn.uuid, conn);
 			}
 			foreach (var conn in this.by_uuid.values) {
 				Host.Connection? parent = null;
 				if (conn.parent_uuid.length > 0 && conn.parent_uuid != "__PAC__ROOT__"
-					&& config.by_uuid.has_key(conn.parent_uuid)) {
-					parent = config.by_uuid.get(conn.parent_uuid);
+					&& tree.by_uuid.has_key(conn.parent_uuid)) {
+					parent = tree.by_uuid.get(conn.parent_uuid);
 				}
-				config.tree.append(parent, conn);
+				tree.append(parent, conn);
 			}
-			return config;
+			return tree;
 		}
 
 		/**

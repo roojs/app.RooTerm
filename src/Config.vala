@@ -19,7 +19,7 @@
 namespace RooTerm
 {
 	/**
-	 * RooTerm ``connections.json``: load/save and one-shot Ásbrú import.
+	 * RooTerm settings in ``config.json``. Host tree lives on {@link MainWindow}.
 	 */
 	public class Config : Object, Json.Serializable
 	{
@@ -45,28 +45,25 @@ namespace RooTerm
 		 * Horizontal placement on the monitor: ``left``, ``centre``, or ``right``.
 		 */
 		public string placement { get; set; default = "centre"; }
+		/**
+		 * Flat host list placeholder so JSON-GLib sees the ``connections`` key
+		 * (sets {@link need_migrate}). Not filled here; migrate re-reads the file.
+		 * Not written to ``config.json``.
+		 */
 		public Gee.ArrayList<Host.Connection> connections {
 			get;
 			set;
 			default = new Gee.ArrayList<Host.Connection>();
 		}
-		public Gee.HashMap<string, Host.Connection> by_uuid {
-			get;
-			set;
-			default = new Gee.HashMap<string, Host.Connection>();
-		}
 		/**
-		 * Nested host tree + flat search list (not JSON).
+		 * True when settings JSON contained ``connections`` — caller runs
+		 * {@link Host.TreeNodes.load}, which migrates when set.
+		 * Not serialized.
 		 */
-		public Host.TreeNodes tree {
-			get;
-			set;
-			default = new Host.TreeNodes();
-		}
-		public string path { get; set; default = ""; }
+		public bool need_migrate { get; set; default = false; }
 		/**
 		 * uuid → password from Ásbrú import; drained by {@link store_pending_secrets}.
-		 * Not serialized to JSON.
+		 * Not serialized.
 		 */
 		public Gee.HashMap<string, string> pending_secrets {
 			get;
@@ -94,19 +91,10 @@ namespace RooTerm
 		public Json.Node serialize_property(string property_name, Value value, ParamSpec pspec)
 		{
 			switch (property_name) {
-				case "by-uuid":
-				case "tree":
-				case "path":
-				case "pending-secrets":
-					return null;
 				case "connections":
-					var arr = new Json.Array();
-					foreach (var conn in this.connections) {
-						arr.add_element(Json.gobject_serialize(conn));
-					}
-					var node = new Json.Node(Json.NodeType.ARRAY);
-					node.take_array(arr);
-					return node;
+				case "pending-secrets":
+				case "need-migrate":
+					return null;
 				default:
 					return default_serialize_property(property_name, value, pspec);
 			}
@@ -116,17 +104,7 @@ namespace RooTerm
 		{
 			switch (property_name) {
 				case "connections":
-					this.connections.clear();
-					if (property_node.get_node_type() == Json.NodeType.ARRAY) {
-						var json_array = property_node.get_array();
-						for (var i = 0; i < json_array.get_length(); i++) {
-							var conn = Json.gobject_deserialize(typeof(Host.Connection), json_array.get_element(i)) as Host.Connection;
-							if (conn == null) {
-								continue;
-							}
-							this.connections.add(conn);
-						}
-					}
+					this.need_migrate = true;
 					value = Value(typeof(Gee.ArrayList));
 					value.set_object(this.connections);
 					return true;
@@ -136,70 +114,36 @@ namespace RooTerm
 		}
 
 		/**
-		 * Load ``~/.config/rooterm/connections.json``, or import Ásbrú once and write it.
+		 * Load ``config.json`` (or legacy combined ``connections.json``) chrome only.
+		 * Sets {@link need_migrate} when a flat ``connections`` key is present.
+		 * Failures log a warning and return an empty config.
 		 *
 		 * @return New config instance
-		 * @throws GLib.Error On read / parse / write failure
 		 */
-		public static Config load() throws GLib.Error
+		public static Config load()
 		{
 			var dir = GLib.Path.build_filename(
 				GLib.Environment.get_home_dir(), ".config", "rooterm"
 			);
 			GLib.DirUtils.create_with_parents(dir, 0755);
 			var path = GLib.Path.build_filename(dir, "connections.json");
+			var config_path = GLib.Path.build_filename(dir, "config.json");
 
-			if (!GLib.FileUtils.test(path, GLib.FileTest.IS_REGULAR)) {
-				var asbru = new Asbru.Config();
-				asbru.load();
-				var config = asbru.to_config();
-				config.path = path;
-				config.save();
-				GLib.debug("imported asbru connections=%d roots=%d to %s",
-					config.by_uuid.size, config.tree.size, config.path);
-				return config;
+			if (!GLib.FileUtils.test(config_path, GLib.FileTest.IS_REGULAR)
+					&& !GLib.FileUtils.test(path, GLib.FileTest.IS_REGULAR)) {
+				return new Config();
 			}
 
-			var parser = new Json.Parser();
-			parser.load_from_file(path);
-			var config = (Config) Json.gobject_deserialize(typeof(Config), parser.get_root());
-			config.path = path;
-			config.tree.config = config;
-			foreach (var conn in config.connections) {
-				if (conn.uuid.length == 0) {
-					continue;
-				}
-				conn.children = new Host.TreeNodes();
-				config.by_uuid.set(conn.uuid, conn);
+			var open_path = GLib.FileUtils.test(config_path, GLib.FileTest.IS_REGULAR)
+				? config_path : path;
+			try {
+				string contents;
+				GLib.FileUtils.get_contents(open_path, out contents);
+				return (Config) Json.gobject_from_data(typeof(Config), contents);
+			} catch (GLib.Error e) {
+				GLib.warning("config load failed: %s", e.message);
+				return new Config();
 			}
-			foreach (var conn in config.by_uuid.values) {
-				if (conn.deleted) {
-					continue;
-				}
-				if (conn.kind == Host.ConnectionKind.LOCAL_PATH) {
-					continue;
-				}
-				Host.Connection? parent = null;
-				if (conn.parent_uuid.length > 0 && conn.parent_uuid != "__PAC__ROOT__"
-					&& config.by_uuid.has_key(conn.parent_uuid)) {
-					parent = config.by_uuid.get(conn.parent_uuid);
-					if (parent.deleted) {
-						parent = null;
-					}
-				}
-				config.tree.append(parent, conn);
-			}
-			config.tree.sort((a, b) => {
-				return a.name.collate(b.name);
-			});
-			foreach (var conn in config.by_uuid.values) {
-				conn.children.sort((a, b) => {
-					return a.name.collate(b.name);
-				});
-			}
-			GLib.debug("loaded connections=%d roots=%d from %s",
-				config.by_uuid.size, config.tree.size, config.path);
-			return config;
 		}
 
 		/**
@@ -256,33 +200,23 @@ namespace RooTerm
 		}
 
 		/**
-		 * Write the current tree to {@link path} (no passwords).
+		 * Write ``config.json`` only (chrome / preferences). Hosts: {@link Host.TreeNodes.save}.
 		 * Write failures log a warning only.
 		 */
 		public void save()
 		{
-			this.connections.clear();
-			var ordered = new Gee.ArrayList<Host.Connection>();
-			foreach (var conn in this.by_uuid.values) {
-				ordered.add(conn);
-			}
-			ordered.sort((a, b) => {
-				return a.name.collate(b.name);
-			});
-			foreach (var conn in ordered) {
-				this.connections.add(conn);
-			}
-			var generator = new Json.Generator();
-			generator.set_root(Json.gobject_serialize(this));
-			generator.pretty = true;
-			generator.indent = 2;
+			var config_path = GLib.Path.build_filename(
+				GLib.Environment.get_home_dir(), ".config", "rooterm", "config.json"
+			);
 			try {
-				generator.to_file(this.path);
+				GLib.FileUtils.set_contents(
+					config_path, Json.gobject_to_data(this, null)
+				);
 			} catch (GLib.Error e) {
 				GLib.warning("config save failed: %s", e.message);
 				return;
 			}
-			GLib.debug("saved connections=%d to %s", this.by_uuid.size, this.path);
+			GLib.debug("saved config.json");
 		}
 	}
 }

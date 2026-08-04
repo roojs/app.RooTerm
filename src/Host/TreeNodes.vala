@@ -24,7 +24,7 @@ namespace RooTerm.Host
 	 * Implements {@link GLib.ListModel} over a {@link Gee.ArrayList}; mutations
 	 * emit ``items-changed`` so {@link Gtk.TreeListModel} / filters update.
 	 *
-	 * The root list (``Config.tree``) also owns {@link flat}; use
+	 * The root list (``MainWindow.tree``) also owns {@link flat}; use
 	 * {@link append} / {@link remove} for nest + flat updates.
 	 */
 	public class TreeNodes : GLib.Object, GLib.ListModel
@@ -43,7 +43,15 @@ namespace RooTerm.Host
 			default = new TreeNodesFlat();
 		}
 		/**
-		 * Owning config (set on {@link Config.tree} only); used to save on expand.
+		 * uuid → connection (root list only).
+		 */
+		public Gee.HashMap<string, Connection> by_uuid {
+			get;
+			set;
+			default = new Gee.HashMap<string, Connection>();
+		}
+		/**
+		 * Owning config (set by {@link load} on the window tree); used to save on expand.
 		 */
 		public weak RooTerm.Config? config;
 
@@ -99,7 +107,7 @@ namespace RooTerm.Host
 		 */
 		public void add(Connection connection)
 		{
-			GLib.error("use Config.tree.append(parent, conn)");
+			GLib.error("use tree.append(parent, conn)");
 		}
 
 		/**
@@ -110,7 +118,7 @@ namespace RooTerm.Host
 		 */
 		public void insert(uint position, Connection connection)
 		{
-			GLib.error("use Config.tree.append(parent, conn)");
+			GLib.error("use tree.append(parent, conn)");
 		}
 
 		/**
@@ -120,7 +128,7 @@ namespace RooTerm.Host
 		 */
 		public void remove_at(uint position)
 		{
-			GLib.error("use Config.tree.remove(conn)");
+			GLib.error("use tree.remove(conn)");
 		}
 
 		/**
@@ -128,12 +136,12 @@ namespace RooTerm.Host
 		 */
 		public void remove_all()
 		{
-			GLib.error("use Config.tree.remove(conn)");
+			GLib.error("use tree.remove(conn)");
 		}
 
 		/**
 		 * Place ``conn`` under ``parent`` (or this list) and update {@link flat}.
-		 * Call on the root list (``Config.tree``).
+		 * Call on the root list (``MainWindow.tree``).
 		 *
 		 * @param parent Parent connection, or ``null`` for a root row
 		 * @param conn Row to attach
@@ -146,11 +154,13 @@ namespace RooTerm.Host
 			add_to.items_changed(position, 0, 1);
 			conn.parent = parent;
 			conn.parent_uuid = parent == null ? "" : parent.uuid;
-			if (this.config != null
-				&& (conn.kind == ConnectionKind.GROUP || conn.lxc_host)
+			if (conn.uuid.length > 0) {
+				this.by_uuid.set(conn.uuid, conn);
+			}
+			if ((conn.kind == ConnectionKind.GROUP || conn.lxc_host)
 				&& conn.expand_save_sid == 0) {
 				conn.expand_save_sid = conn.notify["expanded"].connect(() => {
-					this.config.save();
+					this.save();
 				});
 			}
 			if (conn.deleted || conn.kind == ConnectionKind.GROUP) {
@@ -161,7 +171,7 @@ namespace RooTerm.Host
 
 		/**
 		 * Detach ``conn`` from its parent list (or this list) and from {@link flat}.
-		 * Call on the root list (``Config.tree``).
+		 * Call on the root list (``MainWindow.tree``).
 		 *
 		 * @param conn Row to detach ({@link Connection.parent} must be current)
 		 */
@@ -179,6 +189,9 @@ namespace RooTerm.Host
 			}
 			conn.parent = null;
 			this.flat.remove(conn);
+			if (conn.uuid.length > 0) {
+				this.by_uuid.unset(conn.uuid);
+			}
 		}
 
 		/**
@@ -214,6 +227,95 @@ namespace RooTerm.Host
 			}
 			this.items.sort((owned) compare);
 			this.items_changed(0, n, n);
+		}
+
+		/**
+		 * Load the host nest and bind ``config`` for expand→save.
+		 * Migrate if {@link Config.need_migrate}, else ``connections.json`` when present.
+		 * Read failures log a warning only.
+		 *
+		 * @param config From {@link Config.load}
+		 * @return Host tree for the window
+		 */
+		public static TreeNodes load(RooTerm.Config config)
+		{
+			var tree = new TreeNodes();
+			tree.config = config;
+			if (config.need_migrate) {
+				try {
+					ConfigMigrate.run(tree, config);
+				} catch (GLib.Error e) {
+					GLib.warning("connections migrate failed: %s", e.message);
+				}
+				return tree;
+			}
+			var path = GLib.Path.build_filename(
+				GLib.Environment.get_home_dir(), ".config", "rooterm", "connections.json"
+			);
+			if (!GLib.FileUtils.test(path, GLib.FileTest.IS_REGULAR)) {
+				return tree;
+			}
+			try {
+				string hosts;
+				GLib.FileUtils.get_contents(path, out hosts);
+				TreeNodes.from_json(Json.from_string(hosts), tree);
+			} catch (GLib.Error e) {
+				GLib.warning("connections load failed: %s", e.message);
+			}
+			return tree;
+		}
+
+		/**
+		 * Load a JSON array of {@link Connection} into ``root`` via {@link append}.
+		 * Nested ``children`` are read for the recurse; deserialize leaves ``children`` empty
+		 * ({@link Connection} does not build the nest).
+		 *
+		 * @param node JSON array (empty / non-array → no-op)
+		 * @param root Live tree (``MainWindow.tree``); must have ``config`` set before call
+		 * @param parent Parent for these rows, or ``null`` for roots
+		 */
+		public static void from_json(Json.Node? node, TreeNodes root, Connection? parent = null)
+		{
+			if (node == null || node.get_node_type() != Json.NodeType.ARRAY) {
+				return;
+			}
+			var json_array = node.get_array();
+			for (var i = 0; i < json_array.get_length(); i++) {
+				var element = json_array.get_element(i);
+				if (element.get_node_type() != Json.NodeType.OBJECT) {
+					continue;
+				}
+				var obj = element.get_object();
+				Json.Node? children_node = obj.has_member("children")
+					? obj.get_member("children") : null;
+				var conn = Json.gobject_deserialize(typeof(Connection), element) as Connection;
+				if (conn == null) {
+					continue;
+				}
+				root.append(parent, conn);
+				TreeNodes.from_json(children_node, root, conn);
+			}
+		}
+
+		/**
+		 * Write ``~/.config/rooterm/connections.json`` as nested roots (no passwords).
+		 */
+		public void save()
+		{
+			var path = GLib.Path.build_filename(
+				GLib.Environment.get_home_dir(), ".config", "rooterm", "connections.json"
+			);
+			var arr = new Json.Array();
+			foreach (var conn in this) {
+				arr.add_element(Json.gobject_serialize(conn));
+			}
+			var node = new Json.Node(Json.NodeType.ARRAY);
+			node.take_array(arr);
+			try {
+				GLib.FileUtils.set_contents(path, Json.to_string(node, true));
+			} catch (GLib.Error e) {
+				GLib.warning("connections save failed: %s", e.message);
+			}
 		}
 	}
 }

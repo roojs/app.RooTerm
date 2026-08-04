@@ -44,7 +44,7 @@ export default class RooTermExtension extends Extension {
             var key = 'F12';
             try {
                 var confPath = GLib.build_filenamev([
-                    GLib.get_home_dir(), '.config', 'rooterm', 'connections.json',
+                    GLib.get_home_dir(), '.config', 'rooterm', 'config.json',
                 ]);
                 var [, contents] = GLib.file_get_contents(confPath);
                 var conf = JSON.parse(new TextDecoder().decode(contents));

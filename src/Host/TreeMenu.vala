@@ -124,9 +124,8 @@ namespace RooTerm.Host
 						name = name,
 						kind = ConnectionKind.GROUP
 					};
-					this.window.config.by_uuid.set(conn.uuid, conn);
-					this.window.config.tree.append(null, conn);
-					this.window.config.save();
+					this.window.tree.append(null, conn);
+					this.window.tree.save();
 				});
 				alert.present(this.window);
 			});
@@ -175,7 +174,7 @@ namespace RooTerm.Host
 						return;
 					}
 					conn.deleted = true;
-					this.window.config.tree.remove(conn);
+					this.window.tree.remove(conn);
 					// reverse: close_in(0) removes from sessions synchronously;
 					// close before kill so EXITED handlers cannot re-arm a countdown
 					for (var i = (int) conn.sessions.get_n_items() - 1; i >= 0; i--) {
@@ -186,7 +185,7 @@ namespace RooTerm.Host
 							Posix.kill(pid, Posix.Signal.TERM);
 						}
 					}
-					this.window.config.save();
+					this.window.tree.save();
 				});
 				alert.present(this.window);
 			});

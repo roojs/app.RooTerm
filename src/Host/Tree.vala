@@ -71,7 +71,7 @@ namespace RooTerm.Host
 		}
 
 		/**
-		 * Build tree UI bound to ``config.tree`` (live root {@link TreeNodes}).
+		 * Build tree UI bound to ``window.tree`` (live root {@link TreeNodes}).
 		 *
 		 * @param window Main window (passed to {@link TreeMenu})
 		 */
@@ -85,7 +85,7 @@ namespace RooTerm.Host
 			);
 
 			this.tree_model = new Gtk.TreeListModel(
-				window.config.tree,
+				window.tree,
 				false,
 				false,
 				(item) => {

@@ -40,6 +40,14 @@ namespace RooTerm
 		 */
 		public Actions actions;
 		public Config config;
+		/**
+		 * Nested host tree + flat search index (not on {@link Config}).
+		 */
+		public Host.TreeNodes tree {
+			get;
+			set;
+			default = new Host.TreeNodes();
+		}
 		public Host.Connection localhost;
 		/**
 		 * Primary monitor geometry (Shell docks; size percents use this).
@@ -104,16 +112,27 @@ namespace RooTerm
 		 *
 		 * @param app Owning {@link Application}
 		 */
+		/**
+		 * Builds the window: title, search pulldown, host tree, session stack.
+		 * Chooses docked vs normal chrome from Shell extension state.
+		 *
+		 * @param app Owning {@link Application}
+		 */
 		public MainWindow(Application app)
 		{
-			Config config;
-			try {
-				config = Config.load();
-			} catch (GLib.Error e) {
-				GLib.warning("config load failed: %s", e.message);
-				config = new Config();
-				config.tree.config = config;
+			var connections_path = GLib.Path.build_filename(
+				GLib.Environment.get_home_dir(), ".config", "rooterm", "connections.json"
+			);
+			var first_run = !GLib.FileUtils.test(connections_path, GLib.FileTest.IS_REGULAR);
+
+			Asbru.Config? asbru = new Asbru.Config();
+			if (!first_run || !asbru.exists()) {
+				asbru = null;
+			} else {
+				asbru.load();
 			}
+
+			var config = asbru != null ? asbru.to_config() : Config.load();
 
 			var monitors = Gdk.Display.get_default().get_monitors();
 			var geo = Gdk.Rectangle() { width = 1280, height = 800 };
@@ -132,6 +151,14 @@ namespace RooTerm
 			);
 			this.monitor_geo = geo;
 			this.config = config;
+			if (asbru != null) {
+				this.tree = asbru.to_host_tree();
+				this.tree.config = this.config;
+				this.config.save();
+				this.tree.save();
+			} else {
+				this.tree = Host.TreeNodes.load(this.config);
+			}
 			this.shell = new GnomeShell(this);
 			this.connection_editor = new Dialog.Connection(this);
 			this.preferences_editor = new Dialog.Preferences(this);
@@ -192,9 +219,9 @@ namespace RooTerm
 				name = "Localhost",
 				kind = Host.ConnectionKind.LOCAL
 			};
-			this.config.tree.append(null, this.localhost);
+			this.tree.append(null, this.localhost);
 			var has_group = false;
-			foreach (var conn in this.config.by_uuid.values) {
+			foreach (var conn in this.tree.by_uuid.values) {
 				if (!conn.deleted && conn.kind == Host.ConnectionKind.GROUP) {
 					has_group = true;
 					break;
@@ -206,11 +233,10 @@ namespace RooTerm
 					name = "All",
 					kind = Host.ConnectionKind.GROUP
 				};
-				this.config.by_uuid.set(all.uuid, all);
-				this.config.tree.append(null, all);
-				this.config.save();
+				this.tree.append(null, all);
+				this.tree.save();
 			}
-			this.config.tree.sort((a, b) => {
+			this.tree.sort((a, b) => {
 				if (a.kind == Host.ConnectionKind.LOCAL) {
 					return -1;
 				}
@@ -224,7 +250,7 @@ namespace RooTerm
 				return false;
 			});
 
-			this.host_search = new Host.SearchPulldown(this.config) {
+			this.host_search = new Host.SearchPulldown(this.tree) {
 				halign = Gtk.Align.FILL,
 				hexpand = true,
 				vexpand = false,
@@ -238,7 +264,7 @@ namespace RooTerm
 			this.host_stack = new Host.Stack();
 			this.terminal_menu = new Terminal.ContextMenu(this);
 			this.sessions = new Session.Controller(
-				this.host_stack, this.config.tree, this.config, this.localhost
+				this.host_stack, this.tree, this.config, this.localhost
 			);
 			this.sessions.terminal_font = this.config.terminal_font;
 			this.sessions.display_changed.connect(() => {
@@ -445,7 +471,7 @@ namespace RooTerm
 			});
 
 			var restore = new Gee.ArrayList<Host.Connection>();
-			foreach (var conn in this.config.by_uuid.values) {
+			foreach (var conn in this.tree.by_uuid.values) {
 				if (conn.kind != Host.ConnectionKind.LOCAL_PATH) {
 					continue;
 				}
@@ -453,7 +479,7 @@ namespace RooTerm
 			}
 			Terminal.Local? term = null;
 			foreach (var conn in restore) {
-				this.config.by_uuid.unset(conn.uuid);
+				this.tree.by_uuid.unset(conn.uuid);
 				if (!GLib.FileUtils.test(conn.cwd, GLib.FileTest.IS_DIR)) {
 					continue;
 				}
@@ -462,7 +488,7 @@ namespace RooTerm
 			if (term == null) {
 				term = this.sessions.open_local(this.localhost);
 			}
-			this.config.save();
+			this.tree.save();
 			// After Application add_window + present: focus, prime Shell prefs, dock cue.
 			GLib.Idle.add(() => {
 				this.host_tree.select(term.connection);

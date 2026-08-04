@@ -95,8 +95,7 @@ namespace RooTerm.Host
 				if (term.connection.kind == ConnectionKind.LOCAL_PATH) {
 					term.connection.sessions.remove_all();
 					this.tree.remove(term.connection);
-					this.config.by_uuid.unset(term.connection.uuid);
-					this.config.save();
+					this.tree.save();
 				} else {
 					this.connection.sessions.remove(at);
 				}
@@ -134,7 +133,7 @@ namespace RooTerm.Host
 							|| local.peer_user == GLib.Environment.get_user_name())
 						&& term.connection.cwd != term.cwd) {
 						term.connection.cwd = term.cwd;
-						this.config.save();
+						this.tree.save();
 					}
 				}
 				this.changed();
@@ -153,9 +152,8 @@ namespace RooTerm.Host
 				};
 				term.connection = row;
 				row.sessions.append(term);
-				this.config.by_uuid.set(row.uuid, row);
 				this.tree.append(this.connection, row);
-				this.config.save();
+				this.tree.save();
 			} else {
 				this.connection.sessions.append(term);
 			}

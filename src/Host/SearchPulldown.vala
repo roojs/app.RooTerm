@@ -51,9 +51,9 @@ namespace RooTerm.Host
 		public signal void connection_selected(Connection connection);
 
 		/**
-		 * @param config Loaded RooTerm config (SSH hosts become list rows)
+		 * @param tree Window host tree (flat list for search)
 		 */
-		public SearchPulldown(RooTerm.Config config)
+		public SearchPulldown(TreeNodes tree)
 		{
 			Object();
 
@@ -79,7 +79,7 @@ namespace RooTerm.Host
 
 			var focus_controller = new Gtk.EventControllerFocus();
 			focus_controller.leave.connect(() => {
-				GLib.debug("search entry leave popup=%d focused=%d",
+				GLib.debug("search leave popup=%d focused=%d",
 					this.popup.visible ? 1 : 0, this.entry.has_focus ? 1 : 0);
 				if (!this.popup.visible) {
 					return;
@@ -96,7 +96,7 @@ namespace RooTerm.Host
 			});
 			this.entry.add_controller(focus_controller);
 
-			this.item_store = config.tree.flat;
+			this.item_store = tree.flat;
 
 			this.string_filter = new Gtk.StringFilter(
 				new Gtk.PropertyExpression(typeof(Connection), null, "search-name")
