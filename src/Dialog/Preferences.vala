@@ -21,8 +21,9 @@ namespace RooTerm.Dialog
 	/**
 	 * Single-page preferences: Keyboard (toggle key) and Appearance
 	 * (opacity, height, width, placement). Standalone {@link Adw.Window}
-	 * hosting an {@link Adw.PreferencesPage}. Rows call ``ConfigUpdate`` via
-	 * {@link Row.send}; this window does not write ``config.json``.
+	 * hosting an {@link Adw.PreferencesPage}. Rows apply live via
+	 * {@link Row.send} / ``ConfigUpdate``; Close only Hides (no undo).
+	 * This window does not write ``config.json``.
 	 *
 	 * == Example ==
 	 *
@@ -39,12 +40,6 @@ namespace RooTerm.Dialog
 			get;
 			set;
 			default = new Gee.HashMap<string, Row>();
-		}
-		private bool accepting = false;
-		private Gee.HashMap<string, string> snap {
-			get;
-			set;
-			default = new Gee.HashMap<string, string>();
 		}
 
 		/**
@@ -85,15 +80,8 @@ namespace RooTerm.Dialog
 				appearance
 			);
 
-			var cancel = new Gtk.Button.with_label("Cancel");
-			cancel.clicked.connect(() => {
-				this.close();
-			});
-			var save = new Gtk.Button.with_label("Save") {
-				css_classes = { "suggested-action" }
-			};
-			save.clicked.connect(() => {
-				this.accepting = true;
+			var close_btn = new Gtk.Button.with_label("Close");
+			close_btn.clicked.connect(() => {
 				this.close();
 			});
 			var header = new Adw.HeaderBar() {
@@ -110,20 +98,13 @@ namespace RooTerm.Dialog
 				}
 			});
 			header.add_controller(no_max);
-			header.pack_start(cancel);
-			header.pack_end(save);
+			header.pack_end(close_btn);
 			var toolbar = new Adw.ToolbarView();
 			toolbar.add_top_bar(header);
 			toolbar.content = page;
 			this.content = toolbar;
 
 			this.close_request.connect(() => {
-				if (!this.accepting) {
-					foreach (var key in this.snap.keys) {
-						this.rows.get(key).send(this.snap.get(key));
-					}
-				}
-				this.accepting = false;
 				this.window.dbus.call("Hide", new GLib.Variant("(s)", "preferences"));
 				return true;
 			});
@@ -144,25 +125,14 @@ namespace RooTerm.Dialog
 		}
 
 		/**
-		 * Reload rows from disk and refresh Cancel snapshots.
+		 * Reload rows from disk.
 		 */
 		public void fill()
 		{
-			this.accepting = false;
 			this.config = Config.load();
 			foreach (var row in this.rows.values) {
 				row.config = this.config;
 				row.fill();
-			}
-			this.snap.clear();
-			foreach (var key in this.rows.keys) {
-				var value = Value(this.rows.get(key).pspec.value_type);
-				((GLib.Object) this.config).get_property(key, ref value);
-				if (value.holds(typeof(int))) {
-					this.snap.set(key, value.get_int().to_string());
-					continue;
-				}
-				this.snap.set(key, value.get_string());
 			}
 		}
 	}
