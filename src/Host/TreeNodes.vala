@@ -292,6 +292,10 @@ namespace RooTerm.Host
 				if (conn == null) {
 					continue;
 				}
+				if (conn.uuid.length > 0 && root.by_uuid.has_key(conn.uuid)) {
+					GLib.debug("skip duplicate uuid=%s name=%s", conn.uuid, conn.name);
+					continue;
+				}
 				root.append(parent, conn);
 				TreeNodes.from_json(children_node, root, conn);
 			}

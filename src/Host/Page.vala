@@ -142,20 +142,28 @@ namespace RooTerm.Host
 			var text = term.label();
 			tab.title = text;
 			tab.tooltip = this.tab_tooltip(term, text);
-			if (this.connection.kind == ConnectionKind.LOCAL) {
-				var row = new Connection() {
-					uuid = GLib.Uuid.string_random(),
-					name = term.label(),
-					cwd = term.cwd.length > 0 ? term.cwd : GLib.Environment.get_home_dir(),
-					kind = ConnectionKind.LOCAL_PATH,
-					parent_uuid = this.connection.uuid
-				};
-				term.connection = row;
-				row.sessions.append(term);
-				this.tree.append(this.connection, row);
-				this.tree.save();
-			} else {
-				this.connection.sessions.append(term);
+			switch (term.connection.kind) {
+				case ConnectionKind.LOCAL_PATH:
+					term.connection.sessions.append(term);
+					break;
+
+				case ConnectionKind.LOCAL:
+					var row = new Connection() {
+						uuid = GLib.Uuid.string_random(),
+						name = term.label(),
+						cwd = term.cwd.length > 0 ? term.cwd : GLib.Environment.get_home_dir(),
+						kind = ConnectionKind.LOCAL_PATH,
+						parent_uuid = this.connection.uuid
+					};
+					term.connection = row;
+					row.sessions.append(term);
+					this.tree.append(this.connection, row);
+					this.tree.save();
+					break;
+
+				default:
+					this.connection.sessions.append(term);
+					break;
 			}
 			return tab;
 		}

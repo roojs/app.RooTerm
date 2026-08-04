@@ -448,20 +448,17 @@ namespace RooTerm
 				return true;
 			});
 
-			var restore = new Gee.ArrayList<Host.Connection>();
-			foreach (var conn in this.tree.by_uuid.values) {
+			var term = (Terminal.Local?) null;
+			for (var i = this.localhost.children.size - 1; i >= 0; i--) {
+				var conn = this.localhost.children.get(i);
 				if (conn.kind != Host.ConnectionKind.LOCAL_PATH) {
 					continue;
 				}
-				restore.add(conn);
-			}
-			Terminal.Local? term = null;
-			foreach (var conn in restore) {
-				this.tree.by_uuid.unset(conn.uuid);
 				if (!GLib.FileUtils.test(conn.cwd, GLib.FileTest.IS_DIR)) {
+					this.tree.remove(conn);
 					continue;
 				}
-				term = this.sessions.open_local(this.localhost, conn.cwd);
+				term = this.sessions.open_local(conn);
 			}
 			if (term == null) {
 				term = this.sessions.open_local(this.localhost);

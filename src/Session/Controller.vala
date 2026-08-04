@@ -171,26 +171,32 @@ namespace RooTerm.Session
 
 		/**
 		 * Open a local shell tab under Localhost (creates host page if needed).
+		 * Pass Localhost for a new tab, or an existing {@link Host.ConnectionKind.LOCAL_PATH}
+		 * to reopen that row without inventing another.
 		 *
-		 * @param connection Localhost connection
-		 * @param cwd Working directory (home when empty)
+		 * @param connection Localhost, or a Localhost path child to restore
+		 * @param cwd Working directory (home when empty; path row uses {@link Host.Connection.cwd})
 		 * @return The new local terminal
 		 */
 		public Terminal.Local open_local(Host.Connection connection, string cwd = "")
 		{
-			Host.Page page;
-			if (this.by_uuid.has_key(connection.uuid)) {
-				page = this.by_uuid.get(connection.uuid);
-			} else {
-				page = new Host.Page(connection, this.tree, this.config);
+			if (connection.kind == Host.ConnectionKind.LOCAL_PATH && cwd.length == 0) {
+				cwd = connection.cwd;
+			}
+			// Host.Page is always the Localhost row (parent when restoring a path).
+			var page_connection = connection.kind == Host.ConnectionKind.LOCAL_PATH
+				? connection.parent : connection;
+			var page = this.by_uuid.get(page_connection.uuid);
+			if (page == null) {
+				page = new Host.Page(page_connection, this.tree, this.config);
 				page.empty.connect(() => {
 					this.close(page);
 				});
 				page.changed.connect(() => {
 					this.focus();
 				});
-				this.by_uuid.set(connection.uuid, page);
-				this.stack.pages.add_named(page, connection.uuid);
+				this.by_uuid.set(page_connection.uuid, page);
+				this.stack.pages.add_named(page, page_connection.uuid);
 			}
 
 			var term = new Terminal.Local(connection, this.terminal_font, this.config, cwd);
