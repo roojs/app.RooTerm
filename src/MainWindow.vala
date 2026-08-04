@@ -178,32 +178,7 @@ namespace RooTerm
 				() => {
 				}
 			);
-			this.config.notify["height"].connect(() => {
-				if (!this.is_docked) {
-					return;
-				}
-				this.set_default_size(
-					this.monitor_geo.width * this.config.width / 100,
-					this.monitor_geo.height * this.config.height / 100
-				);
-				this.dbus.redock();
-			});
-			this.config.notify["width"].connect(() => {
-				if (!this.is_docked) {
-					return;
-				}
-				this.set_default_size(
-					this.monitor_geo.width * this.config.width / 100,
-					this.monitor_geo.height * this.config.height / 100
-				);
-				this.dbus.redock();
-			});
-			this.config.notify["placement"].connect(() => {
-				if (!this.is_docked) {
-					return;
-				}
-				this.dbus.redock();
-			});
+			this.config.connect(this);
 			if (this.shell.is_ready) {
 				this.show_docked();
 			}

@@ -200,6 +200,53 @@ namespace RooTerm
 		}
 
 		/**
+		 * Wire chrome ``notify`` handlers onto ``window`` (geometry + toggle key).
+		 * Opacity stays on VTE ({@link Terminal.Base}).
+		 *
+		 * @param window Main window to resize / rebind
+		 */
+		public void connect(MainWindow window)
+		{
+			this.notify["height"].connect(() => {
+				if (!window.is_docked) {
+					return;
+				}
+				window.set_default_size(
+					window.monitor_geo.width * this.width / 100,
+					window.monitor_geo.height * this.height / 100
+				);
+				window.dbus.redock();
+			});
+			this.notify["width"].connect(() => {
+				if (!window.is_docked) {
+					return;
+				}
+				window.set_default_size(
+					window.monitor_geo.width * this.width / 100,
+					window.monitor_geo.height * this.height / 100
+				);
+				window.dbus.redock();
+			});
+			this.notify["placement"].connect(() => {
+				if (!window.is_docked) {
+					return;
+				}
+				window.dbus.redock();
+			});
+			this.notify["toggle-key"].connect(() => {
+				var app = window.application as Application;
+				if (app != null) {
+					app.set_accels_for_action("win.toggle", { this.toggle_key });
+				}
+				try {
+					window.shell.ensure_toggle_binding(this.toggle_key);
+				} catch (GLib.Error e) {
+					GLib.warning("toggle binding: %s", e.message);
+				}
+			});
+		}
+
+		/**
 		 * Write ``config.json`` only (chrome / preferences). Hosts: {@link Host.TreeNodes.save}.
 		 * Write failures log a warning only.
 		 */

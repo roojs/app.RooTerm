@@ -253,6 +253,41 @@ namespace RooTerm
 		}
 
 		/**
+		 * Set one chrome property from the preferences process.
+		 *
+		 * @param key Hyphenated GObject name (``opacity``, ``toggle-key``, …)
+		 * @param value Always a string (ints as decimal text)
+		 */
+		public void config_update(string key, string value)
+		{
+			if (this.application.window == null) {
+				return;
+			}
+			var config = this.application.window.config;
+			var pspec = config.find_property(key);
+			if (pspec == null) {
+				GLib.warning("unknown config key: %s", key);
+				return;
+			}
+			var parsed = Value(pspec.value_type);
+			switch (pspec.value_type) {
+				case GLib.Type.INT:
+					parsed.set_int(int.parse(value));
+					break;
+
+				case GLib.Type.STRING:
+					parsed.set_string(value);
+					break;
+
+				default:
+					GLib.warning("unsupported config type for %s", key);
+					return;
+			}
+			((GLib.Object) config).set_property(key, parsed);
+			config.save();
+		}
+
+		/**
 		 * Present {@link Adw.AboutDialog} (Shell panel menu).
 		 */
 		public void about()

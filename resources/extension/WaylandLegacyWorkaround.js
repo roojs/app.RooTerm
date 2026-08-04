@@ -81,45 +81,7 @@ export class WaylandLegacyWorkaround {
             if (self.shell.waylandPending.length === 0) {
                 return;
             }
-            // Title-match roles — FIFO-by-map swaps Preferences/Connection on Wayland.
-            var unbound = [];
-            var actors = global.get_window_actors();
-            for (var i = 0; i < actors.length; i++) {
-                var win = actors[i].meta_window;
-                if (!win || win.minimized || !self.shell.isRooTerm(win)) {
-                    continue;
-                }
-                if (win === self.shell.win.main || win === self.shell.win.preferences) {
-                    continue;
-                }
-                var rect = win.get_frame_rect();
-                if (!rect || rect.width < 400 || rect.height < 400) {
-                    continue;
-                }
-                unbound.push(win);
-            }
-            var left = [];
-            for (var p = 0; p < self.shell.waylandPending.length; p++) {
-                var pending = self.shell.waylandPending[p];
-                var match = self.windowForRole(pending.role, unbound);
-                if (!match) {
-                    left.push(pending);
-                    continue;
-                }
-                unbound = unbound.filter(function(w) {
-                    return w !== match;
-                });
-                console.error('rooterm: wayland bind role=' + pending.role
-                    + ' id=' + match.get_id()
-                    + ' handle=' + pending.handle
-                    + ' title=' + (match.get_title() || '')
-                    + ' (title-match)');
-                self.shell.storeRole(pending.role, match);
-            }
-            self.shell.waylandPending = left;
-            if (left.length > 0 && unbound.length > 0) {
-                origBind();
-            }
+            origBind();
         };
 
         // G48: Meta.Window has no show/hide_from_window_list — use WaylandClient
@@ -246,22 +208,6 @@ export class WaylandLegacyWorkaround {
         } catch (e) {
             console.error('rooterm: hide_from_window_list: ' + e);
         }
-    }
-
-    /**
-     * Pick an unbound Meta window for a pending role by title.
-     */
-    windowForRole(role, windows) {
-        for (var i = 0; i < windows.length; i++) {
-            var title = (windows[i].get_title() || '').toLowerCase();
-            if (role === 'preferences' && title.indexOf('preferences') !== -1) {
-                return windows[i];
-            }
-            if (role === 'main' && title.indexOf('preferences') === -1) {
-                return windows[i];
-            }
-        }
-        return false;
     }
 
     needs(win) {

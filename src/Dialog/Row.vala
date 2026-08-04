@@ -1,0 +1,131 @@
+/*
+ * Copyright (C) 2026 Alan Knowles <alan@roojs.com>
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this library; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+ */
+
+namespace RooTerm.Dialog
+{
+	/**
+	 * Preferences row bound to one {@link RooTerm.Config} GObject property.
+	 *
+	 * Composes an {@link Adw.PreferencesRow} (does not subclass
+	 * {@link Adw.ActionRow}). Property names use hyphens (``toggle-key``), matching
+	 * {@link GLib.ObjectClass.find_property}. User edits call {@link send}, which
+	 * fires ``ConfigUpdate`` on ``org.roojs.RooTerm.DBus``. Not wired into
+	 * {@link Preferences} yet.
+	 *
+	 * == Example ==
+	 *
+	 * {{{
+	 * var opacity = new Dialog.RowScale(config, "opacity", 10, 100, 1);
+	 * group.add(opacity.row);
+	 * opacity.fill();
+	 * }}}
+	 */
+	public abstract class Row : GLib.Object
+	{
+		/**
+		 * Widget to add to an {@link Adw.PreferencesGroup}.
+		 */
+		public Adw.PreferencesRow row;
+
+		/**
+		 * Chrome config this row edits (read for {@link fill} only).
+		 */
+		public Config config;
+
+		/**
+		 * Property this row binds (name is hyphenated).
+		 */
+		public ParamSpec pspec;
+
+		/**
+		 * True while {@link fill} is updating widgets (ignore control signals).
+		 */
+		public bool loading = false;
+
+		/**
+		 * Hyphenated GObject property name (e.g. ``toggle-key``).
+		 */
+		public string key {
+			get {
+				return this.pspec.get_name();
+			}
+		}
+
+		/**
+		 * Resolve ``key`` on ``config`` and build {@link row} title/subtitle from nick/blurb.
+		 *
+		 * @param config Chrome settings object
+		 * @param key Hyphenated property name (``opacity``, ``toggle-key``, …)
+		 */
+		protected Row(Config config, string key)
+		{
+			this.config = config;
+			var pspec = config.find_property(key);
+			if (pspec == null) {
+				GLib.error("unknown config property: %s", key);
+			}
+			this.pspec = pspec;
+			this.row = new Adw.ActionRow() {
+				title = this.pspec.get_nick(),
+				subtitle = this.pspec.get_blurb()
+			};
+		}
+
+		/**
+		 * Load the widget from {@link config} (sets {@link loading} around the update).
+		 */
+		public abstract void fill();
+
+		/**
+		 * Call main ``ConfigUpdate`` with this row's {@link key} unless {@link loading}.
+		 *
+		 * @param value String form of the control value
+		 */
+		public void send(string value)
+		{
+			if (this.loading) {
+				return;
+			}
+			try {
+				GLib.Bus.get_sync(GLib.BusType.SESSION, null).call_sync(
+					"org.roojs.RooTerm.DBus",
+					"/org/roojs/RooTerm/DBus",
+					"org.roojs.RooTerm.DBus",
+					"ConfigUpdate",
+					new GLib.Variant("(ss)", this.key, value),
+					null,
+					GLib.DBusCallFlags.NONE,
+					2000,
+					null
+				);
+			} catch (GLib.Error e) {
+				GLib.warning("ConfigUpdate %s: %s", this.key, e.message);
+			}
+		}
+
+		/**
+		 * Read the bound property into ``value`` (caller sets the Value type).
+		 *
+		 * @param value Out-style Value to fill via {@link GLib.Object.get_property}
+		 */
+		protected void read(ref Value value)
+		{
+			((GLib.Object) this.config).get_property(this.key, ref value);
+		}
+	}
+}

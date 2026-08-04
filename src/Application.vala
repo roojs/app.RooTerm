@@ -117,6 +117,11 @@ namespace RooTerm
 		 */
 		public MainWindow? window;
 
+		/**
+		 * True when this process is the preferences app (``--preferences``).
+		 */
+		public bool is_preferences = false;
+
 		private const GLib.OptionEntry[] app_options = {
 			{ "debug", 'd', 0, GLib.OptionArg.NONE, ref opt_debug, "Enable debug output", null },
 			{ "debug-critical", 0, 0, GLib.OptionArg.NONE, ref opt_debug_critical, "Treat critical warnings as errors", null },
@@ -129,13 +134,18 @@ namespace RooTerm
 		/**
 		 * Creates the application and installs debug logging.
 		 * Session-bus {@link DBus} + daemon {@link hold} run in {@link startup} (primary only).
+		 *
+		 * @param is_preferences True → prefs app id; false → main
 		 */
-		public Application()
+		public Application(bool is_preferences = false)
 		{
 			Object(
-				application_id: "org.roojs.rooterm",
+				application_id: is_preferences
+					? "org.roojs.rooterm.preferences"
+					: "org.roojs.rooterm",
 				flags: GLib.ApplicationFlags.HANDLES_COMMAND_LINE
 			);
+			this.is_preferences = is_preferences;
 			Gtk.Window.set_default_icon_name("org.roojs.rooterm");
 
 			GLib.Log.set_default_handler((dom, lvl, msg) => {

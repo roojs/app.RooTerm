@@ -2,7 +2,7 @@
 
 > Pointer: `docs/bug-fix-process.md` (emoji).
 
-**Status:** ✅ FIXED — plan **`docs/plans/0.12-DONE-shell-owns-three-windows.md`** (extension **v37**)
+**Status:** ✅ FIXED — plan **`docs/plans/0.12-DONE-shell-owns-three-windows.md`** (extension **v37**). Later: Connection off Shell (**0.15** Phase 0); prefs process + ``ConfigUpdate`` (**0.15.1**); extension **v87** drops title-match bind.
 
 **Started:** 2026-08-01
 
