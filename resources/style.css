@@ -10,8 +10,7 @@ window.drop-down {
 }
 
 .host-pane,
-.host-tree,
-.host-tabbar {
+.host-tree {
 	background-color: @window_bg_color;
 }
 
@@ -62,23 +61,61 @@ vte-terminal {
 .host-tabbar {
 	min-height: 28px;
 	padding: 2px 4px;
+	/* Slightly darker strip so chips read against the chrome. */
+	background-color: shade(@window_bg_color, 0.90);
 }
 
-.host-tab {
+.host-tab,
+.host-tab-add {
 	min-height: 24px;
 	padding: 0 2px 0 4px;
 	border-radius: 4px;
-	background-color: alpha(@view_bg_color, 0.6);
+	border: 1px solid alpha(@borders, 0.55);
+	background-color: alpha(@view_bg_color, 0.75);
+}
+
+/* Class set from EventControllerMotion — GTK :hover on the row is unreliable over child buttons. */
+.host-tab.hover,
+.host-tab-add:hover {
+	background-color: alpha(@accent_bg_color, 0.22);
 }
 
 .host-tab.selected {
 	background-color: alpha(@accent_bg_color, 0.35);
+	box-shadow: inset 0 -2px 0 @accent_bg_color;
+}
+
+.host-tab.selected.hover {
+	background-color: alpha(@accent_bg_color, 0.5);
+}
+
+.host-tab-add {
+	min-width: 28px;
+	padding: 0;
+	margin-left: 2px;
 }
 
 .host-tab-pick,
 .host-tab-close {
 	min-height: 22px;
 	padding: 0 4px;
+}
+
+.host-tab-pick label {
+	font-weight: normal;
+}
+
+.host-tab.selected .host-tab-pick label {
+	font-weight: bold;
+}
+
+.host-tab-pick:hover,
+.host-tab-close:hover,
+.host-tab-pick:active,
+.host-tab-close:active,
+.host-tab-add:active {
+	background: transparent;
+	box-shadow: none;
 }
 
 .host-tab-close {

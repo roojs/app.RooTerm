@@ -90,6 +90,7 @@ namespace RooTerm.Host
 				action_name = "win.new-terminal",
 				valign = Gtk.Align.CENTER
 			};
+			this.add_btn.add_css_class("host-tab-add");
 			this.append(this.add_btn);
 
 			this.view.page_attached.connect((page, position) => {
@@ -190,6 +191,14 @@ namespace RooTerm.Host
 				hexpand = false
 			};
 			row.add_css_class("host-tab");
+			var hover = new Gtk.EventControllerMotion();
+			hover.enter.connect(() => {
+				row.add_css_class("hover");
+			});
+			hover.leave.connect(() => {
+				row.remove_css_class("hover");
+			});
+			row.add_controller(hover);
 			page.set_data("tab-row", row);
 			page.set_data("width-binding", this.bind_property(
 				"tab-width", row, "width-request", GLib.BindingFlags.SYNC_CREATE
