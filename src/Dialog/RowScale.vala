@@ -32,6 +32,10 @@ namespace RooTerm.Dialog
 	public class RowScale : Row
 	{
 		public Gtk.Scale scale;
+		/**
+		 * Pending debounced {@link Row.send} (0 = none).
+		 */
+		private uint send_id = 0;
 
 		/**
 		 * @param config Chrome settings
@@ -51,7 +55,15 @@ namespace RooTerm.Dialog
 				valign = Gtk.Align.CENTER
 			};
 			this.scale.value_changed.connect(() => {
-				this.send(((int) this.scale.get_value()).to_string());
+				if (this.send_id != 0) {
+					GLib.Source.remove(this.send_id);
+				}
+				// Drag fires many value_changed — send once after settle.
+				this.send_id = GLib.Timeout.add(500, () => {
+					this.send_id = 0;
+					this.send(((int) this.scale.get_value()).to_string());
+					return false;
+				});
 			});
 			((Adw.ActionRow) this.row).add_suffix(this.scale);
 		}

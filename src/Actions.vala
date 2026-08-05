@@ -128,8 +128,7 @@ namespace RooTerm
 
 			var prefs_action = new GLib.SimpleAction("preferences", null);
 			prefs_action.activate.connect(() => {
-				this.window.preferences_editor.fill();
-				this.window.dbus.call("show", new GLib.Variant("(s)", "preferences"));
+				this.window.dbus.preferences();
 			});
 			this.window.add_action(prefs_action);
 			app.set_accels_for_action("win.preferences", { "<Control>comma" });

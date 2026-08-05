@@ -172,8 +172,6 @@ namespace RooTerm
 				() => {
 					this.shell.register(this, "main");
 					this.shell.register(this.preferences_editor, "preferences");
-					// Shell reload remaps prefs; re-hide after Register (prime timeout is once).
-					this.dbus.call("hide", new GLib.Variant("(s)", "preferences"));
 				},
 				() => {
 				}

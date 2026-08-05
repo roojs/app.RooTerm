@@ -381,10 +381,6 @@ export class ShellService {
                 console.error('rooterm: unmanaged cleared slot id=' + win.get_id());
             });
         }
-        // Prefs primed for Register; minimize until Show.
-        if (role === 'preferences') {
-            this.hide(role);
-        }
     }
 
     resolveX11(hex) {

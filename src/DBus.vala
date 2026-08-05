@@ -107,14 +107,41 @@ namespace RooTerm
 			try {
 				GLib.Bus.get_sync(GLib.BusType.SESSION, null).call_sync(
 					"org.roojs.RooTerm.Shell",
-					"/org/roojs/RooTerm/Shell",
+					"/org/roojs/RooTerm/Shell", "org.roojs.RooTerm.Shell",
+					method, parameters,
+					null, GLib.DBusCallFlags.NONE, 2000, null
+				);
+			} catch (GLib.Error e) {
+				GLib.debug("Shell %s: %s", method, e.message);
+			}
+		}
+
+		/**
+		 * Async Shell call — use when the main loop must keep running (prefs
+		 * show/hide; avoids ``call_sync`` deadlock with Shell ``skip_taskbar``).
+		 *
+		 * Not exported on ``org.roojs.RooTerm.DBus``.
+		 *
+		 * @param method D-Bus method (``register`` / ``show`` / ``hide`` / …)
+		 * @param parameters Method arguments variant
+		 */
+		[DBus (visible = false)]
+		public void call_async(string method, GLib.Variant parameters)
+		{
+			try {
+				var bus = GLib.Bus.get_sync(GLib.BusType.SESSION, null);
+				bus.call.begin(
 					"org.roojs.RooTerm.Shell",
-					method,
-					parameters,
-					null,
-					GLib.DBusCallFlags.NONE,
-					2000,
-					null
+					"/org/roojs/RooTerm/Shell", "org.roojs.RooTerm.Shell",
+					method, parameters,
+					null, GLib.DBusCallFlags.NONE, -1, null,
+					(s, res) => {
+						try {
+							bus.call.end(res);
+						} catch (GLib.Error e) {
+							GLib.debug("Shell %s: %s", method, e.message);
+						}
+					}
 				);
 			} catch (GLib.Error e) {
 				GLib.debug("Shell %s: %s", method, e.message);
@@ -266,8 +293,14 @@ namespace RooTerm
 			if (window == null) {
 				return;
 			}
-			window.preferences_editor.fill();
-			this.call("show", new GLib.Variant("(s)", "preferences"));
+			var prefs = window.preferences_editor;
+			prefs.fill();
+			prefs.present();
+			// map → register (idle). Async show — call_sync deadlocks with Shell skip_taskbar.
+			GLib.Timeout.add(50, () => {
+				this.call_async("show", new GLib.Variant("(s)", "preferences"));
+				return false;
+			});
 		}
 
 		/**

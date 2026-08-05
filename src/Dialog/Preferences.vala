@@ -61,7 +61,11 @@ namespace RooTerm.Dialog
 			this.window = window;
 			this.config = Config.load();
 			this.map.connect(() => {
-				this.window.shell.register(this, "preferences");
+				// Defer off map — call_sync Register during map deadlocks with Shell.
+				GLib.Idle.add(() => {
+					this.window.shell.register(this, "preferences");
+					return false;
+				});
 			});
 
 			var page = new Adw.PreferencesPage();
@@ -105,7 +109,9 @@ namespace RooTerm.Dialog
 			this.content = toolbar;
 
 			this.close_request.connect(() => {
-				this.window.dbus.call("hide", new GLib.Variant("(s)", "preferences"));
+				this.window.dbus.call_async(
+					"hide", new GLib.Variant("(s)", "preferences")
+				);
 				return true;
 			});
 			this.fill();

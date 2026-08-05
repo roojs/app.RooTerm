@@ -94,6 +94,7 @@ namespace RooTerm.Dialog
 
 		/**
 		 * Call main ``config_update`` with this row's {@link key} unless {@link loading}.
+		 * Async — ``call_sync`` to our own bus name deadlocks (prefs still in-process).
 		 * On failure (main not running), set the property locally and save.
 		 *
 		 * @param value String form of the control value
@@ -104,19 +105,44 @@ namespace RooTerm.Dialog
 				return;
 			}
 			try {
-				GLib.Bus.get_sync(GLib.BusType.SESSION, null).call_sync(
+				var bus = GLib.Bus.get_sync(GLib.BusType.SESSION, null);
+				bus.call.begin(
 					"org.roojs.RooTerm.DBus",
-					"/org/roojs/RooTerm/DBus",
-					"org.roojs.RooTerm.DBus",
-					"config_update",
-					new GLib.Variant("(ss)", this.key, value),
-					null,
-					GLib.DBusCallFlags.NONE,
-					2000,
-					null
+					"/org/roojs/RooTerm/DBus", "org.roojs.RooTerm.DBus",
+					"config_update", new GLib.Variant("(ss)", this.key, value),
+					null, GLib.DBusCallFlags.NONE, -1, null,
+					(s, res) => {
+						try {
+							bus.call.end(res);
+						} catch (GLib.Error e) {
+							GLib.debug(
+								"config_update %s: %s — save locally",
+								this.key, e.message
+							);
+							var parsed = Value(this.pspec.value_type);
+							switch (this.pspec.value_type) {
+								case GLib.Type.INT:
+									parsed.set_int(int.parse(value));
+									break;
+
+								case GLib.Type.STRING:
+									parsed.set_string(value);
+									break;
+
+								default:
+									GLib.warning(
+										"unsupported config type for %s", this.key
+									);
+									return;
+							}
+							((GLib.Object) this.config).set_property(
+								this.key, parsed
+							);
+							this.config.save();
+						}
+					}
 				);
 			} catch (GLib.Error e) {
-				// Main not on the bus — prefs writes config.json itself.
 				GLib.debug("config_update %s: %s — save locally", this.key, e.message);
 				var parsed = Value(this.pspec.value_type);
 				switch (this.pspec.value_type) {

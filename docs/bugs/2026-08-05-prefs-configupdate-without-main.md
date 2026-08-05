@@ -40,14 +40,25 @@
 
 - **🔷** On `config_update` failure: parse value onto `this.config`, `set_property`, `config.save()`.
 - **✔️** `src/Dialog/Row.vala` — catch path saves locally.
-
+1
 ---
 
 ## Attempts / changelog
 
 - **🔷** 2026-08-05 — user: if `config_update` cannot reach main, prefs must save locally (trivial).
 - **✔️** 2026-08-05 — `Row.send` local apply + save on D-Bus failure.
+- **🔷** 2026-08-05 — user: Preferences startup broken after Idle prime removal.
+- **✔️** Evidence: journal `show missing role=preferences` — `preferences()` called Shell show without `present`/register.
+- **✔️** Fix: `DBus.preferences` present + idle register + show; Actions uses `dbus.preferences()`; drop storeRole auto-hide prefs and Bus.watch hide (v91).
+- **🔷** 2026-08-05 — user: prefs locked on screen, app not responding (call_sync show after present deadlocks with Shell `skip_taskbar`).
+- **✔️** Fix: async Shell `show`/`hide` for prefs; defer map `register` to Idle. Killed stuck process.
+- **🔷** 2026-08-05 — user: config send jams (same-process `call_sync` `config_update`).
+- **✔️** `Row.send` uses async `call.begin` / local save on failure.
+- **🔷** 2026-08-05 — user: slider locks prefs UI; no debounce — flood of sends.
+- **✔️** `RowScale` debounces `send` 500ms after last `value_changed`.
 
 ## Next
 
+- **⏳** **🔷** Device: drag width/height/opacity — scale stays smooth; one update after release/settle.
+- **⏳** **🔷** Device: Ctrl+, opens prefs; Close hides.
 - **⏳** **🔷** Device: prefs with main quit → edit opacity → `config.json` updated; with main up → still `config_update` path.
