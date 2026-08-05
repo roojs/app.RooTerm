@@ -142,7 +142,10 @@ Do not fire-and-forget repeating or re-entrant timeouts without an id field.
 - Prefer D-Bus to the RooTerm app (`Const.js` destinations) over spawning
   shell commands from the extension.
 - Heavy work stays in the app; the Shell process stays thin.
-- Last-resort spawn (e.g. Toggle when the bus call fails) must stay rare,
+- **Wire names are lowercase / snake_case** (`register`, `show`, `hide`,
+  `toggle`, `exited`, `skip_taskbar`, `config_update`, `dock_mode`, `redock`)
+  — match Vala method names; do not PascalCase on the bus.
+- Last-resort spawn (e.g. toggle when the bus call fails) must stay rare,
   logged, and justified in a short comment.
 
 ## Settings <!-- section: ego-settings -->

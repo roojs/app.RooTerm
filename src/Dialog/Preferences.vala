@@ -22,14 +22,14 @@ namespace RooTerm.Dialog
 	 * Single-page preferences: Keyboard (toggle key) and Appearance
 	 * (opacity, height, width, placement). Standalone {@link Adw.Window}
 	 * hosting an {@link Adw.PreferencesPage}. Rows apply live via
-	 * {@link Row.send} / ``ConfigUpdate``; Close only Hides (no undo).
+	 * {@link Row.send} / ``config_update``; Close only Hides (no undo).
 	 * This window does not write ``config.json``.
 	 *
 	 * == Example ==
 	 *
 	 * {{{
 	 * window.preferences_editor.fill();
-	 * window.dbus.call("Show", new GLib.Variant("(s)", "preferences"));
+	 * window.dbus.call("show", new GLib.Variant("(s)", "preferences"));
 	 * }}}
 	 */
 	public class Preferences : Adw.Window
@@ -43,7 +43,7 @@ namespace RooTerm.Dialog
 		}
 
 		/**
-		 * Build the window bound to ``window`` (Shell Register / Hide).
+		 * Build the window bound to ``window`` (Shell register / hide).
 		 *
 		 * @param window Main window
 		 */
@@ -105,7 +105,7 @@ namespace RooTerm.Dialog
 			this.content = toolbar;
 
 			this.close_request.connect(() => {
-				this.window.dbus.call("Hide", new GLib.Variant("(s)", "preferences"));
+				this.window.dbus.call("hide", new GLib.Variant("(s)", "preferences"));
 				return true;
 			});
 			this.fill();

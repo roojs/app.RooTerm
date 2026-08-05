@@ -165,7 +165,7 @@ namespace RooTerm
 
 		/**
 		 * First run: create and present main ({@link MainWindow} primes Shell roles).
-		 * Later: remorph if needed, else Shell ``Show('main')``.
+		 * Later: remorph if needed, else Shell ``show('main')``.
 		 */
 		protected override void activate()
 		{
@@ -189,7 +189,7 @@ namespace RooTerm
 				});
 				return;
 			}
-			this.dbus.call("Show", new GLib.Variant("(s)", "main"));
+			this.dbus.call("show", new GLib.Variant("(s)", "main"));
 			this.window.set_default_size(
 				this.window.monitor_geo.width * this.window.config.width / 100,
 				this.window.monitor_geo.height * this.window.config.height / 100

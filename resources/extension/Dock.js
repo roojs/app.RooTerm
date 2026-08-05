@@ -81,14 +81,14 @@ export class Dock {
     }
 
     /**
-     * True when the app reports underbar mode (D-Bus ``DockMode``).
+     * True when the app reports underbar mode (D-Bus ``dock_mode``).
      */
     isDockMode() {
         try {
             var reply = Gio.DBus.session.call_sync(
                 DBUS_DEST, DBUS_PATH,
                 'org.freedesktop.DBus.Properties', 'Get',
-                new GLib.Variant('(ss)', [DBUS_IFACE, 'DockMode']),
+                new GLib.Variant('(ss)', [DBUS_IFACE, 'dock_mode']),
                 new GLib.VariantType('(v)'),
                 Gio.DBusCallFlags.NONE,
                 500,
@@ -96,7 +96,7 @@ export class Dock {
             );
             return reply.get_child_value(0).get_variant().get_boolean();
         } catch (e) {
-            console.error('rooterm: DockMode: ' + e);
+            console.error('rooterm: dock_mode: ' + e);
             return false;
         }
     }

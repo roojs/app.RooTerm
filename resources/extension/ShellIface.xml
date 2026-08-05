@@ -1,17 +1,20 @@
 <node>
   <interface name="org.roojs.RooTerm.Shell">
-    <method name="Register">
+    <method name="register">
       <arg type="s" name="role" direction="in"/>
       <arg type="s" name="handle" direction="in"/>
     </method>
-    <method name="Show">
+    <method name="show">
       <arg type="s" name="role" direction="in"/>
     </method>
-    <method name="Hide">
+    <method name="hide">
       <arg type="s" name="role" direction="in"/>
     </method>
-    <method name="Toggle">
+    <method name="toggle">
       <arg type="s" name="role" direction="in"/>
+    </method>
+    <method name="exited">
+      <arg type="s" name="app_id" direction="in"/>
     </method>
   </interface>
 </node>

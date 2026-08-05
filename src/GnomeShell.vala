@@ -499,7 +499,7 @@ After reload, click OK to switch this window to the drop-down. Then $(key) and t
 		}
 
 		/**
-		 * Export a portal-style window handle and ``Register`` with
+		 * Export a portal-style window handle and ``register`` with
 		 * ``org.roojs.RooTerm.Shell``. Retries D-Bus when the handle is
 		 * already known (Shell bus may appear after first map).
 		 *
@@ -511,7 +511,7 @@ After reload, click OK to switch this window to the drop-down. Then $(key) and t
 			var existing = window.get_data<string>("rooterm-shell-handle");
 			if (existing != null) {
 				GLib.debug("Shell handle retry role=%s %s", role, existing);
-				this.window.dbus.call("Register", new GLib.Variant("(ss)", role, existing));
+				this.window.dbus.call("register", new GLib.Variant("(ss)", role, existing));
 				return;
 			}
 			var surface = window.get_surface();
@@ -523,7 +523,7 @@ After reload, click OK to switch this window to the drop-down. Then $(key) and t
 				var handle = "x11:%x".printf((uint) x11_surface.get_xid());
 				window.set_data("rooterm-shell-handle", handle.dup());
 				GLib.debug("Shell handle role=%s %s", role, handle);
-				this.window.dbus.call("Register", new GLib.Variant("(ss)", role, handle));
+				this.window.dbus.call("register", new GLib.Variant("(ss)", role, handle));
 				return;
 			}
 			var wl_toplevel = surface as Gdk.Wayland.Toplevel;
@@ -534,7 +534,7 @@ After reload, click OK to switch this window to the drop-down. Then $(key) and t
 				var handle = "wayland:" + h;
 				window.set_data("rooterm-shell-handle", handle.dup());
 				GLib.debug("Shell handle role=%s %s", role, handle);
-				this.window.dbus.call("Register", new GLib.Variant("(ss)", role, handle));
+				this.window.dbus.call("register", new GLib.Variant("(ss)", role, handle));
 			})) {
 				GLib.warning("Shell export_handle failed role=%s", role);
 			}

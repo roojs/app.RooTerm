@@ -7,13 +7,13 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {APP_ID, DBUS_DEST, DBUS_IFACE, DBUS_PATH, SHELL_DEST, SHELL_PATH} from './Const.js';
 
 /**
- * Session bus org.roojs.RooTerm.Shell — Register / Show / Hide / Toggle
+ * Session bus org.roojs.RooTerm.Shell — register / show / hide / toggle / exited
  * and Meta window slots for main / preferences.
  *
  * Hide is Meta minimize (keeps slots alive). Main slides then minimizes.
  * skip_taskbar is cleared briefly around minimize (GNOME 48: app D-Bus
- * SkipTaskbar; 49+: Meta show/hide_from_window_list) so overview stays clear
- * without blocking minimize. SkipTaskbar is always async (never call_sync).
+ * skip_taskbar; 49+: Meta show/hide_from_window_list) so overview stays clear
+ * without blocking minimize. skip_taskbar is always async (never call_sync).
  */
 export class ShellService {
     constructor(extensionPath) {
@@ -64,8 +64,8 @@ export class ShellService {
      * x11:HEX via get_description(); wayland: queued until next unbound RooTerm map
      * (Meta GJS has no xdg-foreign handle lookup).
      */
-    Register(role, handle) {
-        console.error('rooterm: Register role=' + role + ' handle=' + handle);
+    register(role, handle) {
+        console.error('rooterm: register role=' + role + ' handle=' + handle);
         if (handle.indexOf('wayland:') === 0) {
             this.waylandPending.push({
                 role: role,
@@ -75,21 +75,21 @@ export class ShellService {
             return;
         }
         if (handle.indexOf('x11:') !== 0) {
-            console.error('rooterm: Register bad handle prefix');
+            console.error('rooterm: register bad handle prefix');
             return;
         }
         var win = this.resolveX11(handle.substring('x11:'.length));
         if (!win) {
-            console.error('rooterm: Register x11 resolve failed role=' + role);
+            console.error('rooterm: register x11 resolve failed role=' + role);
             return;
         }
         this.storeRole(role, win);
     }
 
-    Show(role) {
+    show(role) {
         var self = this;
         if (!this.win[role]) {
-            console.error('rooterm: Show missing role=' + role);
+            console.error('rooterm: show missing role=' + role);
             return;
         }
         this.win[role].rootermHiding = false;
@@ -107,14 +107,14 @@ export class ShellService {
         }
         // Restore skip_taskbar after show (async).
         Gio.DBus.session.call(
-            DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'SkipTaskbar',
+            DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'skip_taskbar',
             new GLib.Variant('(sb)', [role, true]),
             null, Gio.DBusCallFlags.NONE, -1, null,
             function(conn, res) {
                 try {
                     Gio.DBus.session.call_finish(res);
                 } catch (e) {
-                    console.error('rooterm: SkipTaskbar true role=' + role + ': ' + e);
+                    console.error('rooterm: skip_taskbar true role=' + role + ': ' + e);
                 }
                 if (self.win[role]
                         && typeof self.win[role].hide_from_window_list === 'function') {
@@ -169,7 +169,7 @@ export class ShellService {
         } catch (e) {
             this.win[role].activate(global.get_current_time());
         }
-        console.error('rooterm: Show role=' + role + ' id=' + this.win[role].get_id()
+        console.error('rooterm: show role=' + role + ' id=' + this.win[role].get_id()
             + ' minimized=' + this.win[role].minimized);
     }
 
@@ -191,7 +191,7 @@ export class ShellService {
             } catch (e) {
                 front.activate(global.get_current_time());
             }
-            console.error('rooterm: Show role=main id=' + this.win.main.get_id()
+            console.error('rooterm: show role=main id=' + this.win.main.get_id()
                 + ' minimized=' + this.win.main.minimized + ' under-dialog');
             return;
         }
@@ -200,14 +200,14 @@ export class ShellService {
         } catch (e) {
             this.win.main.activate(global.get_current_time());
         }
-        console.error('rooterm: Show role=main id=' + this.win.main.get_id()
+        console.error('rooterm: show role=main id=' + this.win.main.get_id()
             + ' minimized=' + this.win.main.minimized);
     }
 
-    Hide(role) {
+    hide(role) {
         var self = this;
         if (!this.win[role]) {
-            console.error('rooterm: Hide missing role=' + role);
+            console.error('rooterm: hide missing role=' + role);
             return;
         }
         var actor = this.win[role].get_compositor_private();
@@ -228,7 +228,7 @@ export class ShellService {
                     self.win[role].rootermHiding = false;
                     actor.opacity = 0;
                     self.win[role].rootermReadyToMinimize = true;
-                    self.Hide(role);
+                    self.hide(role);
                 },
             });
             return;
@@ -240,14 +240,14 @@ export class ShellService {
         }
         // Clear skip_taskbar → idle → minimize → restore skip (async only).
         Gio.DBus.session.call(
-            DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'SkipTaskbar',
+            DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'skip_taskbar',
             new GLib.Variant('(sb)', [role, false]),
             null, Gio.DBusCallFlags.NONE, -1, null,
             function(conn, res) {
                 try {
                     Gio.DBus.session.call_finish(res);
                 } catch (e) {
-                    console.error('rooterm: SkipTaskbar false role='
+                    console.error('rooterm: skip_taskbar false role='
                         + role + ': ' + e);
                 }
                 if (!self.win[role]) {
@@ -285,14 +285,14 @@ export class ShellService {
             actor.opacity = 255;
         }
         Gio.DBus.session.call(
-            DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'SkipTaskbar',
+            DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'skip_taskbar',
             new GLib.Variant('(sb)', [role, true]),
             null, Gio.DBusCallFlags.NONE, -1, null,
             function(conn, res) {
                 try {
                     Gio.DBus.session.call_finish(res);
                 } catch (e) {
-                    console.error('rooterm: SkipTaskbar true role='
+                    console.error('rooterm: skip_taskbar true role='
                         + role + ': ' + e);
                 }
                 if (self.win[role]
@@ -301,7 +301,7 @@ export class ShellService {
                 }
             }
         );
-        console.error('rooterm: Hide role=' + role + ' id=' + this.win[role].get_id()
+        console.error('rooterm: hide role=' + role + ' id=' + this.win[role].get_id()
             + ' minimized=' + this.win[role].minimized);
         if (role !== 'preferences') {
             return;
@@ -313,16 +313,38 @@ export class ShellService {
         this.win.main.make_above();
     }
 
-    Toggle(role) {
+    toggle(role) {
         if (!this.win[role]) {
-            console.error('rooterm: Toggle missing role=' + role);
+            console.error('rooterm: toggle missing role=' + role);
             return;
         }
         if (this.win[role].minimized || this.win[role].rootermHiding) {
-            this.Show(role);
+            this.show(role);
             return;
         }
-        this.Hide(role);
+        this.hide(role);
+    }
+
+    /**
+     * App process left — drop only that app's roles (main vs preferences).
+     */
+    exited(appId) {
+        console.error('rooterm: exited app_id=' + appId);
+        if (appId === 'org.roojs.rooterm') {
+            this.win.main = false;
+            this.waylandPending = this.waylandPending.filter(function(p) {
+                return p.role !== 'main';
+            });
+            return;
+        }
+        if (appId === 'org.roojs.rooterm.preferences') {
+            this.win.preferences = false;
+            this.waylandPending = this.waylandPending.filter(function(p) {
+                return p.role !== 'preferences';
+            });
+            return;
+        }
+        console.error('rooterm: exited unknown app_id=' + appId);
     }
 
     storeRole(role, win) {
@@ -335,14 +357,14 @@ export class ShellService {
         console.error('rooterm: stored role=' + role + ' id=' + this.win[role].get_id()
             + ' title=' + (this.win[role].get_title() || ''));
         Gio.DBus.session.call(
-            DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'SkipTaskbar',
+            DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'skip_taskbar',
             new GLib.Variant('(sb)', [role, true]),
             null, Gio.DBusCallFlags.NONE, -1, null,
             function(conn, res) {
                 try {
                     Gio.DBus.session.call_finish(res);
                 } catch (e) {
-                    console.error('rooterm: SkipTaskbar true role=' + role + ': ' + e);
+                    console.error('rooterm: skip_taskbar true role=' + role + ': ' + e);
                 }
                 if (self.win[role]
                         && typeof self.win[role].hide_from_window_list === 'function') {
@@ -361,7 +383,7 @@ export class ShellService {
         }
         // Prefs primed for Register; minimize until Show.
         if (role === 'preferences') {
-            this.Hide(role);
+            this.hide(role);
         }
     }
 

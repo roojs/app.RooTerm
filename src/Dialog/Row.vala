@@ -24,8 +24,9 @@ namespace RooTerm.Dialog
 	 * Composes an {@link Adw.PreferencesRow} (does not subclass
 	 * {@link Adw.ActionRow}). Property names use hyphens (``toggle-key``), matching
 	 * {@link GLib.ObjectClass.find_property}. User edits call {@link send}, which
-	 * fires ``ConfigUpdate`` on ``org.roojs.RooTerm.DBus``. Not wired into
-	 * {@link Preferences} yet.
+	 * fires ``config_update`` on ``org.roojs.RooTerm.DBus``. If main is not on
+	 * the bus, applies the value on {@link config} and {@link Config.save}.
+	 * Not wired into {@link Preferences} yet.
 	 *
 	 * == Example ==
 	 *
@@ -92,7 +93,8 @@ namespace RooTerm.Dialog
 		public abstract void fill();
 
 		/**
-		 * Call main ``ConfigUpdate`` with this row's {@link key} unless {@link loading}.
+		 * Call main ``config_update`` with this row's {@link key} unless {@link loading}.
+		 * On failure (main not running), set the property locally and save.
 		 *
 		 * @param value String form of the control value
 		 */
@@ -106,7 +108,7 @@ namespace RooTerm.Dialog
 					"org.roojs.RooTerm.DBus",
 					"/org/roojs/RooTerm/DBus",
 					"org.roojs.RooTerm.DBus",
-					"ConfigUpdate",
+					"config_update",
 					new GLib.Variant("(ss)", this.key, value),
 					null,
 					GLib.DBusCallFlags.NONE,
@@ -114,7 +116,24 @@ namespace RooTerm.Dialog
 					null
 				);
 			} catch (GLib.Error e) {
-				GLib.warning("ConfigUpdate %s: %s", this.key, e.message);
+				// Main not on the bus — prefs writes config.json itself.
+				GLib.debug("config_update %s: %s — save locally", this.key, e.message);
+				var parsed = Value(this.pspec.value_type);
+				switch (this.pspec.value_type) {
+					case GLib.Type.INT:
+						parsed.set_int(int.parse(value));
+						break;
+
+					case GLib.Type.STRING:
+						parsed.set_string(value);
+						break;
+
+					default:
+						GLib.warning("unsupported config type for %s", this.key);
+						return;
+				}
+				((GLib.Object) this.config).set_property(this.key, parsed);
+				this.config.save();
 			}
 		}
 

@@ -173,7 +173,7 @@ namespace RooTerm
 					this.shell.register(this, "main");
 					this.shell.register(this.preferences_editor, "preferences");
 					// Shell reload remaps prefs; re-hide after Register (prime timeout is once).
-					this.dbus.call("Hide", new GLib.Variant("(s)", "preferences"));
+					this.dbus.call("hide", new GLib.Variant("(s)", "preferences"));
 				},
 				() => {
 				}
@@ -444,7 +444,7 @@ namespace RooTerm
 					return true;
 				}
 				this.terminal_menu.popdown();
-				this.dbus.call("Hide", new GLib.Variant("(s)", "main"));
+				this.dbus.call("hide", new GLib.Variant("(s)", "main"));
 				return true;
 			});
 
@@ -464,15 +464,10 @@ namespace RooTerm
 				term = this.sessions.open_local(this.localhost);
 			}
 			this.tree.save();
-			// After Application add_window + present: focus, prime Shell prefs, dock cue.
+			// After Application add_window + present: focus + dock cue.
 			GLib.Idle.add(() => {
 				this.host_tree.select(term.connection);
 				this.sessions.focus();
-				this.preferences_editor.present();
-				GLib.Timeout.add(400, () => {
-					this.dbus.call("Hide", new GLib.Variant("(s)", "preferences"));
-					return GLib.Source.REMOVE;
-				});
 				this.shell.ensure(() => {
 					if (!this.shell.is_ready) {
 						return;

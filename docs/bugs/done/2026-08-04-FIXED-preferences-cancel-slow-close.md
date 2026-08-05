@@ -3,7 +3,7 @@
 > Pointer: `docs/bug-fix-process.md` (emoji). Legend:
 > `docs/guide-to-writing-plans.md` — Discussion style (emoji prefixes).
 
-**Status:** ✔️ applied — awaiting device verify → promote to ✅ / `done/` when confirmed
+**Status:** ✅ FIXED — user closed out 2026-08-05
 
 **Started:** 2026-08-04
 
@@ -199,6 +199,8 @@
 - **ℹ️** 2026-08-04 — dropped partial-restore proposal; **🔷** Close-only / live / no undo.
 - **✔️** 2026-08-04 — applied: Close only; removed Save/Cancel/`snap`/`accepting`; `close_request` only Hides.
 
+- **✅** 2026-08-05 — user: clean up fixed bugs → `done/`.
+
 ## Next
 
-- **⏳** **🔷** Device: Close dismisses immediately; slider changes stay after Close.
+- **✅** 2026-08-05 — closed out; moved to `docs/bugs/done/`.

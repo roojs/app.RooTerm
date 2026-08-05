@@ -22,14 +22,14 @@ namespace RooTerm
 	 * Session-bus API for Guake toggle / quit (Shell extension + CLI).
 	 *
 	 * Owns ``org.roojs.RooTerm.DBus`` at ``/org/roojs/RooTerm/DBus``.
-	 * Methods export as ``Toggle`` / ``Quit`` / ``About`` / ``Preferences`` on the bus. Constructed from
-	 * {@link Application.startup}; the Shell extension (15b) calls it for global F12.
+	 * Wire names are lowercase / snake_case (``toggle``, ``quit``, ``config_update``, …).
+	 * Constructed from {@link Application.startup}; the Shell extension calls it for global toggle.
 	 *
 	 * == Example ==
 	 *
 	 * {{{
 	 * this.dbus = new DBus(this);
-	 * // gdbus … --method org.roojs.RooTerm.DBus.Toggle
+	 * // gdbus … --method org.roojs.RooTerm.DBus.toggle
 	 * }}}
 	 */
 	[DBus (name = "org.roojs.RooTerm.DBus")]
@@ -82,13 +82,15 @@ namespace RooTerm
 		/**
 		 * Cue the Shell extension to (re)apply underbar dock geometry on main.
 		 */
+		[DBus (name = "redock")]
 		public signal void redock();
 
 		/**
 		 * True when {@link MainWindow} is in underbar drop-down mode.
 		 * Set from the window when mode is chosen; Shell docks only when true.
-		 * Must be a property (not a field) so it is exported on D-Bus as ``DockMode``.
+		 * Must be a property (not a field) so it is exported on D-Bus as ``dock_mode``.
 		 */
+		[DBus (name = "dock_mode")]
 		public bool dock_mode { get; set; default = false; }
 
 		/**
@@ -96,7 +98,7 @@ namespace RooTerm
 		 *
 		 * Not exported on ``org.roojs.RooTerm.DBus``.
 		 *
-		 * @param method D-Bus method (``Register`` / ``Show`` / ``Hide`` / ``Toggle``)
+		 * @param method D-Bus method (``register`` / ``show`` / ``hide`` / ``toggle`` / ``exited``)
 		 * @param parameters Method arguments variant
 		 */
 		[DBus (visible = false)]
@@ -120,8 +122,9 @@ namespace RooTerm
 		}
 
 		/**
-		 * Toggle main window: create if missing, else Shell ``Toggle('main')``.
+		 * Toggle main window: create if missing, else Shell ``toggle('main')``.
 		 */
+		[DBus (name = "toggle")]
 		public void toggle()
 		{
 			if (this.application.window == null) {
@@ -134,7 +137,7 @@ namespace RooTerm
 				return;
 			}
 			// Shell may have become ready while the setup window stayed visible (e.g. after
-			// Alt+F2 ``r``). Ensure (enable if needed) then remorph; if still setup, skip Toggle.
+			// Alt+F2 ``r``). Ensure (enable if needed) then remorph; if still setup, skip toggle.
 			if (!window.is_docked) {
 				window.shell.ensure(() => {
 					if (!window.shell.is_ready) {
@@ -150,7 +153,7 @@ namespace RooTerm
 				}
 			}
 			window.terminal_menu.popdown();
-			this.call("Toggle", new GLib.Variant("(s)", "main"));
+			this.call("toggle", new GLib.Variant("(s)", "main"));
 		}
 
 		/**
@@ -159,16 +162,25 @@ namespace RooTerm
 		 *
 		 * @param force Skip the confirm dialog and quit immediately
 		 */
+		[DBus (name = "quit")]
 		public void quit(bool force = false)
 		{
 			if (this.quitting || force) {
 				this.quitting = true;
+				this.call(
+					"exited",
+					new GLib.Variant("(s)", this.application.application_id)
+				);
 				this.application.quit();
 				return;
 			}
 			var window = this.application.window;
 			if (window == null) {
 				this.quitting = true;
+				this.call(
+					"exited",
+					new GLib.Variant("(s)", this.application.application_id)
+				);
 				this.application.quit();
 				return;
 			}
@@ -194,6 +206,10 @@ namespace RooTerm
 					return;
 				}
 				this.quitting = true;
+				this.call(
+					"exited",
+					new GLib.Variant("(s)", this.application.application_id)
+				);
 				this.application.quit();
 			});
 			alert.present(window);
@@ -209,6 +225,7 @@ namespace RooTerm
 		 * @param role ``main`` / ``preferences``
 		 * @param skip True to hide from task lists
 		 */
+		[DBus (name = "skip_taskbar")]
 		public void skip_taskbar(string role, bool skip)
 		{
 			if (this.application.window == null) {
@@ -239,6 +256,7 @@ namespace RooTerm
 		/**
 		 * Show {@link Dialog.Preferences} (Shell panel menu / ``Ctrl+,``).
 		 */
+		[DBus (name = "preferences")]
 		public void preferences()
 		{
 			if (this.application.window == null) {
@@ -249,7 +267,7 @@ namespace RooTerm
 				return;
 			}
 			window.preferences_editor.fill();
-			this.call("Show", new GLib.Variant("(s)", "preferences"));
+			this.call("show", new GLib.Variant("(s)", "preferences"));
 		}
 
 		/**
@@ -258,6 +276,7 @@ namespace RooTerm
 		 * @param key Hyphenated GObject name (``opacity``, ``toggle-key``, …)
 		 * @param value Always a string (ints as decimal text)
 		 */
+		[DBus (name = "config_update")]
 		public void config_update(string key, string value)
 		{
 			if (this.application.window == null) {
@@ -290,6 +309,7 @@ namespace RooTerm
 		/**
 		 * Present {@link Adw.AboutDialog} (Shell panel menu).
 		 */
+		[DBus (name = "about")]
 		public void about()
 		{
 			if (this.application.window == null) {

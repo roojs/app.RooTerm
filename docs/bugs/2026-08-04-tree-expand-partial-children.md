@@ -2,7 +2,7 @@
 
 > Pointer: `docs/bug-fix-process.md` (emoji).
 
-**Status:** ⏳ OPEN — urgent; filed only, no investigation yet
+**Status:** ⏳ OPEN — not reproduced recently; leave open
 
 **Started:** 2026-08-04
 
@@ -13,12 +13,12 @@
 - **🔷** Expanding a tree row is buggy: often only a **few** children appear.
 - **🔷** Collapse the same row, expand again → more (or the full set) of children show up.
 - **🔷** Feels intermittent / “habit” of under-filling on first expand.
-- **🔷** Urgent — needs a proper root-cause fix soon; this log is the paper trail for now.
 
 ## Evidence
 
 - **ℹ️** User report 2026-08-04 — reproduce by expanding; partial list; collapse + expand again fills out.
-- **ℹ️** Likely related to recent tree expand save/restore: **`docs/plans/0.14-DONE-tree-expand-save-restore.md`** (`Connection.expanded`, `TreeListModel` `autoexpand = false`, bind on `GROUP` / `lxc_host`). Manual verify for 0.14 was still pending.
+- **ℹ️** Likely related to tree expand save/restore: **`docs/plans/0.14-DONE-tree-expand-save-restore.md`** (`Connection.expanded`, `TreeListModel` `autoexpand = false`, bind on `GROUP` / `lxc_host`).
+- **🔷** 2026-08-05 — user: have **not** seen it recently; keep the bug open.
 
 ## Root cause
 
@@ -26,14 +26,14 @@
 
 ## Proposed fix
 
-- **⏳** None yet — diagnose first (do not guess; no defensive “force expand twice” workaround).
+- **⏳** None yet — diagnose when it shows up again (do not guess; no defensive “force expand twice” workaround).
 
 ## Attempts / changelog
 
-- (none)
+- **ℹ️** 2026-08-05 — still open; unreproduced recently per user.
 
 ## Next
 
-- **⏳** **🔷** Reproduce with `--debug`; watch tree model / `expanded` / child append timing.
+- **⏳** **🔷** If it returns: reproduce with `--debug`; watch tree model / `expanded` / child append timing.
 - **⏳** **🔷** Confirm whether 0.14 bind / `autoexpand = false` / restore-on-load races with nest fill.
 - **⏳** **🔷** Root-cause fix + approval before code edits.

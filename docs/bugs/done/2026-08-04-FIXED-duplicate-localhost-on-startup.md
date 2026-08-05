@@ -3,7 +3,7 @@
 > Pointer: `docs/bug-fix-process.md` (emoji). Legend:
 > `docs/guide-to-writing-plans.md` — Discussion style (emoji prefixes).
 
-**Status:** ✔️ applied — awaiting device verify → promote to ✅ / `done/` when confirmed
+**Status:** ✅ FIXED — user closed out 2026-08-05
 
 **Started:** 2026-08-04
 
@@ -260,6 +260,8 @@
 - **✔️** 2026-08-04 — applied visible fences: `TreeNodes.from_json`, `open_local`, `Page.add`, MainWindow restore walk.
 - **💩** 2026-08-04 — proposal slimmed to that.
 
+- **✅** 2026-08-05 — user: clean up fixed bugs → `done/`.
+
 ## Next
 
-- **⏳** **🔷** Verify: one Localhost; path tabs appear; close extras → file matches; relaunch stable; then `docs/bugs/done/` + `FIXED`.
+- **✅** 2026-08-05 — closed out; moved to `docs/bugs/done/`.

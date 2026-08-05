@@ -90,6 +90,9 @@ export default class RooTermExtension extends Extension {
                     self.indicator.menu.close();
                     self.indicator.visible = false;
                 }
+                if (self.shell) {
+                    self.shell.exited('org.roojs.rooterm');
+                }
             }
         );
         // Global toggle is a settings-daemon custom shortcut (rooterm --toggle).
@@ -105,7 +108,7 @@ export default class RooTermExtension extends Extension {
             self.dock.dockWindow(actor.meta_window);
         });
         this.redockSignalId = Gio.DBus.session.signal_subscribe(
-            DBUS_DEST, DBUS_IFACE, 'Redock', DBUS_PATH, null,
+            DBUS_DEST, DBUS_IFACE, 'redock', DBUS_PATH, null,
             Gio.DBusSignalFlags.NONE,
             function() {
                 self.dock.scheduleDock();
@@ -153,7 +156,7 @@ export default class RooTermExtension extends Extension {
         try {
             conn.call_finish(result);
         } catch (e) {
-            if (method !== 'Toggle') {
+            if (method !== 'toggle') {
                 return;
             }
             // Last resort if D-Bus Toggle failed (app not on bus yet).
@@ -164,7 +167,7 @@ export default class RooTermExtension extends Extension {
                 return;
             }
         }
-        if (method !== 'Toggle') {
+        if (method !== 'toggle') {
             return;
         }
         this.dock.scheduleDock();

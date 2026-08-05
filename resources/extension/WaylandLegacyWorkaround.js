@@ -39,19 +39,33 @@ export class WaylandLegacyWorkaround {
             origDisable();
         };
 
-        var origRegister = shell.Register.bind(shell);
-        shell.Register = function(role, handle) {
+        var origRegister = shell.register.bind(shell);
+        shell.register = function(role, handle) {
             if (self.pending && !self.client) {
-                console.error('rooterm: Register ignored during handoff quit');
+                console.error('rooterm: register ignored during handoff quit');
                 return;
             }
             // App Bus.watch retries must not re-queue a role already stored —
             // Wayland bind is FIFO by map and will steal main for a dialog.
             if (self.shell.win[role]) {
-                console.error('rooterm: Register skip already stored role=' + role);
+                console.error('rooterm: register skip already stored role=' + role);
                 return;
             }
             origRegister(role, handle);
+        };
+
+        var origExited = shell.exited.bind(shell);
+        shell.exited = function(appId) {
+            origExited(appId);
+            if (appId !== 'org.roojs.rooterm') {
+                return;
+            }
+            // Handoff Quit also Exited — keep pending so spawnOwned can run.
+            if (self.pending) {
+                return;
+            }
+            self.client = null;
+            self.spawnTries = 0;
         };
 
         var origStoreRole = shell.storeRole.bind(shell);
@@ -109,8 +123,8 @@ export class WaylandLegacyWorkaround {
             }
         };
 
-        var origShow = shell.Show.bind(shell);
-        shell.Show = function(role) {
+        var origShow = shell.show.bind(shell);
+        shell.show = function(role) {
             var win = self.shell.win[role];
             // Bracket: allow unminimize, then hide from list after slide-in.
             if (win && self.client) {
@@ -145,7 +159,7 @@ export class WaylandLegacyWorkaround {
             DBUS_PATH, null, Gio.DBusSignalFlags.NONE,
             function(conn, sender, path, iface, signal, params) {
                 var changed = params.get_child_value(1);
-                var dock = changed.lookup_value('DockMode', null);
+                var dock = changed.lookup_value('dock_mode', null);
                 if (!dock) {
                     return;
                 }
@@ -166,7 +180,7 @@ export class WaylandLegacyWorkaround {
         Gio.DBus.session.call(
             DBUS_DEST, DBUS_PATH,
             'org.freedesktop.DBus.Properties', 'Get',
-            new GLib.Variant('(ss)', [DBUS_IFACE, 'DockMode']),
+            new GLib.Variant('(ss)', [DBUS_IFACE, 'dock_mode']),
             new GLib.VariantType('(v)'),
             Gio.DBusCallFlags.NONE,
             500,
@@ -256,7 +270,7 @@ export class WaylandLegacyWorkaround {
         this.shell.waylandPending = [];
         console.error('rooterm: G48 Wayland handoff — Quit(true) then WaylandClient spawn');
         Gio.DBus.session.call(
-            DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'Quit',
+            DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'quit',
             new GLib.Variant('(b)', [true]),
             null, Gio.DBusCallFlags.NONE, 2000, null,
             function(conn, res) {

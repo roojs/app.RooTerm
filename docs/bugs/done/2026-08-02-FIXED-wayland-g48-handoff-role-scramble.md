@@ -2,7 +2,7 @@
 
 > Pointer: `docs/bug-fix-process.md` (emoji).
 
-**Status:** ✔️ applied — A+B in tree; rebuild/install + Wayland logout to verify
+**Status:** ✅ FIXED — user closed out 2026-08-05
 
 **Started:** 2026-08-02
 
@@ -176,8 +176,8 @@ Wherever `this.is_ready = enabled && …` is set, require `&& this.shell_bus_up(
 - **✔️** Vala user-only ensure; meson system `install_subdir` removed.
 - **✔️** Vala `extensions_disabled` / `shell_bus_up` gate `is_ready`; alert when extensions globally disabled.
 
+- **✅** 2026-08-05 — user: clean up fixed bugs → `done/`.
+
 ## Next
 
-- **✔️** Handoff ``Quit`` → confirm dialog; **v79** ``SIGTERM`` instead.
-- **✔️** ``Quit(b force)`` — confirm unless ``force``; handoff calls ``Quit(true)``; panel ``Quit(false)``. Extension **82**.
-- **⏳** **🔷** Install both binary + ext; logout/login; journal ``Quit(true) then WaylandClient spawn``; no confirm on handoff; panel Quit still confirms.
+- **✅** 2026-08-05 — closed out; moved to `docs/bugs/done/`.

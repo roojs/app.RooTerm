@@ -24,9 +24,9 @@ class Indicator extends PanelMenu.Button {
         var prefsItem = new PopupMenu.PopupMenuItem('Preferences');
         prefsItem.connect('activate', function() {
             Gio.DBus.session.call(
-                DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'Preferences',
+                DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'preferences',
                 null, null, Gio.DBusCallFlags.NONE, 2000, null,
-                self.extension.onDBusFinished.bind(self.extension, 'Preferences')
+                self.extension.onDBusFinished.bind(self.extension, 'preferences')
             );
         });
         this.menu.addMenuItem(prefsItem);
@@ -34,9 +34,9 @@ class Indicator extends PanelMenu.Button {
         var aboutItem = new PopupMenu.PopupMenuItem('About');
         aboutItem.connect('activate', function() {
             Gio.DBus.session.call(
-                DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'About',
+                DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'about',
                 null, null, Gio.DBusCallFlags.NONE, 2000, null,
-                self.extension.onDBusFinished.bind(self.extension, 'About')
+                self.extension.onDBusFinished.bind(self.extension, 'about')
             );
         });
         this.menu.addMenuItem(aboutItem);
@@ -44,10 +44,10 @@ class Indicator extends PanelMenu.Button {
         var quitItem = new PopupMenu.PopupMenuItem('Quit');
         quitItem.connect('activate', function() {
             Gio.DBus.session.call(
-                DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'Quit',
+                DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'quit',
                 new GLib.Variant('(b)', [false]),
                 null, Gio.DBusCallFlags.NONE, 2000, null,
-                self.extension.onDBusFinished.bind(self.extension, 'Quit')
+                self.extension.onDBusFinished.bind(self.extension, 'quit')
             );
         });
         this.menu.addMenuItem(quitItem);
@@ -66,9 +66,9 @@ class Indicator extends PanelMenu.Button {
         if (event.type() === Clutter.EventType.TOUCH_BEGIN
                 || event.get_button() === Clutter.BUTTON_PRIMARY) {
             Gio.DBus.session.call(
-                DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'Toggle',
+                DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'toggle',
                 null, null, Gio.DBusCallFlags.NONE, 2000, null,
-                this.extension.onDBusFinished.bind(this.extension, 'Toggle')
+                this.extension.onDBusFinished.bind(this.extension, 'toggle')
             );
             return Clutter.EVENT_PROPAGATE;
         }

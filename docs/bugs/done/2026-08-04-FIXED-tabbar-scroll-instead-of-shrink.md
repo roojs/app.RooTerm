@@ -3,7 +3,7 @@
 > Pointer: `docs/bug-fix-process.md` (emoji). Legend:
 > `docs/guide-to-writing-plans.md` — Discussion style (emoji prefixes).
 
-**Status:** ✔️ applied — awaiting device verify → promote to ✅ / `done/` when confirmed
+**Status:** ✅ FIXED — user closed out 2026-08-04
 
 **Started:** 2026-08-04
 
@@ -331,7 +331,8 @@ Update class doc to describe `min(30%, equal share)` via bound `tab_width` (no s
 - **🔷** 2026-08-04 — `page.set_data("tab-row" / "width-binding")`; detach / reorder use that (no map, no sibling hunt).
 - **🔷** 2026-08-04 — selected: track `selected_row`, update old + new only (no iterate-all).
 - **✔️** 2026-08-04 — approved fix applied to `TabBar.vala` + CSS comment.
+- **✅** 2026-08-04 — user: close out tab shrink bug.
 
 ## Next
 
-- **⏳** **🔷** Device-check 1 / 3 / 10 tabs (cap vs shrink, no scrollbar); then ✅ / move to `done/`.
+- **✅** 2026-08-04 — closed out; moved to `docs/bugs/done/`.

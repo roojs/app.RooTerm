@@ -3,7 +3,7 @@
 > Pointer: `docs/bug-fix-process.md` (emoji). Legend:
 > `docs/guide-to-writing-plans.md` — Discussion style (emoji prefixes).
 
-**Status:** ✔️ applied — awaiting device verify → promote to ✅ / `done/` when confirmed
+**Status:** ✅ FIXED — user closed out 2026-08-05
 
 **Started:** 2026-08-04
 
@@ -48,6 +48,8 @@
 
 ---
 
+- **✅** 2026-08-05 — user: clean up fixed bugs → `done/`.
+
 ## Next
 
-- **⏳** **🔷** Re-test Hebe Haven with Auth Manual: open → type password → shell; no injected Enter / password noise. Then move to `docs/bugs/done/` with `FIXED` in the name.
+- **✅** 2026-08-05 — closed out; moved to `docs/bugs/done/`.
