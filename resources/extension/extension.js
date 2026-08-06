@@ -69,7 +69,7 @@ export default class RooTermExtension extends Extension {
             self.panelTooltip.opacity = 0;
         });
 
-        Main.panel.addToStatusArea('rooterm', this.indicator, 1, 'right');
+        Main.panel.addToStatusArea('rooterm', this.indicator, 0, 'right');
         this.indicator.visible = false;
         this.nameWatchId = Gio.DBus.session.watch_name(
             DBUS_DEST,
