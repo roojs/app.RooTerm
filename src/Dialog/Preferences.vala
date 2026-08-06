@@ -71,7 +71,11 @@ namespace RooTerm.Dialog
 			var page = new Adw.PreferencesPage();
 			var keyboard = new Adw.PreferencesGroup() { title = "Keyboard" };
 			page.add(keyboard);
-			this.add("toggle-key", new RowAccel(this.config, "toggle-key"), keyboard);
+			var toggle = new RowKeySelect(this.config, "toggle-key") {
+				block_desktop = true,
+				window = this.window
+			};
+			this.add("toggle-key", toggle, keyboard);
 
 			var appearance = new Adw.PreferencesGroup() { title = "Appearance" };
 			page.add(appearance);
@@ -109,6 +113,7 @@ namespace RooTerm.Dialog
 			this.content = toolbar;
 
 			this.close_request.connect(() => {
+				((RowKeySelect) this.rows.get("toggle-key")).fill();
 				this.window.dbus.call_async(
 					"hide", new GLib.Variant("(s)", "preferences")
 				);

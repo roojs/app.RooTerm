@@ -3,7 +3,7 @@
 > Pointer: `docs/bug-fix-process.md` (emoji). Legend:
 > `docs/guide-to-writing-plans.md` — Discussion style (emoji prefixes).
 
-**Status:** ✔️ CSS pass 2 — await device
+**Status:** ✅ FIXED — user closed out 2026-08-06 (happy enough for now)
 
 **Started:** 2026-08-04
 
@@ -37,7 +37,9 @@
 - **🔷** 2026-08-05 — apply pass 1–2.
 - **🔷** 2026-08-05 — user: `:hover`/`:has` dubious; strip a touch too dark; `+` should match chip colour.
 - **✔️** 2026-08-05 — pass 3.
+- **✅** 2026-08-06 — user: reasonably happy; close for now.
 
 ## Next
 
-- **⏳** **🔷** Device: strip contrast OK; whole-chip hover; `+` matches tabs; selected bold.
+- (none — closed)
+
