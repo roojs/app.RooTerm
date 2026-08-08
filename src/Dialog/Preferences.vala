@@ -59,6 +59,7 @@ namespace RooTerm.Dialog
 			this.add_css_class("floating-dialog");
 			this.window = window;
 			this.config = Config.load();
+			this.config.themes.load();
 			this.map.connect(() => {
 				// Defer off map — call_sync Register during map deadlocks with Shell.
 				GLib.Idle.add(() => {
@@ -79,6 +80,17 @@ namespace RooTerm.Dialog
 			this.add(
 				"placement",
 				new RowCombo(this.config, "placement", { "left", "centre", "right" }),
+				appearance
+			);
+			var theme_bg = new RowCombo(
+				this.config,
+				"theme-category",
+				{ "black", "dark-grey", "dark", "off-white", "white" }
+			);
+			this.add("theme-category", theme_bg, appearance);
+			this.add(
+				"theme-name",
+				new RowThemeSelect(this.config, "theme-name", theme_bg),
 				appearance
 			);
 
@@ -216,6 +228,7 @@ namespace RooTerm.Dialog
 		public void fill()
 		{
 			this.config = Config.load();
+			this.config.themes.load();
 			foreach (var row in this.rows.values) {
 				row.config = this.config;
 				row.fill();
