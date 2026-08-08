@@ -21,12 +21,10 @@ namespace RooTerm.Host
 	/**
 	 * Simple GTK tab strip for an {@link Adw.TabView} (replaces {@link Adw.TabBar}).
 	 *
-	 * Keeps the view; builds one row button per {@link Adw.TabPage} so width and
-	 * chrome are ordinary CSS instead of Adw's expand-tabs-only contract.
-	 *
-	 * Tab width is ``min(30% of strip, equal share)`` via {@link tab_width}, bound
-	 * to each row’s ``width-request``. Titles ellipsize; no scrollbar. Blank space
-	 * double-click and ``+`` run ``win.new-terminal``.
+	 * Keeps the view; builds one row button per {@link Adw.TabPage} so chrome is
+	 * ordinary CSS instead of Adw's expand-tabs-only contract. Chips size to
+	 * content for now (see ``docs/bugs/2026-08-08-tabbar-width-feedback-loop.md``).
+	 * Blank space double-click and ``+`` run ``win.new-terminal``.
 	 *
 	 * == Example ==
 	 *
@@ -43,11 +41,6 @@ namespace RooTerm.Host
 		 * Tab pages this strip mirrors and switches.
 		 */
 		public Adw.TabView view;
-
-		/**
-		 * Shared tab chip width — bound to each row’s ``width-request``.
-		 */
-		public int tab_width { get; set; default = -1; }
 
 		private Gtk.Box tabs;
 		private Gtk.Button add_btn;
@@ -98,7 +91,6 @@ namespace RooTerm.Host
 			});
 			this.view.page_detached.connect((page, position) => {
 				var row = page.get_data<Gtk.Widget>("tab-row");
-				page.get_data<GLib.Binding>("width-binding").unbind();
 				this.tabs.remove(row);
 				if (row == this.selected_row) {
 					this.selected_row = null;
@@ -125,29 +117,6 @@ namespace RooTerm.Host
 				this.selected_row = this.view.selected_page.get_data<Gtk.Widget>("tab-row");
 				this.selected_row.add_css_class("selected");
 			});
-		}
-
-		public override void size_allocate(int width, int height, int baseline)
-		{
-			if (this.view.n_pages <= 0 || width <= 0) {
-				base.size_allocate(width, height, baseline);
-				return;
-			}
-			var add_min = 0, add_nat = 0;
-			this.add_btn.measure(Gtk.Orientation.HORIZONTAL, -1,
-				out add_min, out add_nat, null, null);
-			if (width <= add_nat) {
-				base.size_allocate(width, height, baseline);
-				return;
-			}
-			var w = int.min((int) ((width - add_nat) * 0.30),
-				(width - add_nat - 2 * (this.view.n_pages - 1)) / this.view.n_pages);
-			if (w == this.tab_width) {
-				base.size_allocate(width, height, baseline);
-				return;
-			}
-			this.tab_width = w;
-			base.size_allocate(width, height, baseline);
 		}
 
 		/**
@@ -183,12 +152,10 @@ namespace RooTerm.Host
 				tooltip_text = "Close",
 				valign = Gtk.Align.CENTER
 			};
-			var close = new Gtk.Button.from_icon_name("window-close-symbolic") {
-				has_frame = false,
-				tooltip_text = "Close",
-				valign = Gtk.Align.CENTER
-			};
 			close.add_css_class("host-tab-close");
+			close.clicked.connect(() => {
+				this.view.close_page(page);
+			});
 			var row = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 0) {
 				hexpand = false
 			};
@@ -201,41 +168,13 @@ namespace RooTerm.Host
 				row.remove_css_class("hover");
 			});
 			row.add_controller(hover);
-			close.clicked.connect(() => {
-				if (row.has_css_class("closing")) {
-					((Terminal.Base) page.child).cancel_close();
-					return;
-				}
-				this.view.close_page(page);
-			});
 			page.set_data("tab-row", row);
-			page.set_data("width-binding", this.bind_property(
-				"tab-width", row, "width-request", GLib.BindingFlags.SYNC_CREATE
-			));
 			if (page == this.view.selected_page) {
 				row.add_css_class("selected");
 				this.selected_row = row;
 			}
 			row.append(pick);
 			row.append(close);
-			var fill = new Gtk.CssProvider();
-			row.get_style_context().add_provider(
-				fill, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION + 10
-			);
-			((Terminal.Base) page.child).closing.connect((left, total) => {
-				if (left <= 0 || total <= 0) {
-					row.remove_css_class("closing");
-					fill.load_from_string("");
-					close.icon_name = "window-close-symbolic";
-					close.tooltip_text = "Close";
-					return;
-				}
-				row.add_css_class("closing");
-				close.icon_name = "media-playback-pause-symbolic";
-				close.tooltip_text = "Cancel close";
-				var pct = (left * 100) / total;
-				fill.load_from_string(@".host-tab.closing { --close-frac: $(pct)%; }");
-			});
 			page.notify["title"].connect(() => {
 				label.label = page.title;
 				pick.tooltip_text = page.tooltip != "" ? page.tooltip : page.title;

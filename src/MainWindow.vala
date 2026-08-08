@@ -447,9 +447,10 @@ namespace RooTerm
 			});
 
 			var term = (Terminal.Local?) null;
-			for (var i = this.localhost.children.size - 1; i >= 0; i--) {
+			for (var i = 0; i < this.localhost.children.size; ) {
 				var conn = this.localhost.children.get(i);
 				if (conn.kind != Host.ConnectionKind.LOCAL_PATH) {
+					i++;
 					continue;
 				}
 				if (!GLib.FileUtils.test(conn.cwd, GLib.FileTest.IS_DIR)) {
@@ -457,6 +458,7 @@ namespace RooTerm
 					continue;
 				}
 				term = this.sessions.open_local(conn);
+				i++;
 			}
 			if (term == null) {
 				term = this.sessions.open_local(this.localhost);

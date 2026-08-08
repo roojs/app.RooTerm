@@ -56,8 +56,7 @@ vte-terminal {
 }
 
 /* Bottom host tab strip (Host.TabBar — not Adw.TabBar).
- * Width: Vala tab_width property (bound to each .host-tab width-request).
- * Do not use CSS max-width — GTK has no such property. */
+ * Chip width: content-sized for now — see docs/bugs/2026-08-08-tabbar-width-feedback-loop.md */
 .host-tabbar {
 	min-height: 28px;
 	padding: 2px 4px;
@@ -87,22 +86,6 @@ vte-terminal {
 
 .host-tab.selected.hover {
 	background-color: alpha(@accent_bg_color, 0.5);
-}
-
-/* Closing: Vala sets --close-frac (e.g. 75%); left orange, right grey. */
-.host-tab.closing,
-.host-tab.closing.hover,
-.host-tab.closing.selected,
-.host-tab.closing.selected.hover {
-	box-shadow: none;
-	background-color: transparent;
-	background-image: linear-gradient(
-		to right,
-		alpha(@destructive_color, 0.55) 0%,
-		alpha(@destructive_color, 0.55) var(--close-frac, 100%),
-		alpha(@view_bg_color, 0.75) var(--close-frac, 100%),
-		alpha(@view_bg_color, 0.75) 100%
-	);
 }
 
 .host-tab-add {
