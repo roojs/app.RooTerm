@@ -124,46 +124,6 @@ namespace RooTerm.Session
 		}
 
 		/**
-		 * Open another tab: SSH clone via {@link Jobs.OpenSession}, or a local
-		 * shell in the user home directory. Falls back to a new local shell in
-		 * home when nothing is focused.
-		 *
-		 * @param localhost Localhost connection for local / empty fallback
-		 * @param window Main window (for {@link Jobs.OpenSession})
-		 */
-		public void open_new(Host.Connection localhost, RooTerm.MainWindow window)
-		{
-			if (this.shown_uuid.length == 0 || !this.by_uuid.has_key(this.shown_uuid)) {
-				this.open_local(localhost);
-				return;
-			}
-			var page = this.by_uuid.get(this.shown_uuid);
-			var term = page.current;
-			if (term == null) {
-				this.open_local(localhost);
-				return;
-			}
-			if (term is Terminal.Ssh) {
-				var job = new Jobs.OpenSession(window, term.connection);
-				GLib.Idle.add(() => {
-					window.present();
-					job.terminal.terminal.grab_focus();
-					return false;
-				});
-				job.run.begin((obj, res) => {
-					try {
-						job.run.end(res);
-					} catch (Jobs.Error e) {
-						GLib.warning("open session failed name=%s: %s",
-							term.connection.name, e.message);
-					}
-				});
-				return;
-			}
-			this.open_local(localhost);
-		}
-
-		/**
 		 * Open a local shell tab under Localhost (creates host page if needed).
 		 * Pass Localhost for a new tab, or an existing {@link Host.ConnectionKind.LOCAL_PATH}
 		 * to reopen that row without inventing another.

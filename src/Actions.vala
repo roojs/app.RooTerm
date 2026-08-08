@@ -53,10 +53,45 @@ namespace RooTerm
 
 			var new_term_action = new GLib.SimpleAction("new-terminal", null);
 			new_term_action.activate.connect(() => {
-				this.window.sessions.open_new(this.window.localhost, this.window);
+				this.window.sessions.open_local(this.window.localhost);
 			});
 			this.window.add_action(new_term_action);
 			app.set_accels_for_action("win.new-terminal", { "<Control><Shift>t" });
+
+			var new_ssh_action = new GLib.SimpleAction("new-ssh", null);
+			new_ssh_action.activate.connect(() => {
+				var page = this.window.host_stack.pages.visible_child as Host.Page;
+				if (page == null) {
+					this.window.sessions.open_local(this.window.localhost);
+					return;
+				}
+				var conn = page.connection;
+				switch (conn.kind) {
+					case Host.ConnectionKind.HOST:
+					case Host.ConnectionKind.LXC:
+						break;
+
+					default:
+						this.window.sessions.open_local(this.window.localhost);
+						return;
+				}
+				var job = new Jobs.OpenSession(this.window, conn);
+				GLib.Idle.add(() => {
+					this.window.present();
+					job.terminal.terminal.grab_focus();
+					return false;
+				});
+				job.run.begin((obj, res) => {
+					try {
+						job.run.end(res);
+					} catch (Jobs.Error e) {
+						GLib.warning("open session failed name=%s: %s",
+							conn.name, e.message);
+					}
+				});
+			});
+			this.window.add_action(new_ssh_action);
+			app.set_accels_for_action("win.new-ssh", { "<Control><Shift>s" });
 
 			var close_term_action = new GLib.SimpleAction("close-terminal", null);
 			close_term_action.activate.connect(() => {

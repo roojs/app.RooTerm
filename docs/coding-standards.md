@@ -1053,15 +1053,12 @@ if (project_file.file.is_ignored || !project_file.file.is_text) {
 
 **Maximum line length:** In docblocks and comments, no line may extend past **72 characters** (including leading spaces/tab). Break after a word so the next line continues the sentence; a good rule of thumb is “break after a comma or before the next phrase” so that the first line does not go beyond roughly “… add all references,” in length.
 
-- **Code:** Break on `(` when function calls or method invocations are long; break on `+` when string concatenation creates long lines; if arguments are broken, put each argument on its own line. **Exception:** format-string calls (`throw` / `GLib.IOError` / wire `Error` / `GLib.debug` / `warning` / `critical`) — see **CRITICAL — format-string calls** above: string stays on the call line; remaining args may wrap **grouped**, not one-per-line.
+- **Code:** Break on `(` when function calls or method invocations are long; break on `+` when string concatenation creates long lines.
+- **Named key–value lists** (`Object (prop: value, …)`, `new Foo () { prop = value, … }`, and other property maps): when the list is broken across lines, put **one `key: value` / `key = value` per line**. Names make the layout readable.
+- **Positional argument lists:** when wrapping a long call, pack arguments **as densely as practical** (several per line). Do **not** put one positional argument per line — the names are not visible anyway, so vertical sprawl does not help. **Exception:** format-string calls (`throw` / `GLib.IOError` / wire `Error` / `GLib.debug` / `warning` / `critical`) — see **CRITICAL — format-string calls** above: string stays on the call line; remaining args may wrap **grouped**, not one-per-line.
 - **Docblocks and comments:** Break so that no line exceeds 72 characters; prefer breaking after commas or natural phrase boundaries.
 
-**Bad:**
-```vala
-this.buffer.insert_markup(ref end_iter, "<span size=\"small\" color=\"#1a1a1a\">" + renderer.toPango(message) + "</span>\n", -1);
-```
-
-**Good:**
+**Bad (one positional arg per line — forbidden):**
 ```vala
 this.buffer.insert_markup(
 	ref end_iter,
@@ -1070,15 +1067,32 @@ this.buffer.insert_markup(
 );
 ```
 
+**Good (positional — pack densely when wrapping):**
+```vala
+this.buffer.insert_markup(ref end_iter,
+	"<span size=\"small\" color=\"#1a1a1a\">" + renderer.toPango(message) + "</span>\n", -1);
+```
+
 **Also Good (breaking on + for long concatenation):**
 ```vala
-this.buffer.insert_markup(
-	ref end_iter,
+this.buffer.insert_markup(ref end_iter,
 	"<span size=\"small\" color=\"#1a1a1a\">" +
 		renderer.toPango(message) +
 		"</span>\n",
-	-1
+	-1);
+```
+
+**Good (named key–value — one pair per line when multiline):**
+```vala
+Object (
+	orientation: Gtk.Orientation.VERTICAL,
+	spacing: 12,
+	hexpand: true
 );
+this.stack = new Gtk.Stack () {
+	vhomogeneous = false,
+	hhomogeneous = false
+};
 ```
 
 **Good (each argument on its own line):**
@@ -1703,7 +1717,7 @@ Run these checks on **every file you changed**. Fix violations; do not hand-wave
 | **`var` on locals** | Search: `^\s+(string\|int\|bool\|uint\|int64)\s+\w+\s*[=;]` — no local matches except `string[] … = {}` |
 | **No `handle_*` for signals** | Button/signal handlers inline in lambda, not new `handle_*` methods |
 | **No gratuitous `else`** | New `else` / `else if` chains restructure to early return/`continue` |
-| **No gratuitous line breaks** | Short `if`, `\|\|`, `&&`, and calls stay on one line; **format-string calls (`throw` / error ctor / `GLib.debug`/`warning`/`critical`): message on the call line**; if wrapping, group remaining args (not one-per-line); match surrounding file; 72-char rule is docblocks/comments only |
+| **No gratuitous line breaks** | Short `if`, `\|\|`, `&&`, and calls stay on one line; **key–value lists** (`Object` / `{ prop = }`) one pair per line when multiline; **positional args** packed dense when wrapping (not one-per-line); **format-string calls**: message on the call line, remaining args grouped; match surrounding file; 72-char rule is docblocks/comments only |
 | **Enum branches use `switch`** | Multi-value response/status checks use `switch`, not `\|\|` chains |
 | **No defensive re-checks** | No duplicate validation after a module boundary already enforced it |
 | **Debug text** | No class/method names in `GLib.debug()` / `GLib.warning()` messages |

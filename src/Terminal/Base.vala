@@ -130,6 +130,14 @@ namespace RooTerm.Terminal
 		public signal void close_tab();
 
 		/**
+		 * Close countdown tick for tab chrome (``left == 0`` = cancelled / done).
+		 *
+		 * @param left Milliseconds remaining
+		 * @param total Original delay in milliseconds
+		 */
+		public signal void closing(int left, int total);
+
+		/**
 		 * Emitted when {@link label} should refresh.
 		 */
 		public signal void label_changed();
@@ -425,7 +433,12 @@ namespace RooTerm.Terminal
 		 */
 		protected virtual void close_countdown(int left, int total)
 		{
+			this.closing(left, total);
 			if (left <= 0 || total <= 0) {
+				this.close_bar.visible = false;
+				return;
+			}
+			if (!this.selected) {
 				this.close_bar.visible = false;
 				return;
 			}

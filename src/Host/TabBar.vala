@@ -183,10 +183,12 @@ namespace RooTerm.Host
 				tooltip_text = "Close",
 				valign = Gtk.Align.CENTER
 			};
+			var close = new Gtk.Button.from_icon_name("window-close-symbolic") {
+				has_frame = false,
+				tooltip_text = "Close",
+				valign = Gtk.Align.CENTER
+			};
 			close.add_css_class("host-tab-close");
-			close.clicked.connect(() => {
-				this.view.close_page(page);
-			});
 			var row = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 0) {
 				hexpand = false
 			};
@@ -199,6 +201,13 @@ namespace RooTerm.Host
 				row.remove_css_class("hover");
 			});
 			row.add_controller(hover);
+			close.clicked.connect(() => {
+				if (row.has_css_class("closing")) {
+					((Terminal.Base) page.child).cancel_close();
+					return;
+				}
+				this.view.close_page(page);
+			});
 			page.set_data("tab-row", row);
 			page.set_data("width-binding", this.bind_property(
 				"tab-width", row, "width-request", GLib.BindingFlags.SYNC_CREATE
@@ -209,6 +218,24 @@ namespace RooTerm.Host
 			}
 			row.append(pick);
 			row.append(close);
+			var fill = new Gtk.CssProvider();
+			row.get_style_context().add_provider(
+				fill, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION + 10
+			);
+			((Terminal.Base) page.child).closing.connect((left, total) => {
+				if (left <= 0 || total <= 0) {
+					row.remove_css_class("closing");
+					fill.load_from_string("");
+					close.icon_name = "window-close-symbolic";
+					close.tooltip_text = "Close";
+					return;
+				}
+				row.add_css_class("closing");
+				close.icon_name = "media-playback-pause-symbolic";
+				close.tooltip_text = "Cancel close";
+				var pct = (left * 100) / total;
+				fill.load_from_string(@".host-tab.closing { --close-frac: $(pct)%; }");
+			});
 			page.notify["title"].connect(() => {
 				label.label = page.title;
 				pick.tooltip_text = page.tooltip != "" ? page.tooltip : page.title;
