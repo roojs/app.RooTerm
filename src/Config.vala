@@ -101,6 +101,26 @@ namespace RooTerm
 		[Description(nick = "Placement", blurb = "Left, centre, or right on the monitor")]
 		public string placement { get; set; default = "centre"; }
 		/**
+		 * Selected VTE theme name (unique within {@link theme_category}).
+		 * Empty = first theme in the Black catalogue file.
+		 */
+		[Description(nick = "Foreground theme", blurb = "Terminal colour theme name")]
+		public string theme_name { get; set; default = ""; }
+		/**
+		 * Background category for {@link theme_name}: ``black``, ``dark-grey``,
+		 * ``dark``, ``off-white``, or ``white``.
+		 */
+		[Description(nick = "Background colour", blurb = "Theme background category")]
+		public string theme_category { get; set; default = "black"; }
+		/**
+		 * Stock VTE theme catalogue ({@link Themes.load}). Not serialized.
+		 */
+		public Themes themes {
+			get;
+			set;
+			default = new Themes();
+		}
+		/**
 		 * Flat host list placeholder so JSON-GLib sees the ``connections`` key
 		 * (sets {@link need_migrate}). Not filled here; migrate re-reads the file.
 		 * Not written to ``config.json``.
@@ -149,6 +169,7 @@ namespace RooTerm
 				case "connections":
 				case "pending-secrets":
 				case "need-migrate":
+				case "themes":
 					return null;
 				default:
 					return default_serialize_property(property_name, value, pspec);

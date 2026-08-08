@@ -2,7 +2,11 @@
 <gresources>
   <gresource prefix="/">
     <file>style.css</file>
-    <file>solarized-dark.json</file>
+    <file>themes/theme-black.ini</file>
+    <file>themes/theme-dark-grey.ini</file>
+    <file>themes/theme-dark.ini</file>
+    <file>themes/theme-off-white.ini</file>
+    <file>themes/theme-white.ini</file>
   </gresource>
   <gresource prefix="/extension">
     <file>metadata.json</file>

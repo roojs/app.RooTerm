@@ -165,31 +165,9 @@ namespace RooTerm.Terminal
 				font_desc = Pango.FontDescription.from_string(font)
 			};
 			this.terminal.set_size(80, 24);
-			try {
-
-				// needs a design temporary for now
-
-				var bytes = GLib.resources_lookup_data(
-					"/solarized-dark.json",
-					GLib.ResourceLookupFlags.NONE
-				);
-				var parser = new Json.Parser();
-				parser.load_from_data((string) bytes.get_data(), (ssize_t) bytes.get_size());
-				var root = parser.get_root().get_object();
-				this.theme_fg = Gdk.RGBA();
-				this.theme_bg = Gdk.RGBA();
-				this.theme_fg.parse(root.get_string_member("foreground"));
-				this.theme_bg.parse(root.get_string_member("background"));
-				this.theme_bg.alpha = config.opacity / 100.0f;
-				var arr = root.get_array_member("palette");
-				this.theme_palette = new Gdk.RGBA[arr.get_length()];
-				for (var i = 0; i < arr.get_length(); i++) {
-					this.theme_palette[i].parse(arr.get_string_element(i));
-				}
-				this.terminal.set_colors(this.theme_fg, this.theme_bg, this.theme_palette);
-			} catch (GLib.Error e) {
-				GLib.warning("terminal theme: %s", e.message);
-			}
+			config.themes.load();
+			this.theme_fg = Gdk.RGBA();
+			this.theme_bg = Gdk.RGBA();
 			/*
 			 * VTE does not composite background alpha to the desktop. Below 100%
 			 * leave VTE unfilled and paint the dimmed colour on ``.vte-frame``.
@@ -202,10 +180,31 @@ namespace RooTerm.Terminal
 				);
 				frame_css_added = true;
 			}
-			this.terminal.set_clear_background(config.opacity >= 100);
-			if (config.opacity >= 100) {
-				frame_css.load_from_string(".vte-frame { background-color: transparent; }");
-			} else {
+			config.notify.connect((s, pspec) => {
+				if (pspec.get_name() != "opacity"
+						&& pspec.get_name() != "theme-name"
+						&& pspec.get_name() != "theme-category") {
+					return;
+				}
+				var pick = config.themes.items.get(0);
+				var map_key = config.theme_category + "\n" + config.theme_name;
+				if (config.themes.by_key.has_key(map_key)) {
+					pick = config.themes.by_key.get(map_key);
+				}
+				this.theme_fg.parse(pick.foreground);
+				this.theme_bg.parse(pick.background);
+				this.theme_bg.alpha = config.opacity / 100.0f;
+				var slots = pick.palette.split(";");
+				this.theme_palette = new Gdk.RGBA[slots.length];
+				for (var i = 0; i < slots.length; i++) {
+					this.theme_palette[i].parse(slots[i]);
+				}
+				this.terminal.set_colors(this.theme_fg, this.theme_bg, this.theme_palette);
+				this.terminal.set_clear_background(config.opacity >= 100);
+				if (config.opacity >= 100) {
+					frame_css.load_from_string(".vte-frame { background-color: transparent; }");
+					return;
+				}
 				frame_css.load_from_string(
 					".vte-frame { background-color: rgba(%u,%u,%u,%.3f); }".printf(
 						(uint) (this.theme_bg.red * 255.0f + 0.5f),
@@ -214,24 +213,8 @@ namespace RooTerm.Terminal
 						config.opacity / 100.0
 					)
 				);
-			}
-			config.notify["opacity"].connect(() => {
-				this.theme_bg.alpha = config.opacity / 100.0f;
-				this.terminal.set_colors(this.theme_fg, this.theme_bg, this.theme_palette);
-				this.terminal.set_clear_background(config.opacity >= 100);
-				if (config.opacity >= 100) {
-					frame_css.load_from_string(".vte-frame { background-color: transparent; }");
-				} else {
-					frame_css.load_from_string(
-						".vte-frame { background-color: rgba(%u,%u,%u,%.3f); }".printf(
-							(uint) (this.theme_bg.red * 255.0f + 0.5f),
-							(uint) (this.theme_bg.green * 255.0f + 0.5f),
-							(uint) (this.theme_bg.blue * 255.0f + 0.5f),
-							config.opacity / 100.0
-						)
-					);
-				}
 			});
+			config.notify_property("theme-name");
 			var vte_frame = new Gtk.Box(Gtk.Orientation.VERTICAL, 0) {
 				hexpand = true,
 				vexpand = true
