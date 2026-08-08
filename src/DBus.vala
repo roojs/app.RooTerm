@@ -130,8 +130,7 @@ namespace RooTerm
 		{
 			try {
 				var bus = GLib.Bus.get_sync(GLib.BusType.SESSION, null);
-				bus.call.begin(
-					"org.roojs.RooTerm.Shell",
+				bus.call.begin("org.roojs.RooTerm.Shell",
 					"/org/roojs/RooTerm/Shell", "org.roojs.RooTerm.Shell",
 					method, parameters,
 					null, GLib.DBusCallFlags.NONE, -1, null,
@@ -306,7 +305,7 @@ namespace RooTerm
 		/**
 		 * Set one chrome property from the preferences process.
 		 *
-		 * @param key Hyphenated GObject name (``opacity``, ``toggle-key``, …)
+		 * @param key Hyphenated GObject name (``opacity``, ``key-toggle``, …)
 		 * @param value Always a string (ints as decimal text)
 		 */
 		[DBus (name = "config_update")]

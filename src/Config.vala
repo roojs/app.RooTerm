@@ -28,22 +28,77 @@ namespace RooTerm
 		/**
 		 * Drop-down width as percent of the monitor (1–100). Full width for now.
 		 */
+		[Description(nick = "Width", blurb = "Drop-down width as percent of the monitor")]
 		public int width { get; set; default = 100; }
 		/**
 		 * Drop-down height as percent of the monitor (1–100).
 		 */
+		[Description(nick = "Height", blurb = "Drop-down height as percent of the monitor")]
 		public int height { get; set; default = 60; }
 		/**
-		 * Guake global toggle key (Shell extension / ``--toggle-key``).
+		 * Desktop-wide show/hide (Shell media-keys / ``--toggle-key``).
 		 */
-		public string toggle_key { get; set; default = "F12"; }
+		[Description(nick = "Toggle visibility", blurb = "Show or hide the drop-down")]
+		public string key_toggle { get; set; default = "F12"; }
+		/**
+		 * Focus the host search entry.
+		 */
+		[Description(nick = "Search hosts", blurb = "Focus the host tree search")]
+		public string key_search { get; set; default = "<Control><Shift>o"; }
+		/**
+		 * Open a new local terminal tab.
+		 */
+		[Description(nick = "New terminal", blurb = "Open a local terminal tab")]
+		public string key_new_terminal { get; set; default = "<Control><Shift>t"; }
+		/**
+		 * Open a new SSH tab for the focused host.
+		 */
+		[Description(nick = "New SSH", blurb = "Open an SSH tab for the focused host")]
+		public string key_new_ssh { get; set; default = "<Control><Shift>s"; }
+		/**
+		 * Close the current terminal tab.
+		 */
+		[Description(nick = "Close terminal", blurb = "Close the current tab")]
+		public string key_close_terminal { get; set; default = "<Control><Shift>w"; }
+		/**
+		 * Select the previous tab.
+		 */
+		[Description(nick = "Previous tab", blurb = "Select the previous tab")]
+		public string key_prev_tab { get; set; default = "<Control><Shift>Left"; }
+		/**
+		 * Select the next tab.
+		 */
+		[Description(nick = "Next tab", blurb = "Select the next tab")]
+		public string key_next_tab { get; set; default = "<Control><Shift>Right"; }
+		/**
+		 * Select all in the focused VTE.
+		 */
+		[Description(nick = "Select all", blurb = "Select all terminal text")]
+		public string key_select_all { get; set; default = "<Control><Shift>a"; }
+		/**
+		 * Copy from the focused VTE.
+		 */
+		[Description(nick = "Copy", blurb = "Copy selected terminal text")]
+		public string key_copy { get; set; default = "<Control><Shift>c"; }
+		/**
+		 * Paste into the focused VTE.
+		 */
+		[Description(nick = "Paste", blurb = "Paste into the terminal")]
+		public string key_paste { get; set; default = "<Control><Shift>v"; }
+		/**
+		 * Open preferences.
+		 */
+		[Description(nick = "Preferences", blurb = "Open the preferences window")]
+		public string key_preferences { get; set; default = "<Control>comma"; }
 		/**
 		 * VTE background opacity percent (10–100). Host chrome stays opaque.
 		 */
+		[Description(nick = "Opacity", blurb = "Terminal background opacity percent")]
 		public int opacity { get; set; default = 100; }
 		/**
 		 * Horizontal placement on the monitor: ``left``, ``centre``, or ``right``.
 		 */
+		[Description(nick = "Placement", blurb = "Left, centre, or right on the monitor")]
 		public string placement { get; set; default = "centre"; }
 		/**
 		 * Flat host list placeholder so JSON-GLib sees the ``connections`` key
@@ -200,7 +255,7 @@ namespace RooTerm
 		}
 
 		/**
-		 * Wire chrome ``notify`` handlers onto ``window`` (geometry + toggle key).
+		 * Wire chrome ``notify`` handlers onto ``window`` (geometry + ``key_*``).
 		 * Opacity stays on VTE ({@link Terminal.Base}).
 		 *
 		 * @param window Main window to resize / rebind
@@ -233,15 +288,66 @@ namespace RooTerm
 				}
 				window.dbus.redock();
 			});
-			this.notify["toggle-key"].connect(() => {
-				var app = window.application as Application;
-				if (app != null) {
-					app.set_accels_for_action("win.toggle", { this.toggle_key });
+			this.notify.connect((_, pspec) => {
+				if (!pspec.name.has_prefix("key-")) {
+					return;
 				}
-				try {
-					window.shell.ensure_toggle_binding(this.toggle_key);
-				} catch (GLib.Error e) {
-					GLib.warning("toggle binding: %s", e.message);
+				var app = window.application as Application;
+				if (app == null) {
+					return;
+				}
+				var value = Value(typeof(string));
+				((GLib.Object) this).get_property(pspec.name, ref value);
+				var accel = value.get_string();
+				switch (pspec.name) {
+					case "key-toggle":
+						app.set_accels_for_action("win.toggle", { accel });
+						try {
+							window.shell.ensure_toggle_binding(accel);
+						} catch (GLib.Error e) {
+							GLib.warning("toggle binding: %s", e.message);
+						}
+						break;
+
+					case "key-search":
+						app.set_accels_for_action("win.search", { accel });
+						break;
+
+					case "key-new-terminal":
+						app.set_accels_for_action("win.new-terminal", { accel });
+						break;
+
+					case "key-new-ssh":
+						app.set_accels_for_action("win.new-ssh", { accel });
+						break;
+
+					case "key-close-terminal":
+						app.set_accels_for_action("win.close-terminal", { accel });
+						break;
+
+					case "key-prev-tab":
+						app.set_accels_for_action("win.prev-tab", { accel });
+						break;
+
+					case "key-next-tab":
+						app.set_accels_for_action("win.next-tab", { accel });
+						break;
+
+					case "key-select-all":
+						app.set_accels_for_action("win.select-all", { accel });
+						break;
+
+					case "key-copy":
+						app.set_accels_for_action("win.copy", { accel });
+						break;
+
+					case "key-paste":
+						app.set_accels_for_action("win.paste", { accel });
+						break;
+
+					case "key-preferences":
+						app.set_accels_for_action("win.preferences", { accel });
+						break;
 				}
 			});
 		}

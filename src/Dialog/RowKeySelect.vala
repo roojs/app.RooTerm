@@ -20,13 +20,13 @@ namespace RooTerm.Dialog
 {
 	/**
 	 * Key-capture button on an {@link Adw.ActionRow} for a Config string
-	 * (e.g. ``toggle-key``). Click the button, then press a key; Escape cancels.
+	 * (e.g. ``key-toggle``). Click the button, then press a key; Escape cancels.
 	 * Set {@link block_desktop} for desktop-wide shortcuts (media-keys).
 	 *
 	 * == Example ==
 	 *
 	 * {{{
-	 * var toggle = new Dialog.RowKeySelect(config, "toggle-key") {
+	 * var toggle = new Dialog.RowKeySelect(config, "key-toggle") {
 	 *     block_desktop = true,
 	 *     window = main_window
 	 * };
@@ -40,7 +40,7 @@ namespace RooTerm.Dialog
 
 		/**
 		 * Main window for desktop capture (``block_toggle`` / media-keys).
-		 * Set with {@link block_desktop} for ``toggle-key``; unused for app-local
+		 * Set with {@link block_desktop} for ``key-toggle``; unused for app-local
 		 * accelerators.
 		 */
 		public MainWindow window { get; set; }
@@ -55,7 +55,7 @@ namespace RooTerm.Dialog
 
 		/**
 		 * @param config Chrome settings
-		 * @param key Hyphenated string property (``toggle-key``)
+		 * @param key Hyphenated string property (``key-toggle``)
 		 */
 		public RowKeySelect(Config config, string key)
 		{

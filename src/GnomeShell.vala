@@ -162,7 +162,7 @@ namespace RooTerm
 		public void ensure(owned GnomeShellDone done)
 		{
 			try {
-				this.ensure_toggle_binding(Config.load().toggle_key);
+				this.ensure_toggle_binding(Config.load().key_toggle);
 			} catch (GLib.Error e) {
 				GLib.warning("toggle binding: %s", e.message);
 			}
@@ -213,7 +213,7 @@ namespace RooTerm
 				try {
 					this.install(data_home, user_dir);
 					// Schema was just compiled; default source is still cached.
-					this.ensure_toggle_binding(Config.load().toggle_key);
+					this.ensure_toggle_binding(Config.load().key_toggle);
 				} catch (GLib.Error e) {
 					GLib.warning("Shell extension install failed: %s", e.message);
 					this.alert(
@@ -352,7 +352,7 @@ gnome-extensions enable $(this.uuid)"
 		 */
 		public void alert(string title, string detail, owned GnomeShellDone done)
 		{
-			var key = Config.load().toggle_key;
+			var key = Config.load().key_toggle;
 			var body = @"$(detail)
 
 Global $(key) / panel icon will not work until this is fixed. You can still use this window, or run: rooterm --toggle";

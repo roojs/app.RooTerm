@@ -22,7 +22,7 @@ namespace RooTerm.Dialog
 	 * Preferences row bound to one {@link RooTerm.Config} GObject property.
 	 *
 	 * Composes an {@link Adw.PreferencesRow} (does not subclass
-	 * {@link Adw.ActionRow}). Property names use hyphens (``toggle-key``), matching
+	 * {@link Adw.ActionRow}). Property names use hyphens (``key-toggle``), matching
 	 * {@link GLib.ObjectClass.find_property}. User edits call {@link send}, which
 	 * fires ``config_update`` on ``org.roojs.RooTerm.DBus``. If main is not on
 	 * the bus, applies the value on {@link config} and {@link Config.save}.
@@ -59,7 +59,7 @@ namespace RooTerm.Dialog
 		public bool loading = false;
 
 		/**
-		 * Hyphenated GObject property name (e.g. ``toggle-key``).
+		 * Hyphenated GObject property name (e.g. ``key-toggle``).
 		 */
 		public string key {
 			get {
@@ -71,7 +71,7 @@ namespace RooTerm.Dialog
 		 * Resolve ``key`` on ``config`` and build {@link row} title/subtitle from nick/blurb.
 		 *
 		 * @param config Chrome settings object
-		 * @param key Hyphenated property name (``opacity``, ``toggle-key``, …)
+		 * @param key Hyphenated property name (``opacity``, ``key-toggle``, …)
 		 */
 		protected Row(Config config, string key)
 		{

@@ -49,14 +49,16 @@ namespace RooTerm
 				this.window.host_search.entry.select_region(0, -1);
 			});
 			this.window.add_action(search_action);
-			app.set_accels_for_action("win.search", { "<Control><Shift>o" });
+			app.set_accels_for_action("win.search", { this.window.config.key_search });
 
 			var new_term_action = new GLib.SimpleAction("new-terminal", null);
 			new_term_action.activate.connect(() => {
 				this.window.sessions.open_local(this.window.localhost);
 			});
 			this.window.add_action(new_term_action);
-			app.set_accels_for_action("win.new-terminal", { "<Control><Shift>t" });
+			app.set_accels_for_action("win.new-terminal", {
+				this.window.config.key_new_terminal
+			});
 
 			var new_ssh_action = new GLib.SimpleAction("new-ssh", null);
 			new_ssh_action.activate.connect(() => {
@@ -91,35 +93,39 @@ namespace RooTerm
 				});
 			});
 			this.window.add_action(new_ssh_action);
-			app.set_accels_for_action("win.new-ssh", { "<Control><Shift>s" });
+			app.set_accels_for_action("win.new-ssh", { this.window.config.key_new_ssh });
 
 			var close_term_action = new GLib.SimpleAction("close-terminal", null);
 			close_term_action.activate.connect(() => {
 				this.window.sessions.close_current();
 			});
 			this.window.add_action(close_term_action);
-			app.set_accels_for_action("win.close-terminal", { "<Control><Shift>w" });
+			app.set_accels_for_action("win.close-terminal", {
+				this.window.config.key_close_terminal
+			});
 
 			var prev_tab_action = new GLib.SimpleAction("prev-tab", null);
 			prev_tab_action.activate.connect(() => {
 				this.window.sessions.select_tab(-1);
 			});
 			this.window.add_action(prev_tab_action);
-			app.set_accels_for_action("win.prev-tab", { "<Control><Shift>Left" });
+			app.set_accels_for_action("win.prev-tab", { this.window.config.key_prev_tab });
 
 			var next_tab_action = new GLib.SimpleAction("next-tab", null);
 			next_tab_action.activate.connect(() => {
 				this.window.sessions.select_tab(1);
 			});
 			this.window.add_action(next_tab_action);
-			app.set_accels_for_action("win.next-tab", { "<Control><Shift>Right" });
+			app.set_accels_for_action("win.next-tab", { this.window.config.key_next_tab });
 
 			var select_all_action = new GLib.SimpleAction("select-all", null);
 			select_all_action.activate.connect(() => {
 				this.window.sessions.select_all();
 			});
 			this.window.add_action(select_all_action);
-			app.set_accels_for_action("win.select-all", { "<Control><Shift>a" });
+			app.set_accels_for_action("win.select-all", {
+				this.window.config.key_select_all
+			});
 
 			var copy_action = new GLib.SimpleAction("copy", null);
 			copy_action.activate.connect(() => {
@@ -130,7 +136,7 @@ namespace RooTerm
 				page.current.terminal.copy_clipboard_format(Vte.Format.TEXT);
 			});
 			this.window.add_action(copy_action);
-			app.set_accels_for_action("win.copy", { "<Control><Shift>c" });
+			app.set_accels_for_action("win.copy", { this.window.config.key_copy });
 
 			var paste_action = new GLib.SimpleAction("paste", null);
 			paste_action.activate.connect(() => {
@@ -141,7 +147,7 @@ namespace RooTerm
 				page.current.terminal.paste_clipboard();
 			});
 			this.window.add_action(paste_action);
-			app.set_accels_for_action("win.paste", { "<Control><Shift>v" });
+			app.set_accels_for_action("win.paste", { this.window.config.key_paste });
 
 			var reset_action = new GLib.SimpleAction("reset-terminal", null);
 			reset_action.activate.connect(() => {
@@ -159,14 +165,16 @@ namespace RooTerm
 			});
 			this.window.add_action(toggle_action);
 			// Shell / media-keys own the global binding; this covers in-app when focused.
-			app.set_accels_for_action("win.toggle", { this.window.config.toggle_key });
+			app.set_accels_for_action("win.toggle", { this.window.config.key_toggle });
 
 			var prefs_action = new GLib.SimpleAction("preferences", null);
 			prefs_action.activate.connect(() => {
 				this.window.dbus.preferences();
 			});
 			this.window.add_action(prefs_action);
-			app.set_accels_for_action("win.preferences", { "<Control>comma" });
+			app.set_accels_for_action("win.preferences", {
+				this.window.config.key_preferences
+			});
 
 			var about_action = new GLib.SimpleAction("about", null);
 			about_action.activate.connect(() => {

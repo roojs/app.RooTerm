@@ -19,11 +19,10 @@
 namespace RooTerm.Dialog
 {
 	/**
-	 * Single-page preferences: Keyboard (toggle key) and Appearance
-	 * (opacity, height, width, placement). Standalone {@link Adw.Window}
-	 * hosting an {@link Adw.PreferencesPage}. Rows apply live via
-	 * {@link Row.send} / ``config_update``; Close only Hides (no undo).
-	 * This window does not write ``config.json``.
+	 * Preferences: standalone {@link Adw.Window} (Shell Show/Hide) with a left
+	 * section list and {@link Adw.PreferencesPage}s — **General** (appearance)
+	 * and **Keyboard shortcuts** (``key_*``). Rows apply live via {@link Row.send}
+	 * / ``config_update``; Close only Hides. Does not write ``config.json``.
 	 *
 	 * == Example ==
 	 *
@@ -54,8 +53,8 @@ namespace RooTerm.Dialog
 				title: "Preferences",
 				resizable: false,
 				hide_on_close: false,
-				default_width: 520,
-				default_height: 504
+				default_width: 720,
+				default_height: 520
 			);
 			this.add_css_class("floating-dialog");
 			this.window = window;
@@ -68,17 +67,12 @@ namespace RooTerm.Dialog
 				});
 			});
 
-			var page = new Adw.PreferencesPage();
-			var keyboard = new Adw.PreferencesGroup() { title = "Keyboard" };
-			page.add(keyboard);
-			var toggle = new RowKeySelect(this.config, "toggle-key") {
-				block_desktop = true,
-				window = this.window
+			var general = new Adw.PreferencesPage() {
+				title = "General",
+				icon_name = "preferences-system-symbolic"
 			};
-			this.add("toggle-key", toggle, keyboard);
-
 			var appearance = new Adw.PreferencesGroup() { title = "Appearance" };
-			page.add(appearance);
+			general.add(appearance);
 			this.add("opacity", new RowScale(this.config, "opacity", 10, 100, 1), appearance);
 			this.add("height", new RowScale(this.config, "height", 10, 100, 1), appearance);
 			this.add("width", new RowScale(this.config, "width", 10, 100, 1), appearance);
@@ -87,6 +81,87 @@ namespace RooTerm.Dialog
 				new RowCombo(this.config, "placement", { "left", "centre", "right" }),
 				appearance
 			);
+
+			var shortcuts = new Adw.PreferencesPage() {
+				title = "Keyboard shortcuts",
+				icon_name = "input-keyboard-symbolic"
+			};
+			var keys = new Adw.PreferencesGroup() { title = "Shortcuts" };
+			shortcuts.add(keys);
+			var toggle = new RowKeySelect(this.config, "key-toggle") {
+				block_desktop = true,
+				window = this.window
+			};
+			this.add("key-toggle", toggle, keys);
+			this.add("key-search", new RowKeySelect(this.config, "key-search"), keys);
+			this.add(
+				"key-new-terminal",
+				new RowKeySelect(this.config, "key-new-terminal"),
+				keys
+			);
+			this.add("key-new-ssh", new RowKeySelect(this.config, "key-new-ssh"), keys);
+			this.add(
+				"key-close-terminal",
+				new RowKeySelect(this.config, "key-close-terminal"),
+				keys
+			);
+			this.add("key-prev-tab", new RowKeySelect(this.config, "key-prev-tab"), keys);
+			this.add("key-next-tab", new RowKeySelect(this.config, "key-next-tab"), keys);
+			this.add("key-select-all", new RowKeySelect(this.config, "key-select-all"), keys);
+			this.add("key-copy", new RowKeySelect(this.config, "key-copy"), keys);
+			this.add("key-paste", new RowKeySelect(this.config, "key-paste"), keys);
+			this.add(
+				"key-preferences",
+				new RowKeySelect(this.config, "key-preferences"),
+				keys
+			);
+
+			var stack = new Adw.ViewStack();
+			stack.add_titled_with_icon(
+				general, "general", "General", "preferences-system-symbolic"
+			);
+			stack.add_titled_with_icon(
+				shortcuts, "shortcuts", "Keyboard shortcuts", "input-keyboard-symbolic"
+			);
+
+			var nav = new Gtk.ListBox() {
+				selection_mode = Gtk.SelectionMode.SINGLE,
+				css_classes = { "navigation-sidebar" }
+			};
+			nav.append(new Gtk.Label("General") {
+				xalign = 0f,
+				margin_start = 12,
+				margin_end = 12,
+				margin_top = 10,
+				margin_bottom = 10
+			});
+			nav.append(new Gtk.Label("Keyboard shortcuts") {
+				xalign = 0f,
+				margin_start = 12,
+				margin_end = 12,
+				margin_top = 10,
+				margin_bottom = 10
+			});
+			var side_scroll = new Gtk.ScrolledWindow() {
+				child = nav,
+				hscrollbar_policy = Gtk.PolicyType.NEVER
+			};
+			var split = new Adw.NavigationSplitView() {
+				sidebar = new Adw.NavigationPage(side_scroll, "Preferences"),
+				content = new Adw.NavigationPage(stack, "General"),
+				min_sidebar_width = 180,
+				max_sidebar_width = 220
+			};
+			nav.row_selected.connect((row) => {
+				if (row == null) {
+					return;
+				}
+				var name = row.get_index() == 0 ? "general" : "shortcuts";
+				stack.visible_child_name = name;
+				split.content.title = row.get_index() == 0
+					? "General" : "Keyboard shortcuts";
+			});
+			nav.select_row(nav.get_row_at_index(0));
 
 			var close_btn = new Gtk.Button.with_label("Close");
 			close_btn.clicked.connect(() => {
@@ -109,11 +184,11 @@ namespace RooTerm.Dialog
 			header.pack_end(close_btn);
 			var toolbar = new Adw.ToolbarView();
 			toolbar.add_top_bar(header);
-			toolbar.content = page;
+			toolbar.content = split;
 			this.content = toolbar;
 
 			this.close_request.connect(() => {
-				((RowKeySelect) this.rows.get("toggle-key")).fill();
+				((RowKeySelect) this.rows.get("key-toggle")).fill();
 				this.window.dbus.call_async(
 					"hide", new GLib.Variant("(s)", "preferences")
 				);

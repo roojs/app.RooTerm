@@ -48,8 +48,8 @@ export default class RooTermExtension extends Extension {
                 ]);
                 var [, contents] = GLib.file_get_contents(confPath);
                 var conf = JSON.parse(new TextDecoder().decode(contents));
-                if (conf['toggle-key']) {
-                    key = conf['toggle-key'];
+                if (conf['key-toggle']) {
+                    key = conf['key-toggle'];
                 }
             } catch (e) {
                 console.error('rooterm: toggle_key: ' + e);

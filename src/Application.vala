@@ -238,7 +238,7 @@ namespace RooTerm
 			if (opt_toggle_key != "") {
 				try {
 					var config = Config.load();
-					config.toggle_key = opt_toggle_key;
+					config.key_toggle = opt_toggle_key;
 					config.save();
 					// Settings-only; no window required (no throwaway parent).
 					new GnomeShell(this.window).ensure_toggle_binding(opt_toggle_key);
