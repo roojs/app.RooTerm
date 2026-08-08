@@ -88,6 +88,10 @@ vte-terminal {
 	background-color: alpha(@accent_bg_color, 0.5);
 }
 
+.host-tab.closing .host-tab-close-fill {
+	background-color: alpha(@destructive_color, 0.55);
+}
+
 .host-tab-add {
 	min-width: 28px;
 	padding: 0;

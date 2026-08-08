@@ -23,7 +23,7 @@ namespace RooTerm.Host
 	 *
 	 * Keeps the view; builds one row button per {@link Adw.TabPage} so chrome is
 	 * ordinary CSS instead of Adw's expand-tabs-only contract. Chips size to
-	 * content for now (see ``docs/bugs/2026-08-08-tabbar-width-feedback-loop.md``).
+	 * content; close countdown uses an Overlay fill sized from the chip width.
 	 * Blank space double-click and ``+`` run ``win.new-terminal``.
 	 *
 	 * == Example ==
@@ -154,6 +154,10 @@ namespace RooTerm.Host
 			};
 			close.add_css_class("host-tab-close");
 			close.clicked.connect(() => {
+				if (page.get_data<Gtk.Widget>("tab-row").has_css_class("closing")) {
+					((Terminal.Base) page.child).cancel_close();
+					return;
+				}
 				this.view.close_page(page);
 			});
 			var row = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 0) {
@@ -173,8 +177,41 @@ namespace RooTerm.Host
 				row.add_css_class("selected");
 				this.selected_row = row;
 			}
-			row.append(pick);
-			row.append(close);
+			var fill = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 0) {
+				halign = Gtk.Align.START,
+				valign = Gtk.Align.FILL,
+				visible = false,
+				width_request = 1,
+				height_request = 1
+			};
+			fill.add_css_class("host-tab-close-fill");
+			var face = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 0) {
+				hexpand = false
+			};
+			var overlay = new Gtk.Overlay();
+			overlay.child = fill;
+			overlay.add_overlay(face);
+			overlay.set_measure_overlay(face, true);
+			face.append(pick);
+			face.append(close);
+			row.append(overlay);
+			((Terminal.Base) page.child).closing.connect((left, total) => {
+				if (left <= 0 || total <= 0) {
+					row.remove_css_class("closing");
+					fill.visible = false;
+					fill.width_request = 1;
+					fill.height_request = 1;
+					close.icon_name = "window-close-symbolic";
+					close.tooltip_text = "Close";
+					return;
+				}
+				row.add_css_class("closing");
+				fill.visible = true;
+				fill.height_request = int.max(row.get_height(), 1);
+				fill.width_request = (row.get_width() * left) / total;
+				close.icon_name = "media-playback-pause-symbolic";
+				close.tooltip_text = "Cancel close";
+			});
 			page.notify["title"].connect(() => {
 				label.label = page.title;
 				pick.tooltip_text = page.tooltip != "" ? page.tooltip : page.title;
