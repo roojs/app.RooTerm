@@ -20,9 +20,10 @@ namespace RooTerm.Dialog
 {
 	/**
 	 * Preferences: standalone {@link Adw.Window} (Shell Show/Hide) with a left
-	 * section list and {@link Adw.PreferencesPage}s — **General** (appearance)
-	 * and **Keyboard shortcuts** (``key_*``). Rows apply live via {@link Row.send}
-	 * / ``config_update``; Close only Hides. Does not write ``config.json``.
+	 * section list and {@link Adw.PreferencesPage}s — **General** (geometry),
+	 * **Theme and colours**, and **Keyboard shortcuts** (``key_*``). Rows apply
+	 * live via {@link Row.send} / ``config_update``; Close only Hides. Does not
+	 * write ``config.json``.
 	 *
 	 * == Example ==
 	 *
@@ -40,6 +41,10 @@ namespace RooTerm.Dialog
 			set;
 			default = new Gee.HashMap<string, Row>();
 		}
+		/**
+		 * Live VTE theme preview (not a config-bound {@link Row}).
+		 */
+		public RowThemePreview theme_preview;
 
 		/**
 		 * Build the window bound to ``window`` (Shell register / hide).
@@ -54,7 +59,7 @@ namespace RooTerm.Dialog
 				resizable: false,
 				hide_on_close: false,
 				default_width: 720,
-				default_height: 520
+				default_height: 570
 			);
 			this.add_css_class("floating-dialog");
 			this.window = window;
@@ -74,25 +79,26 @@ namespace RooTerm.Dialog
 			};
 			var appearance = new Adw.PreferencesGroup() { title = "Appearance" };
 			general.add(appearance);
-			this.add("opacity", new RowScale(this.config, "opacity", 10, 100, 1), appearance);
 			this.add("height", new RowScale(this.config, "height", 10, 100, 1), appearance);
 			this.add("width", new RowScale(this.config, "width", 10, 100, 1), appearance);
-			this.add(
-				"placement",
-				new RowCombo(this.config, "placement", { "left", "centre", "right" }),
-				appearance
-			);
-			var theme_bg = new RowCombo(
-				this.config,
-				"theme-category",
-				{ "black", "dark-grey", "dark", "off-white", "white" }
-			);
-			this.add("theme-category", theme_bg, appearance);
-			this.add(
-				"theme-name",
-				new RowThemeSelect(this.config, "theme-name", theme_bg),
-				appearance
-			);
+			this.add("placement",
+				new RowCombo(this.config, "placement", { "left", "centre", "right" }), appearance);
+
+			var theme_page = new Adw.PreferencesPage() {
+				title = "Theme and colours",
+				icon_name = "preferences-color-symbolic"
+			};
+			var theme_group = new Adw.PreferencesGroup() { title = "Theme and colours" };
+			theme_page.add(theme_group);
+			var opacity = new RowScale(this.config, "opacity", 10, 100, 1);
+			this.add("opacity", opacity, theme_group);
+			var theme_bg = new RowCombo(this.config, "theme-category",
+				{ "black", "dark-grey", "dark", "off-white", "white" });
+			this.add("theme-category", theme_bg, theme_group);
+			var theme_name = new RowThemeSelect(this.config, "theme-name", theme_bg);
+			this.add("theme-name", theme_name, theme_group);
+			this.theme_preview = new RowThemePreview(this.config, theme_name, opacity);
+			theme_group.add(this.theme_preview.row);
 
 			var shortcuts = new Adw.PreferencesPage() {
 				title = "Keyboard shortcuts",
@@ -106,41 +112,39 @@ namespace RooTerm.Dialog
 			};
 			this.add("key-toggle", toggle, keys);
 			this.add("key-search", new RowKeySelect(this.config, "key-search"), keys);
-			this.add(
-				"key-new-terminal",
-				new RowKeySelect(this.config, "key-new-terminal"),
-				keys
-			);
+			this.add("key-new-terminal",
+				new RowKeySelect(this.config, "key-new-terminal"), keys);
 			this.add("key-new-ssh", new RowKeySelect(this.config, "key-new-ssh"), keys);
-			this.add(
-				"key-close-terminal",
-				new RowKeySelect(this.config, "key-close-terminal"),
-				keys
-			);
+			this.add("key-close-terminal",
+				new RowKeySelect(this.config, "key-close-terminal"), keys);
 			this.add("key-prev-tab", new RowKeySelect(this.config, "key-prev-tab"), keys);
 			this.add("key-next-tab", new RowKeySelect(this.config, "key-next-tab"), keys);
 			this.add("key-select-all", new RowKeySelect(this.config, "key-select-all"), keys);
 			this.add("key-copy", new RowKeySelect(this.config, "key-copy"), keys);
 			this.add("key-paste", new RowKeySelect(this.config, "key-paste"), keys);
-			this.add(
-				"key-preferences",
-				new RowKeySelect(this.config, "key-preferences"),
-				keys
-			);
+			this.add("key-preferences",
+				new RowKeySelect(this.config, "key-preferences"), keys);
 
 			var stack = new Adw.ViewStack();
 			stack.add_titled_with_icon(
-				general, "general", "General", "preferences-system-symbolic"
-			);
+				general, "general", "General", "preferences-system-symbolic");
 			stack.add_titled_with_icon(
-				shortcuts, "shortcuts", "Keyboard shortcuts", "input-keyboard-symbolic"
-			);
+				theme_page, "theme", "Theme and colours", "preferences-color-symbolic");
+			stack.add_titled_with_icon(
+				shortcuts, "shortcuts", "Keyboard shortcuts", "input-keyboard-symbolic");
 
 			var nav = new Gtk.ListBox() {
 				selection_mode = Gtk.SelectionMode.SINGLE,
 				css_classes = { "navigation-sidebar" }
 			};
 			nav.append(new Gtk.Label("General") {
+				xalign = 0f,
+				margin_start = 12,
+				margin_end = 12,
+				margin_top = 10,
+				margin_bottom = 10
+			});
+			nav.append(new Gtk.Label("Theme and colours") {
 				xalign = 0f,
 				margin_start = 12,
 				margin_end = 12,
@@ -168,10 +172,22 @@ namespace RooTerm.Dialog
 				if (row == null) {
 					return;
 				}
-				var name = row.get_index() == 0 ? "general" : "shortcuts";
-				stack.visible_child_name = name;
-				split.content.title = row.get_index() == 0
-					? "General" : "Keyboard shortcuts";
+				switch (row.get_index()) {
+					case 0:
+						stack.visible_child_name = "general";
+						split.content.title = "General";
+						break;
+
+					case 1:
+						stack.visible_child_name = "theme";
+						split.content.title = "Theme and colours";
+						break;
+
+					case 2:
+						stack.visible_child_name = "shortcuts";
+						split.content.title = "Keyboard shortcuts";
+						break;
+				}
 			});
 			nav.select_row(nav.get_row_at_index(0));
 
@@ -201,9 +217,7 @@ namespace RooTerm.Dialog
 
 			this.close_request.connect(() => {
 				((RowKeySelect) this.rows.get("key-toggle")).fill();
-				this.window.dbus.call_async(
-					"hide", new GLib.Variant("(s)", "preferences")
-				);
+				this.window.dbus.call_async("hide", new GLib.Variant("(s)", "preferences"));
 				return true;
 			});
 			this.fill();
@@ -233,6 +247,8 @@ namespace RooTerm.Dialog
 				row.config = this.config;
 				row.fill();
 			}
+			this.theme_preview.config = this.config;
+			this.theme_preview.fill();
 		}
 	}
 }

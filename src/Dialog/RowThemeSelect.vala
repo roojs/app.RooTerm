@@ -116,9 +116,10 @@ namespace RooTerm.Dialog
 				var item = (Gtk.StringObject) this.category_row.combo.selected_item;
 				this.loading = true;
 				this.category_filter.search = item.string;
-				this.combo.selected = 0;
+				this.combo.selected = Gtk.INVALID_LIST_POSITION;
 				this.loading = false;
-				this.send(((Theme) this.combo.selected_item).name);
+				// After loading — so preview / send see the new first theme.
+				this.combo.selected = 0;
 			});
 		}
 

@@ -1,0 +1,8 @@
+[1;32muser[0m@[1;32mhost[0m:[1;34m~/src[0m$ _
+ls   [1;34mdirectory[0m  [1;36msymlink[0m  [1;32mexecutable[0m  [1;35msocket[0m
+     [30;42msticky+ow[0m  [34;42mother-w[0m  [37;41msetuid[0m  [30;43msetgid[0m
+     [37;44msticky[0m  [40;31;01morphan[0m  [40;33mpipe[0m
+git  [32madd[0m  [31mdelete[0m  [33mcommit[0m  [36mbranch[0m
+gcc  [31merror[0m  [33mwarning[0m  [34mnote[0m
+echo [90mcomment[0m  [91mmatch[0m  [92mok[0m  [93mwarn[0m  [94minfo[0m  [95mheader[0m  [96mmeta[0m  [97mbright[0m
+[2mdim[0m  [1memphasis[0m
