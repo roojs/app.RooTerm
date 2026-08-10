@@ -106,8 +106,7 @@ namespace RooTerm.Dialog
 			}
 			try {
 				var bus = GLib.Bus.get_sync(GLib.BusType.SESSION, null);
-				bus.call.begin(
-					"org.roojs.RooTerm.DBus",
+				bus.call.begin("org.roojs.RooTerm.DBus",
 					"/org/roojs/RooTerm/DBus", "org.roojs.RooTerm.DBus",
 					"config_update", new GLib.Variant("(ss)", this.key, value),
 					null, GLib.DBusCallFlags.NONE, -1, null,
@@ -115,10 +114,8 @@ namespace RooTerm.Dialog
 						try {
 							bus.call.end(res);
 						} catch (GLib.Error e) {
-							GLib.debug(
-								"config_update %s: %s — save locally",
-								this.key, e.message
-							);
+							GLib.debug("config_update %s: %s — save locally",
+								this.key, e.message);
 							var parsed = Value(this.pspec.value_type);
 							switch (this.pspec.value_type) {
 								case GLib.Type.INT:

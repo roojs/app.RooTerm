@@ -21,14 +21,15 @@ namespace RooTerm.Dialog
 	/**
 	 * Key-capture button on an {@link Adw.ActionRow} for a Config string
 	 * (e.g. ``key-toggle``). Click the button, then press a key; Escape cancels.
-	 * Set {@link block_desktop} for desktop-wide shortcuts (media-keys).
+	 * Set {@link block_desktop} + {@link shell} for desktop-wide shortcuts
+	 * (media-keys).
 	 *
 	 * == Example ==
 	 *
 	 * {{{
 	 * var toggle = new Dialog.RowKeySelect(config, "key-toggle") {
 	 *     block_desktop = true,
-	 *     window = main_window
+	 *     shell = prefs.shell
 	 * };
 	 * group.add(toggle.row);
 	 * toggle.fill();
@@ -39,15 +40,14 @@ namespace RooTerm.Dialog
 		public Gtk.Button button;
 
 		/**
-		 * Main window for desktop capture (``block_toggle`` / media-keys).
-		 * Set with {@link block_desktop} for ``key-toggle``; unused for app-local
-		 * accelerators.
+		 * Shell helper for media-keys while capturing a desktop accelerator.
+		 * Set with {@link block_desktop} for ``key-toggle``.
 		 */
-		public MainWindow window { get; set; }
+		public GnomeShell shell { get; set; }
 
 		/**
 		 * True when this accelerator is owned by the desktop (media-keys), not the
-		 * app. Capture then blocks toggle and temporarily clears that binding.
+		 * app. Capture then temporarily clears that binding.
 		 */
 		public bool block_desktop { get; set; default = false; }
 
@@ -69,13 +69,8 @@ namespace RooTerm.Dialog
 				if (!this.block_desktop) {
 					return;
 				}
-				this.window.block_toggle = true;
-				var app = this.window.application as Application;
-				if (app != null) {
-					app.set_accels_for_action("win.toggle", {});
-				}
 				try {
-					this.window.shell.ensure_toggle_binding("");
+					this.shell.ensure_toggle_binding("");
 				} catch (GLib.Error e) {
 					GLib.warning("toggle binding: %s", e.message);
 				}
@@ -96,15 +91,8 @@ namespace RooTerm.Dialog
 					this.read(ref value);
 					this.button.label = value.get_string();
 					if (this.block_desktop) {
-						this.window.block_toggle = false;
-						var app = this.window.application as Application;
-						if (app != null) {
-							app.set_accels_for_action("win.toggle", {
-								value.get_string()
-							});
-						}
 						try {
-							this.window.shell.ensure_toggle_binding(value.get_string());
+							this.shell.ensure_toggle_binding(value.get_string());
 						} catch (GLib.Error e) {
 							GLib.warning("toggle binding: %s", e.message);
 						}
@@ -129,13 +117,8 @@ namespace RooTerm.Dialog
 				this.button.label = accel;
 				this.send(accel);
 				if (this.block_desktop) {
-					this.window.block_toggle = false;
-					var app = this.window.application as Application;
-					if (app != null) {
-						app.set_accels_for_action("win.toggle", { accel });
-					}
 					try {
-						this.window.shell.ensure_toggle_binding(accel);
+						this.shell.ensure_toggle_binding(accel);
 					} catch (GLib.Error e) {
 						GLib.warning("toggle binding: %s", e.message);
 					}
@@ -149,15 +132,10 @@ namespace RooTerm.Dialog
 		{
 			this.loading = true;
 			if (this.capturing && this.block_desktop) {
-				this.window.block_toggle = false;
 				var cur = Value(typeof(string));
 				this.read(ref cur);
-				var app = this.window.application as Application;
-				if (app != null) {
-					app.set_accels_for_action("win.toggle", { cur.get_string() });
-				}
 				try {
-					this.window.shell.ensure_toggle_binding(cur.get_string());
+					this.shell.ensure_toggle_binding(cur.get_string());
 				} catch (GLib.Error e) {
 					GLib.warning("toggle binding: %s", e.message);
 				}

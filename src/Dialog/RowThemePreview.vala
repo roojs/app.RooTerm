@@ -20,16 +20,15 @@ namespace RooTerm.Dialog
 {
 	/**
 	 * Theme preview: live VTE sample from ``/themes/theme-preview-sample.txt``
-	 * over wallpaper (or off-blue) so {@link RooTerm.Config.opacity} reads
-	 * correctly in opaque prefs.
+	 * over wallpaper (or off-blue) so opacity reads correctly in opaque prefs.
 	 *
-	 * Follows {@link RowThemeSelect} / opacity {@link RowScale} widgets (prefs
-	 * local config is not updated on successful ``config_update``).
+	 * Follows theme / opacity / font rows on {@link Preferences} (prefs local
+	 * config is not updated on successful ``config_update``).
 	 *
 	 * == Example ==
 	 *
 	 * {{{
-	 * var preview = new Dialog.RowThemePreview(config, theme_row, opacity_row);
+	 * var preview = new Dialog.RowThemePreview(preferences);
 	 * group.add(preview.row);
 	 * preview.fill();
 	 * }}}
@@ -40,9 +39,7 @@ namespace RooTerm.Dialog
 		 * Widget to add to an {@link Adw.PreferencesGroup}.
 		 */
 		public Adw.PreferencesRow row;
-		public Config config;
-		public RowThemeSelect theme_row;
-		public RowScale opacity_row;
+		public Preferences preferences;
 		public Vte.Terminal terminal;
 		/**
 		 * Solid off-blue or wallpaper; under the translucent VTE frame.
@@ -60,17 +57,13 @@ namespace RooTerm.Dialog
 		public Gdk.RGBA[] theme_palette;
 
 		/**
-		 * @param config Chrome settings (themes catalogue)
-		 * @param theme_row Foreground theme selector
-		 * @param opacity_row Appearance opacity scale
+		 * @param preferences Prefs window (rows + config)
 		 */
-		public RowThemePreview(Config config, RowThemeSelect theme_row, RowScale opacity_row)
+		public RowThemePreview(Preferences preferences)
 		{
 			Object();
-			this.config = config;
-			this.theme_row = theme_row;
-			this.opacity_row = opacity_row;
-			this.config.themes.load();
+			this.preferences = preferences;
+			this.preferences.config.themes.load();
 			this.theme_fg = Gdk.RGBA();
 			this.theme_bg = Gdk.RGBA();
 			Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(),
@@ -149,14 +142,30 @@ namespace RooTerm.Dialog
 				activatable = false,
 				child = box
 			};
-			this.theme_row.combo.notify["selected"].connect(() => {
-				if (this.theme_row.loading) {
+			var theme_row = (RowThemeSelect) this.preferences.rows.get("theme-name");
+			var opacity_row = (RowScale) this.preferences.rows.get("opacity");
+			var font_family_row = (RowFontFamily) this.preferences.rows.get("font-family");
+			var font_size_row = (RowScale) this.preferences.rows.get("font-size");
+			theme_row.combo.notify["selected"].connect(() => {
+				if (theme_row.loading) {
 					return;
 				}
 				this.fill();
 			});
-			this.opacity_row.scale.value_changed.connect(() => {
-				if (this.opacity_row.loading) {
+			opacity_row.scale.value_changed.connect(() => {
+				if (opacity_row.loading) {
+					return;
+				}
+				this.fill();
+			});
+			font_family_row.combo.notify["selected"].connect(() => {
+				if (font_family_row.loading) {
+					return;
+				}
+				this.fill();
+			});
+			font_size_row.scale.value_changed.connect(() => {
+				if (font_size_row.loading) {
 					return;
 				}
 				this.fill();
@@ -164,15 +173,27 @@ namespace RooTerm.Dialog
 		}
 
 		/**
-		 * Apply colours from the theme combo and opacity scale.
+		 * Apply colours and font from the prefs rows.
 		 */
 		public void fill()
 		{
-			if (this.theme_row.combo.selected == Gtk.INVALID_LIST_POSITION) {
+			var theme_row = (RowThemeSelect) this.preferences.rows.get("theme-name");
+			var opacity_row = (RowScale) this.preferences.rows.get("opacity");
+			var font_family_row = (RowFontFamily) this.preferences.rows.get("font-family");
+			var font_size_row = (RowScale) this.preferences.rows.get("font-size");
+			if (theme_row.combo.selected == Gtk.INVALID_LIST_POSITION) {
 				return;
 			}
-			var theme = (Theme) this.theme_row.combo.selected_item;
-			var opacity = (int) this.opacity_row.scale.get_value();
+			var face = Fonts.system();
+			if (font_family_row.combo.selected != Gtk.INVALID_LIST_POSITION
+					&& ((Font) font_family_row.combo.selected_item).name.length > 0) {
+				face = ((Font) font_family_row.combo.selected_item).name;
+			}
+			this.terminal.font_desc = Pango.FontDescription.from_string(
+				"%s %d".printf(face, (int) font_size_row.scale.get_value())
+			);
+			var theme = (Theme) theme_row.combo.selected_item;
+			var opacity = (int) opacity_row.scale.get_value();
 			this.theme_fg.parse(theme.foreground);
 			this.theme_bg.parse(theme.background);
 			this.theme_bg.alpha = opacity / 100.0f;

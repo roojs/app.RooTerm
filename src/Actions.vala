@@ -169,7 +169,14 @@ namespace RooTerm
 
 			var prefs_action = new GLib.SimpleAction("preferences", null);
 			prefs_action.activate.connect(() => {
-				this.window.dbus.preferences();
+				try {
+					string[] argv = { "rooterm", "--preferences" };
+					GLib.Process.spawn_async(
+						null, argv, null, GLib.SpawnFlags.SEARCH_PATH, null, null
+					);
+				} catch (GLib.Error e) {
+					GLib.warning("preferences: %s", e.message);
+				}
 			});
 			this.window.add_action(prefs_action);
 			app.set_accels_for_action("win.preferences", {

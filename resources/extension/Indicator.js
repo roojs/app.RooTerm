@@ -23,11 +23,11 @@ class Indicator extends PanelMenu.Button {
         var self = this;
         var prefsItem = new PopupMenu.PopupMenuItem('Preferences');
         prefsItem.connect('activate', function() {
-            Gio.DBus.session.call(
-                DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'preferences',
-                null, null, Gio.DBusCallFlags.NONE, 2000, null,
-                self.extension.onDBusFinished.bind(self.extension, 'preferences')
-            );
+            try {
+                GLib.spawn_command_line_async('rooterm --preferences');
+            } catch (e) {
+                console.error('rooterm: preferences spawn: ' + e);
+            }
         });
         this.menu.addMenuItem(prefsItem);
 

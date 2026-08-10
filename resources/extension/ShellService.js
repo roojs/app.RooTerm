@@ -4,7 +4,7 @@ import GLib from 'gi://GLib';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
-import {APP_ID, DBUS_DEST, DBUS_IFACE, DBUS_PATH, SHELL_DEST, SHELL_PATH} from './Const.js';
+import {APP_ID, DBUS_DEST, DBUS_IFACE, DBUS_PATH, PREFS_DBUS_DEST, PREFS_DBUS_PATH, SHELL_DEST, SHELL_PATH} from './Const.js';
 
 /**
  * Session bus org.roojs.RooTerm.Shell — register / show / hide / toggle / exited
@@ -86,6 +86,34 @@ export class ShellService {
         this.storeRole(role, win);
     }
 
+    /**
+     * App D-Bus skip_taskbar: main vs preferences process.
+     */
+    skipTaskbar(role, skip, done) {
+        var dest = DBUS_DEST;
+        var path = DBUS_PATH;
+        if (role === 'preferences') {
+            dest = PREFS_DBUS_DEST;
+            path = PREFS_DBUS_PATH;
+        }
+        Gio.DBus.session.call(
+            dest, path, DBUS_IFACE, 'skip_taskbar',
+            new GLib.Variant('(sb)', [role, skip]),
+            null, Gio.DBusCallFlags.NONE, -1, null,
+            function(conn, res) {
+                try {
+                    Gio.DBus.session.call_finish(res);
+                } catch (e) {
+                    console.error('rooterm: skip_taskbar ' + skip
+                        + ' role=' + role + ': ' + e);
+                }
+                if (done) {
+                    done();
+                }
+            }
+        );
+    }
+
     show(role) {
         var self = this;
         if (!this.win[role]) {
@@ -106,22 +134,12 @@ export class ShellService {
             this.win[role].unminimize();
         }
         // Restore skip_taskbar after show (async).
-        Gio.DBus.session.call(
-            DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'skip_taskbar',
-            new GLib.Variant('(sb)', [role, true]),
-            null, Gio.DBusCallFlags.NONE, -1, null,
-            function(conn, res) {
-                try {
-                    Gio.DBus.session.call_finish(res);
-                } catch (e) {
-                    console.error('rooterm: skip_taskbar true role=' + role + ': ' + e);
-                }
-                if (self.win[role]
-                        && typeof self.win[role].hide_from_window_list === 'function') {
-                    self.win[role].hide_from_window_list();
-                }
+        this.skipTaskbar(role, true, function() {
+            if (self.win[role]
+                    && typeof self.win[role].hide_from_window_list === 'function') {
+                self.win[role].hide_from_window_list();
             }
-        );
+        });
         if (role !== 'preferences') {
             var actor = this.win[role].get_compositor_private();
             if (actor) {
@@ -239,31 +257,20 @@ export class ShellService {
             this.win[role].rootermBracketId = 0;
         }
         // Clear skip_taskbar → idle → minimize → restore skip (async only).
-        Gio.DBus.session.call(
-            DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'skip_taskbar',
-            new GLib.Variant('(sb)', [role, false]),
-            null, Gio.DBusCallFlags.NONE, -1, null,
-            function(conn, res) {
-                try {
-                    Gio.DBus.session.call_finish(res);
-                } catch (e) {
-                    console.error('rooterm: skip_taskbar false role='
-                        + role + ': ' + e);
-                }
-                if (!self.win[role]) {
-                    return;
-                }
-                if (typeof self.win[role].show_in_window_list === 'function') {
-                    self.win[role].show_in_window_list();
-                }
-                self.win[role].rootermBracketId = GLib.timeout_add(
-                    GLib.PRIORITY_DEFAULT, 50, function() {
-                        self.finishHide(role, actor);
-                        return GLib.SOURCE_REMOVE;
-                    }
-                );
+        this.skipTaskbar(role, false, function() {
+            if (!self.win[role]) {
+                return;
             }
-        );
+            if (typeof self.win[role].show_in_window_list === 'function') {
+                self.win[role].show_in_window_list();
+            }
+            self.win[role].rootermBracketId = GLib.timeout_add(
+                GLib.PRIORITY_DEFAULT, 50, function() {
+                    self.finishHide(role, actor);
+                    return GLib.SOURCE_REMOVE;
+                }
+            );
+        });
     }
 
     /**
@@ -284,24 +291,13 @@ export class ShellService {
             actor.translation_y = 0;
             actor.opacity = 255;
         }
-        Gio.DBus.session.call(
-            DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'skip_taskbar',
-            new GLib.Variant('(sb)', [role, true]),
-            null, Gio.DBusCallFlags.NONE, -1, null,
-            function(conn, res) {
-                try {
-                    Gio.DBus.session.call_finish(res);
-                } catch (e) {
-                    console.error('rooterm: skip_taskbar true role='
-                        + role + ': ' + e);
-                }
-                if (self.win[role]
-                        && typeof self.win[role].hide_from_window_list === 'function') {
-                    self.win[role].hide_from_window_list();
-                }
+        this.skipTaskbar(role, true, function() {
+            if (self.win[role] && typeof self.win[role].hide_from_window_list === 'function') {
+                self.win[role].hide_from_window_list();
             }
-        );
-        console.error('rooterm: hide role=' + role + ' id=' + this.win[role].get_id()
+        });
+
+                           console.error('rooterm: hide role=' + role + ' id=' + this.win[role].get_id()
             + ' minimized=' + this.win[role].minimized);
         if (role !== 'preferences') {
             return;
@@ -356,22 +352,11 @@ export class ShellService {
         this.win[role] = win;
         console.error('rooterm: stored role=' + role + ' id=' + this.win[role].get_id()
             + ' title=' + (this.win[role].get_title() || ''));
-        Gio.DBus.session.call(
-            DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'skip_taskbar',
-            new GLib.Variant('(sb)', [role, true]),
-            null, Gio.DBusCallFlags.NONE, -1, null,
-            function(conn, res) {
-                try {
-                    Gio.DBus.session.call_finish(res);
-                } catch (e) {
-                    console.error('rooterm: skip_taskbar true role=' + role + ': ' + e);
-                }
-                if (self.win[role]
-                        && typeof self.win[role].hide_from_window_list === 'function') {
-                    self.win[role].hide_from_window_list();
-                }
+        this.skipTaskbar(role, true, function() {
+            if (self.win[role] && typeof self.win[role].hide_from_window_list === 'function') {
+                self.win[role].hide_from_window_list();
             }
-        );
+        });
         if (!this.win[role].rootermSlotHooked) {
             this.win[role].rootermSlotHooked = true;
             this.win[role].connect('unmanaged', function() {

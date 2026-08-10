@@ -152,17 +152,16 @@ namespace RooTerm.Terminal
 		 * Cwd / prompt watching is {@link Stream} (created by subclasses).
 		 *
 		 * @param connection Host or Localhost this tab belongs to
-		 * @param font Pango font string
-		 * @param config App config (binds VTE background to {@link RooTerm.Config.opacity})
+		 * @param config App config (binds VTE background / theme / font)
 		 */
-		protected Base(Host.Connection connection, string font, RooTerm.Config config)
+		protected Base(Host.Connection connection, RooTerm.Config config)
 		{
 			Object(orientation: Gtk.Orientation.VERTICAL, spacing: 0, hexpand: true, vexpand: true);
 			this.connection = connection;
 			this.terminal = new Vte.Terminal() {
 				hexpand = true,
 				vexpand = true,
-				font_desc = Pango.FontDescription.from_string(font)
+				font_desc = config.font_desc()
 			};
 			this.terminal.set_size(80, 24);
 			config.themes.load();
@@ -181,6 +180,10 @@ namespace RooTerm.Terminal
 				frame_css_added = true;
 			}
 			config.notify.connect((s, pspec) => {
+				if (pspec.get_name() == "font-family" || pspec.get_name() == "font-size") {
+					this.terminal.font_desc = config.font_desc();
+					return;
+				}
 				if (pspec.get_name() != "opacity"
 						&& pspec.get_name() != "theme-name"
 						&& pspec.get_name() != "theme-category") {

@@ -1053,33 +1053,75 @@ if (project_file.file.is_ignored || !project_file.file.is_text) {
 
 **Maximum line length:** In docblocks and comments, no line may extend past **72 characters** (including leading spaces/tab). Break after a word so the next line continues the sentence; a good rule of thumb is “break after a comma or before the next phrase” so that the first line does not go beyond roughly “… add all references,” in length.
 
-- **Code:** Break on `(` when function calls or method invocations are long; break on `+` when string concatenation creates long lines.
-- **Named key–value lists** (`Object (prop: value, …)`, `new Foo () { prop = value, … }`, and other property maps): when the list is broken across lines, put **one `key: value` / `key = value` per line**. Names make the layout readable.
-- **Positional argument lists:** when wrapping a long call, pack arguments **as densely as practical** (several per line). Do **not** put one positional argument per line — the names are not visible anyway, so vertical sprawl does not help. **Exception:** format-string calls (`throw` / `GLib.IOError` / wire `Error` / `GLib.debug` / `warning` / `critical`) — see **CRITICAL — format-string calls** above: string stays on the call line; remaining args may wrap **grouped**, not one-per-line.
+**CRITICAL — positional call wraps (every method, not only format-string):** Do **not**
+break immediately after `(` so arguments sit on a middle line (or one-per-line)
+with `)` alone underneath. Prefer **one** break: keep the **callee and the first
+argument** on the call line; put **remaining arguments grouped on the next
+line**, closing `)` on that same line. Pack densely (several args per line).
+Format-string calls use the same shape (see above).
+
+**CRITICAL — method / ctor declarations:** When a signature is too long for one
+line, put **one parameter per line** (types and names are visible — same idea as
+named key–value lists). Do **not** leave a packed multi-parameter declaration on
+one overlong line, and do **not** wrap a declaration the same way as a call
+(first param on the header line, rest crammed). Opening `(` may end the header
+line; closing `)` then `throws` / `{` follow the last parameter.
+
+**Bad (declaration crammed on one long line — forbidden when it pastes ~100+):**
+```vala
+public GLib.Variant call_desktop(string method, GLib.Variant parameters, GLib.VariantType reply_type) throws GLib.Error
+```
+
+**Good (declaration — one parameter per line):**
+```vala
+public GLib.Variant call_desktop(
+	string method,
+	GLib.Variant parameters,
+	GLib.VariantType reply_type
+) throws GLib.Error
+```
+
+- **Code:** When a **call** is genuinely long, break **after the first argument** (not
+  after bare `(`). Break on `+` when string concatenation creates long lines.
+- **Method / ctor parameter lists:** when wrapping a **declaration**, one
+  `type name` (with defaults) per line — see CRITICAL above.
+- **Named key–value lists** (`Object (prop: value, …)`, `new Foo () { prop = value, … }`, and other property maps): when the list is broken across lines, put **one `key: value` / `key = value` per line**. Names make the layout readable. (Named maps may open on `(`; that exception does **not** apply to positional **calls**.)
+- **Positional argument lists (call sites):** pack **as densely as practical**. Do **not** put one positional argument per line — the names are not visible anyway, so vertical sprawl does not help.
 - **Docblocks and comments:** Break so that no line exceeds 72 characters; prefer breaking after commas or natural phrase boundaries.
 
-**Bad (one positional arg per line — forbidden):**
+**Bad (break after `(` — args in the middle / `)` alone / one-arg-per-line — forbidden):**
 ```vala
+var info_reply = this.window.dbus.call_desktop(
+	"GetExtensionInfo", new GLib.Variant("(s)", this.uuid), new GLib.VariantType("(a{sv})")
+);
 this.buffer.insert_markup(
 	ref end_iter,
 	"<span size=\"small\" color=\"#1a1a1a\">" + renderer.toPango(message) + "</span>\n",
 	-1
 );
+this.some_method(
+	arg1,
+	arg2,
+	arg3,
+	arg4
+);
 ```
 
-**Good (positional — pack densely when wrapping):**
+**Good (positional — one break after first arg; rest grouped):**
 ```vala
+var info_reply = this.window.dbus.call_desktop("GetExtensionInfo",
+	new GLib.Variant("(s)", this.uuid), new GLib.VariantType("(a{sv})"));
 this.buffer.insert_markup(ref end_iter,
 	"<span size=\"small\" color=\"#1a1a1a\">" + renderer.toPango(message) + "</span>\n", -1);
+this.some_method(arg1, arg2, arg3, arg4);
 ```
 
-**Also Good (breaking on + for long concatenation):**
+**Also Good (breaking on + for long concatenation — still no bare `(` wrap):**
 ```vala
 this.buffer.insert_markup(ref end_iter,
 	"<span size=\"small\" color=\"#1a1a1a\">" +
 		renderer.toPango(message) +
-		"</span>\n",
-	-1);
+		"</span>\n", -1);
 ```
 
 **Good (named key–value — one pair per line when multiline):**
@@ -1093,16 +1135,6 @@ this.stack = new Gtk.Stack () {
 	vhomogeneous = false,
 	hhomogeneous = false
 };
-```
-
-**Good (each argument on its own line):**
-```vala
-this.some_method(
-	arg1,
-	arg2,
-	arg3,
-	arg4
-);
 ```
 
 ## Debug and Warning Statements <!-- section: debug-warning-statements -->
@@ -1717,7 +1749,7 @@ Run these checks on **every file you changed**. Fix violations; do not hand-wave
 | **`var` on locals** | Search: `^\s+(string\|int\|bool\|uint\|int64)\s+\w+\s*[=;]` — no local matches except `string[] … = {}` |
 | **No `handle_*` for signals** | Button/signal handlers inline in lambda, not new `handle_*` methods |
 | **No gratuitous `else`** | New `else` / `else if` chains restructure to early return/`continue` |
-| **No gratuitous line breaks** | Short `if`, `\|\|`, `&&`, and calls stay on one line; **key–value lists** (`Object` / `{ prop = }`) one pair per line when multiline; **positional args** packed dense when wrapping (not one-per-line); **format-string calls**: message on the call line, remaining args grouped; match surrounding file; 72-char rule is docblocks/comments only |
+| **No gratuitous line breaks** | Short `if`, `\|\|`, `&&`, and **calls** stay on one line; long **calls**: first arg on call line, rest packed (not one-per-line); long **declarations**: one parameter per line; **key–value lists** one pair per line when multiline; **format-string calls**: message on the call line, remaining args grouped; match surrounding file; 72-char rule is docblocks/comments only |
 | **Enum branches use `switch`** | Multi-value response/status checks use `switch`, not `\|\|` chains |
 | **No defensive re-checks** | No duplicate validation after a module boundary already enforced it |
 | **Debug text** | No class/method names in `GLib.debug()` / `GLib.warning()` messages |

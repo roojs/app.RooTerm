@@ -24,7 +24,43 @@ namespace RooTerm
 	public class Config : Object, Json.Serializable
 	{
 		public int version { get; set; default = 1; }
-		public string terminal_font { get; set; default = "Monospace 9"; }
+		/**
+		 * VTE font family. Empty = system monospace family
+		 * (``org.gnome.desktop.interface`` ``monospace-font-name``, family only).
+		 */
+		[Description(nick = "Font family", blurb = "Monospace font family (empty = system)")]
+		public string font_family { get; set; default = ""; }
+		/**
+		 * VTE font size in points.
+		 */
+		[Description(nick = "Font size", blurb = "Terminal font size in points")]
+		public int font_size { get; set; default = 9; }
+
+		/**
+		 * Pango font string for VTE: resolved family + {@link font_size}.
+		 * Empty {@link font_family} uses the system monospace family.
+		 *
+		 * @return Description like ``Ubuntu Sans Mono 9``
+		 */
+		public string font()
+		{
+			var face = this.font_family;
+			if (face.length == 0) {
+				face = Dialog.Fonts.system();
+			}
+			return "%s %d".printf(face, this.font_size);
+		}
+
+		/**
+		 * {@link font} as a {@link Pango.FontDescription} for VTE ``font_desc``.
+		 *
+		 * @return Parsed description from {@link font}
+		 */
+		public Pango.FontDescription font_desc()
+		{
+			return Pango.FontDescription.from_string(this.font());
+		}
+
 		/**
 		 * Drop-down width as percent of the monitor (1–100). Full width for now.
 		 */
@@ -277,7 +313,7 @@ namespace RooTerm
 
 		/**
 		 * Wire chrome ``notify`` handlers onto ``window`` (geometry + ``key_*``).
-		 * Opacity stays on VTE ({@link Terminal.Base}).
+		 * Opacity / font apply on VTE ({@link Terminal.Base}).
 		 *
 		 * @param window Main window to resize / rebind
 		 */

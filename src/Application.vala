@@ -105,6 +105,7 @@ namespace RooTerm
 		public static bool opt_debug_critical = false;
 		public static bool opt_toggle = false;
 		public static bool opt_quit = false;
+		public static bool opt_preferences = false;
 		public static string opt_toggle_key = "";
 
 		/**
@@ -114,19 +115,21 @@ namespace RooTerm
 
 		/**
 		 * Sole drop-down window (kept when hidden; {@link Gtk.Application.active_window} is null then).
+		 * Null in the preferences process.
 		 */
 		public MainWindow? window;
 
 		/**
-		 * True when this process is the preferences app (``--preferences``).
+		 * Preferences window — only in the ``--preferences`` process.
 		 */
-		public bool is_preferences = false;
+		public Dialog.Preferences? preferences;
 
 		private const GLib.OptionEntry[] app_options = {
 			{ "debug", 'd', 0, GLib.OptionArg.NONE, ref opt_debug, "Enable debug output", null },
 			{ "debug-critical", 0, 0, GLib.OptionArg.NONE, ref opt_debug_critical, "Treat critical warnings as errors", null },
 			{ "toggle", 0, 0, GLib.OptionArg.NONE, ref opt_toggle, "Show or hide the main window", null },
 			{ "quit", 0, 0, GLib.OptionArg.NONE, ref opt_quit, "Quit the running RooTerm", null },
+			{ "preferences", 0, 0, GLib.OptionArg.NONE, ref opt_preferences, "Open preferences", null },
 			{ "toggle-key", 0, 0, GLib.OptionArg.STRING, ref opt_toggle_key, "Set global toggle key (e.g. F12)", "KEY" },
 			{ null }
 		};
@@ -135,17 +138,16 @@ namespace RooTerm
 		 * Creates the application and installs debug logging.
 		 * Session-bus {@link DBus} + daemon {@link hold} run in {@link startup} (primary only).
 		 *
-		 * @param is_preferences True → prefs app id; false → main
+		 * @param preferences True → prefs app id; false → main
 		 */
-		public Application(bool is_preferences = false)
+		public Application(bool preferences = false)
 		{
 			Object(
-				application_id: is_preferences
+				application_id: preferences
 					? "org.roojs.rooterm.preferences"
 					: "org.roojs.rooterm",
 				flags: GLib.ApplicationFlags.HANDLES_COMMAND_LINE
 			);
-			this.is_preferences = is_preferences;
 			Gtk.Window.set_default_icon_name("org.roojs.rooterm");
 
 			GLib.Log.set_default_handler((dom, lvl, msg) => {
@@ -164,11 +166,24 @@ namespace RooTerm
 		}
 
 		/**
-		 * First run: create and present main ({@link MainWindow} primes Shell roles).
-		 * Later: remorph if needed, else Shell ``show('main')``.
+		 * First run: main creates {@link MainWindow}; prefs creates {@link Dialog.Preferences}
+		 * then Shell Show. Later prefs activate fills + Shows again.
 		 */
 		protected override void activate()
 		{
+			if (this.application_id == "org.roojs.rooterm.preferences") {
+				if (this.preferences == null) {
+					this.preferences = new Dialog.Preferences(this);
+					this.add_window(this.preferences);
+				}
+				this.preferences.fill();
+				this.preferences.present();
+				GLib.Timeout.add(50, () => {
+					this.dbus.call_shell_async("show", new GLib.Variant("(s)", "preferences"));
+					return false;
+				});
+				return;
+			}
 			if (this.window == null) {
 				this.window = new MainWindow(this);
 				this.add_window(this.window);
@@ -189,7 +204,7 @@ namespace RooTerm
 				});
 				return;
 			}
-			this.dbus.call("show", new GLib.Variant("(s)", "main"));
+			this.dbus.call_shell("show", new GLib.Variant("(s)", "main"));
 			this.window.set_default_size(
 				this.window.monitor_geo.width * this.window.config.width / 100,
 				this.window.monitor_geo.height * this.window.config.height / 100
@@ -204,6 +219,7 @@ namespace RooTerm
 			opt_debug_critical = false;
 			opt_toggle = false;
 			opt_quit = false;
+			opt_preferences = false;
 			opt_toggle_key = "";
 
 			string[] args = command_line.get_arguments();
@@ -240,8 +256,11 @@ namespace RooTerm
 					var config = Config.load();
 					config.key_toggle = opt_toggle_key;
 					config.save();
-					// Settings-only; no window required (no throwaway parent).
-					new GnomeShell(this.window).ensure_toggle_binding(opt_toggle_key);
+					if (this.window == null) {
+						this.window = new MainWindow(this);
+						this.add_window(this.window);
+					}
+					this.window.shell.ensure_toggle_binding(opt_toggle_key);
 				} catch (GLib.Error e) {
 					GLib.warning("toggle-key failed: %s", e.message);
 				}

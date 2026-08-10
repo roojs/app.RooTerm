@@ -45,10 +45,10 @@ namespace RooTerm
 		public string uuid = "rooterm@roojs.com";
 
 		/**
-		 * Parent for install-failure / restart {@link Adw.AlertDialog}s.
-		 * Null only for headless ``--toggle-key`` (settings write; no UI).
+		 * Parent for install-failure / restart {@link Adw.AlertDialog}s
+		 * and session {@link DBus}.
 		 */
-		public MainWindow? window { get; construct; default = null; }
+		public ShellInterface window { get; construct; }
 
 		/**
 		 * True when Shell has the extension enabled at the bundled version.
@@ -62,17 +62,10 @@ namespace RooTerm
 		public bool shell_bus_up()
 		{
 			try {
-				var reply = GLib.Bus.get_sync(GLib.BusType.SESSION, null).call_sync(
-					"org.freedesktop.DBus",
-					"/org/freedesktop/DBus",
-					"org.freedesktop.DBus",
-					"NameHasOwner",
+				var reply = GLib.Bus.get_sync(GLib.BusType.SESSION, null).call_sync("org.freedesktop.DBus",
+					"/org/freedesktop/DBus", "org.freedesktop.DBus", "NameHasOwner",
 					new GLib.Variant("(s)", "org.roojs.RooTerm.Shell"),
-					new GLib.VariantType("(b)"),
-					GLib.DBusCallFlags.NONE,
-					1000,
-					null
-				);
+					new GLib.VariantType("(b)"), GLib.DBusCallFlags.NONE, 1000, null);
 				var owned = false;
 				reply.get("(b)", out owned);
 				return owned;
@@ -83,9 +76,9 @@ namespace RooTerm
 		}
 
 		/**
-		 * @param window Parent for extension dialogs, or null for settings-only
+		 * @param window Main or preferences window (Shell Register / dialogs)
 		 */
-		public GnomeShell(MainWindow? window = null)
+		public GnomeShell(ShellInterface window)
 		{
 			Object(window: window);
 
@@ -117,16 +110,8 @@ namespace RooTerm
 				return;
 			}
 			try {
-				var bus = GLib.Bus.get_sync(GLib.BusType.SESSION);
-				var info_reply = bus.call_sync(
-					"org.gnome.Shell.Extensions", "/org/gnome/Shell/Extensions",
-					"org.gnome.Shell.Extensions", "GetExtensionInfo",
-					new GLib.Variant("(s)", this.uuid),
-					new GLib.VariantType("(a{sv})"),
-					GLib.DBusCallFlags.NONE,
-					-1,
-					null
-				);
+				var info_reply = this.window.dbus.call_desktop("GetExtensionInfo",
+					new GLib.Variant("(s)", this.uuid), new GLib.VariantType("(a{sv})"));
 				var info = info_reply.get_child_value(0);
 				if (info.n_children() == 0) {
 					return;
@@ -235,16 +220,8 @@ $(e.message)",
 			var enabled = false;
 			var shell_version = 0;
 			try {
-				var bus = GLib.Bus.get_sync(GLib.BusType.SESSION);
-				var info_reply = bus.call_sync(
-					"org.gnome.Shell.Extensions", "/org/gnome/Shell/Extensions",
-					"org.gnome.Shell.Extensions", "GetExtensionInfo",
-					new GLib.Variant("(s)", this.uuid),
-					new GLib.VariantType("(a{sv})"),
-					GLib.DBusCallFlags.NONE,
-					-1,
-					null
-				);
+				var info_reply = this.window.dbus.call_desktop("GetExtensionInfo",
+					new GLib.Variant("(s)", this.uuid), new GLib.VariantType("(a{sv})"));
 				var info = info_reply.get_child_value(0);
 				if (info.n_children() > 0) {
 					shell_knows = true;
@@ -295,16 +272,8 @@ $(e.message)",
 
 			var enable_error = "";
 			try {
-				var bus = GLib.Bus.get_sync(GLib.BusType.SESSION);
-				var en_reply = bus.call_sync(
-					"org.gnome.Shell.Extensions", "/org/gnome/Shell/Extensions",
-					"org.gnome.Shell.Extensions", "EnableExtension",
-					new GLib.Variant("(s)", this.uuid),
-					new GLib.VariantType("(b)"),
-					GLib.DBusCallFlags.NONE,
-					-1,
-					null
-				);
+				var en_reply = this.window.dbus.call_desktop("EnableExtension",
+					new GLib.Variant("(s)", this.uuid), new GLib.VariantType("(b)"));
 				en_reply.get("(b)", out enabled);
 			} catch (GLib.Error e) {
 				enable_error = e.message;
@@ -511,7 +480,7 @@ After reload, click OK to switch this window to the drop-down. Then $(key) and t
 			var existing = window.get_data<string>("rooterm-shell-handle");
 			if (existing != null) {
 				GLib.debug("Shell handle retry role=%s %s", role, existing);
-				this.window.dbus.call("register", new GLib.Variant("(ss)", role, existing));
+				this.window.dbus.call_shell_async("register", new GLib.Variant("(ss)", role, existing));
 				return;
 			}
 			var surface = window.get_surface();
@@ -523,7 +492,7 @@ After reload, click OK to switch this window to the drop-down. Then $(key) and t
 				var handle = "x11:%x".printf((uint) x11_surface.get_xid());
 				window.set_data("rooterm-shell-handle", handle.dup());
 				GLib.debug("Shell handle role=%s %s", role, handle);
-				this.window.dbus.call("register", new GLib.Variant("(ss)", role, handle));
+				this.window.dbus.call_shell_async("register", new GLib.Variant("(ss)", role, handle));
 				return;
 			}
 			var wl_toplevel = surface as Gdk.Wayland.Toplevel;
@@ -534,7 +503,7 @@ After reload, click OK to switch this window to the drop-down. Then $(key) and t
 				var handle = "wayland:" + h;
 				window.set_data("rooterm-shell-handle", handle.dup());
 				GLib.debug("Shell handle role=%s %s", role, handle);
-				this.window.dbus.call("register", new GLib.Variant("(ss)", role, handle));
+				this.window.dbus.call_shell_async("register", new GLib.Variant("(ss)", role, handle));
 			})) {
 				GLib.warning("Shell export_handle failed role=%s", role);
 			}

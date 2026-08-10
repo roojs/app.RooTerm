@@ -251,7 +251,13 @@ namespace RooTerm.Asbru
 		public RooTerm.Config to_config()
 		{
 			var config = new RooTerm.Config();
-			config.terminal_font = this.terminal_font;
+			var desc = Pango.FontDescription.from_string(this.terminal_font);
+			if (desc.get_family() != null && desc.get_family().length > 0) {
+				config.font_family = desc.get_family();
+			}
+			if (desc.get_size() > 0) {
+				config.font_size = desc.get_size() / Pango.SCALE;
+			}
 			foreach (var conn in this.by_uuid.values) {
 				if (conn.pass.length > 0) {
 					config.pending_secrets.set(conn.uuid, conn.pass);

@@ -25,7 +25,7 @@ namespace RooTerm
 	 * under the top panel; close closes the current terminal (or hides).
 	 * Otherwise: decorated 960×640 setup chrome; window close quits the app.
 	 */
-	public class MainWindow : Gtk.ApplicationWindow
+	public class MainWindow : Gtk.ApplicationWindow, ShellInterface
 	{
 		public Host.SearchPulldown host_search;
 		public Host.Tree host_tree;
@@ -62,15 +62,11 @@ namespace RooTerm
 		 * True while a {@link GnomeShell} setup/restart dialog is open.
 		 * {@link DBus.toggle} must not hide/show the window then.
 		 */
-		public bool block_toggle = false;
+		public bool block_toggle { get; set; default = false; }
 		/**
 		 * Shared add/edit connection window (transient of main; GTK show/hide).
 		 */
 		public Dialog.Connection connection_editor;
-		/**
-		 * Shared preferences window (Shell Show/Hide).
-		 */
-		public Dialog.Preferences preferences_editor;
 		/**
 		 * Extension install / readiness / window {@link GnomeShell.register}.
 		 */
@@ -161,7 +157,6 @@ namespace RooTerm
 			}
 			this.shell = new GnomeShell(this);
 			this.connection_editor = new Dialog.Connection(this);
-			this.preferences_editor = new Dialog.Preferences(this);
 			this.map.connect(() => {
 				this.shell.register(this, "main");
 			});
@@ -171,7 +166,6 @@ namespace RooTerm
 				GLib.BusNameWatcherFlags.NONE,
 				() => {
 					this.shell.register(this, "main");
-					this.shell.register(this.preferences_editor, "preferences");
 				},
 				() => {
 				}
@@ -242,7 +236,6 @@ namespace RooTerm
 			this.sessions = new Session.Controller(
 				this.host_stack, this.tree, this.config, this.localhost
 			);
-			this.sessions.terminal_font = this.config.terminal_font;
 			this.sessions.display_changed.connect(() => {
 				this.title = this.sessions.display;
 				var page = this.host_stack.pages.visible_child as Host.Page;
@@ -442,7 +435,7 @@ namespace RooTerm
 					return true;
 				}
 				this.terminal_menu.popdown();
-				this.dbus.call("hide", new GLib.Variant("(s)", "main"));
+				this.dbus.call_shell("hide", new GLib.Variant("(s)", "main"));
 				return true;
 			});
 

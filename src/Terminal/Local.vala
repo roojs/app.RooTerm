@@ -39,14 +39,12 @@ namespace RooTerm.Terminal
 		 * Build a local shell tab (call {@link spawn} to start).
 		 *
 		 * @param connection Localhost connection
-		 * @param font Pango font string
-		 * @param config App config (VTE opacity)
+		 * @param config App config (VTE opacity / font)
 		 * @param cwd Working directory (home when empty)
 		 */
-		public Local(Host.Connection connection, 
-			string font, RooTerm.Config config, string cwd = "")
+		public Local(Host.Connection connection, RooTerm.Config config, string cwd = "")
 		{
-			base(connection, font, config);
+			base(connection, config);
 			this.start_cwd = cwd;
 			this.cwd = cwd;
 			this.stream = new Stream(this);

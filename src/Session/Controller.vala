@@ -33,10 +33,6 @@ namespace RooTerm.Session
 		public Host.Connection localhost;
 		public string display = "Roo Term";
 		/**
-		 * VTE font from Ásbrú defaults (``Monospace 9`` etc.).
-		 */
-		public string terminal_font = "Monospace 9";
-		/**
 		 * Open host pages by connection uuid (same key as {@link Gtk.Stack} names).
 		 */
 		private Gee.HashMap<string, Host.Page> by_uuid = new Gee.HashMap<string, Host.Page>();
@@ -112,7 +108,7 @@ namespace RooTerm.Session
 				this.stack.pages.add_named(page, connection.uuid);
 			}
 
-			var term = new Terminal.Ssh(connection, this.terminal_font, this.config, stream);
+			var term = new Terminal.Ssh(connection, this.config, stream);
 			var tab = page.add(term);
 			term.close_tab.connect(() => {
 				page.tab_view.close_page(tab);
@@ -153,7 +149,7 @@ namespace RooTerm.Session
 				this.stack.pages.add_named(page, page_connection.uuid);
 			}
 
-			var term = new Terminal.Local(connection, this.terminal_font, this.config, cwd);
+			var term = new Terminal.Local(connection, this.config, cwd);
 			var tab = page.add(term);
 			term.close_tab.connect(() => {
 				page.tab_view.close_page(tab);

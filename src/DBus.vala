@@ -54,19 +54,28 @@ namespace RooTerm
 		public DBus(Application application)
 		{
 			this.application = application;
+			var bus_name = "org.roojs.RooTerm.DBus";
+			var object_path = "/org/roojs/RooTerm/DBus";
+			if (application.application_id == "org.roojs.rooterm.preferences") {
+				bus_name = "org.roojs.RooTerm.Preferences.DBus";
+				object_path = "/org/roojs/RooTerm/Preferences";
+			}
 			GLib.Bus.own_name(
 				GLib.BusType.SESSION,
-				"org.roojs.RooTerm.DBus",
+				bus_name,
 				GLib.BusNameOwnerFlags.NONE,
 				(conn) => {
 					try {
-						conn.register_object("/org/roojs/RooTerm/DBus", this);
+						conn.register_object(object_path, this);
 					} catch (GLib.IOError e) {
 						GLib.warning("D-Bus register failed: %s", e.message);
 					}
 				},
 				() => {
 					GLib.debug("D-Bus name acquired");
+					if (this.application.application_id == "org.roojs.rooterm.preferences") {
+						return;
+					}
 					var window = this.application.window;
 					if (window != null && window.is_docked && window.visible) {
 						GLib.debug("redock after name acquired dock_mode=%d", (int) this.dock_mode);
@@ -102,23 +111,21 @@ namespace RooTerm
 		 * @param parameters Method arguments variant
 		 */
 		[DBus (visible = false)]
-		public void call(string method, GLib.Variant parameters)
+		public void call_shell(string method, GLib.Variant parameters)
 		{
 			try {
-				GLib.Bus.get_sync(GLib.BusType.SESSION, null).call_sync(
-					"org.roojs.RooTerm.Shell",
+				GLib.Bus.get_sync(GLib.BusType.SESSION, null).call_sync("org.roojs.RooTerm.Shell",
 					"/org/roojs/RooTerm/Shell", "org.roojs.RooTerm.Shell",
-					method, parameters,
-					null, GLib.DBusCallFlags.NONE, 2000, null
-				);
+					method, parameters, null, GLib.DBusCallFlags.NONE, 2000, null);
 			} catch (GLib.Error e) {
 				GLib.debug("Shell %s: %s", method, e.message);
 			}
 		}
 
 		/**
-		 * Async Shell call — use when the main loop must keep running (prefs
-		 * show/hide; avoids ``call_sync`` deadlock with Shell ``skip_taskbar``).
+		 * Async ``org.roojs.RooTerm.Shell`` call — use when the main loop must keep
+		 * running (prefs show/hide; avoids ``call_sync`` deadlock with Shell
+		 * ``skip_taskbar``).
 		 *
 		 * Not exported on ``org.roojs.RooTerm.DBus``.
 		 *
@@ -126,14 +133,13 @@ namespace RooTerm
 		 * @param parameters Method arguments variant
 		 */
 		[DBus (visible = false)]
-		public void call_async(string method, GLib.Variant parameters)
+		public void call_shell_async(string method, GLib.Variant parameters)
 		{
 			try {
 				var bus = GLib.Bus.get_sync(GLib.BusType.SESSION, null);
 				bus.call.begin("org.roojs.RooTerm.Shell",
 					"/org/roojs/RooTerm/Shell", "org.roojs.RooTerm.Shell",
-					method, parameters,
-					null, GLib.DBusCallFlags.NONE, -1, null,
+					method, parameters, null, GLib.DBusCallFlags.NONE, -1, null,
 					(s, res) => {
 						try {
 							bus.call.end(res);
@@ -145,6 +151,29 @@ namespace RooTerm
 			} catch (GLib.Error e) {
 				GLib.debug("Shell %s: %s", method, e.message);
 			}
+		}
+
+		/**
+		 * Sync call to ``org.gnome.Shell.Extensions`` (install / enable probes).
+		 *
+		 * Not exported on ``org.roojs.RooTerm.DBus``.
+		 *
+		 * @param method ``GetExtensionInfo`` / ``EnableExtension`` / …
+		 * @param parameters Method arguments variant
+		 * @param reply_type Expected reply type
+		 * @return Full method reply variant
+		 * @throws GLib.Error On D-Bus failure
+		 */
+		[DBus (visible = false)]
+		public GLib.Variant call_desktop(
+			string method,
+			GLib.Variant parameters,
+			GLib.VariantType reply_type
+		) throws GLib.Error
+		{
+			return GLib.Bus.get_sync(GLib.BusType.SESSION, null).call_sync("org.gnome.Shell.Extensions",
+				"/org/gnome/Shell/Extensions", "org.gnome.Shell.Extensions",
+				method, parameters, reply_type, GLib.DBusCallFlags.NONE, -1, null);
 		}
 
 		/**
@@ -179,7 +208,7 @@ namespace RooTerm
 				}
 			}
 			window.terminal_menu.popdown();
-			this.call("toggle", new GLib.Variant("(s)", "main"));
+			this.call_shell("toggle", new GLib.Variant("(s)", "main"));
 		}
 
 		/**
@@ -193,20 +222,14 @@ namespace RooTerm
 		{
 			if (this.quitting || force) {
 				this.quitting = true;
-				this.call(
-					"exited",
-					new GLib.Variant("(s)", this.application.application_id)
-				);
+				this.call_shell("exited", new GLib.Variant("(s)", this.application.application_id));
 				this.application.quit();
 				return;
 			}
 			var window = this.application.window;
 			if (window == null) {
 				this.quitting = true;
-				this.call(
-					"exited",
-					new GLib.Variant("(s)", this.application.application_id)
-				);
+				this.call_shell("exited", new GLib.Variant("(s)", this.application.application_id));
 				this.application.quit();
 				return;
 			}
@@ -232,10 +255,7 @@ namespace RooTerm
 					return;
 				}
 				this.quitting = true;
-				this.call(
-					"exited",
-					new GLib.Variant("(s)", this.application.application_id)
-				);
+				this.call_shell("exited", new GLib.Variant("(s)", this.application.application_id));
 				this.application.quit();
 			});
 			alert.present(window);
@@ -254,17 +274,22 @@ namespace RooTerm
 		[DBus (name = "skip_taskbar")]
 		public void skip_taskbar(string role, bool skip)
 		{
-			if (this.application.window == null) {
-				return;
-			}
-			var target = this.application.window as Gtk.Window;
+			Gtk.Window target;
 			switch (role) {
 				case "main":
+					if (this.application.application_id == "org.roojs.rooterm.preferences"
+							|| this.application.window == null) {
+						return;
+					}
 					target = this.application.window;
 					break;
 
 				case "preferences":
-					target = this.application.window.preferences_editor;
+					if (this.application.application_id != "org.roojs.rooterm.preferences"
+							|| this.application.preferences == null) {
+						return;
+					}
+					target = this.application.preferences;
 					break;
 
 				default:
@@ -277,29 +302,6 @@ namespace RooTerm
 			}
 			x11.set_skip_taskbar_hint(skip);
 			x11.set_skip_pager_hint(skip);
-		}
-
-		/**
-		 * Show {@link Dialog.Preferences} (Shell panel menu / ``Ctrl+,``).
-		 */
-		[DBus (name = "preferences")]
-		public void preferences()
-		{
-			if (this.application.window == null) {
-				this.application.activate();
-			}
-			var window = this.application.window;
-			if (window == null) {
-				return;
-			}
-			var prefs = window.preferences_editor;
-			prefs.fill();
-			prefs.present();
-			// map → register (idle). Async show — call_sync deadlocks with Shell skip_taskbar.
-			GLib.Timeout.add(50, () => {
-				this.call_async("show", new GLib.Variant("(s)", "preferences"));
-				return false;
-			});
 		}
 
 		/**

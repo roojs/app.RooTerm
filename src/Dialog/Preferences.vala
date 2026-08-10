@@ -19,42 +19,58 @@
 namespace RooTerm.Dialog
 {
 	/**
-	 * Preferences: standalone {@link Adw.Window} (Shell Show/Hide) with a left
-	 * section list and {@link Adw.PreferencesPage}s — **General** (geometry),
-	 * **Theme and colours**, and **Keyboard shortcuts** (``key_*``). Rows apply
-	 * live via {@link Row.send} / ``config_update``; Close only Hides. Does not
-	 * write ``config.json``.
+	 * Preferences window for the ``--preferences`` process only.
+	 * Implements {@link ShellInterface} so {@link GnomeShell.register} works
+	 * the same as main. Rows use ``config_update`` on main; does not write
+	 * ``config.json``.
 	 *
 	 * == Example ==
 	 *
 	 * {{{
-	 * window.preferences_editor.fill();
-	 * window.dbus.call("show", new GLib.Variant("(s)", "preferences"));
+	 * // rooterm --preferences → Application.activate creates this window
 	 * }}}
 	 */
-	public class Preferences : Adw.Window
+	public class Preferences : Adw.Window, ShellInterface
 	{
-		public RooTerm.MainWindow window;
+		public Application app;
+		public GnomeShell shell;
 		public Config config;
+		/**
+		 * Unused on prefs (main-only); required by {@link ShellInterface}.
+		 */
+		public bool block_toggle { get; set; default = false; }
 		public Gee.HashMap<string, Row> rows {
 			get;
 			set;
 			default = new Gee.HashMap<string, Row>();
 		}
 		/**
-		 * Live VTE theme preview (not a config-bound {@link Row}).
+		 * Live VTE theme preview on the Theme and colours page.
 		 */
 		public RowThemePreview theme_preview;
+		/**
+		 * Live VTE preview on the Font page (same row widgets as theme preview).
+		 */
+		public RowThemePreview font_preview;
 
 		/**
-		 * Build the window bound to ``window`` (Shell register / hide).
-		 *
-		 * @param window Main window
+		 * Session {@link DBus} for Shell Register / Show / Hide.
 		 */
-		public Preferences(RooTerm.MainWindow window)
+		public DBus dbus {
+			get {
+				return this.app.dbus;
+			}
+		}
+
+		/**
+		 * Build the prefs window for the preferences application.
+		 *
+		 * @param app Preferences {@link Application} (prefs app id)
+		 */
+		public Preferences(Application app)
 		{
 			Object(
-				application: window.application,
+				application: app,
 				title: "Preferences",
 				resizable: false,
 				hide_on_close: false,
@@ -62,13 +78,21 @@ namespace RooTerm.Dialog
 				default_height: 570
 			);
 			this.add_css_class("floating-dialog");
-			this.window = window;
+			this.app = app;
+			this.shell = new GnomeShell(this);
 			this.config = Config.load();
 			this.config.themes.load();
+			var css = new Gtk.CssProvider();
+			css.load_from_resource("/style.css");
+			Gtk.StyleContext.add_provider_for_display(
+				this.get_display(),
+				css,
+				Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+			);
 			this.map.connect(() => {
-				// Defer off map — call_sync Register during map deadlocks with Shell.
+				// Defer off map — Register during map deadlocks with Shell skip_taskbar.
 				GLib.Idle.add(() => {
-					this.window.shell.register(this, "preferences");
+					this.shell.register(this, "preferences");
 					return false;
 				});
 			});
@@ -97,8 +121,22 @@ namespace RooTerm.Dialog
 			this.add("theme-category", theme_bg, theme_group);
 			var theme_name = new RowThemeSelect(this.config, "theme-name", theme_bg);
 			this.add("theme-name", theme_name, theme_group);
-			this.theme_preview = new RowThemePreview(this.config, theme_name, opacity);
+
+			var font_page = new Adw.PreferencesPage() {
+				title = "Font",
+				icon_name = "preferences-desktop-font-symbolic"
+			};
+			var font_group = new Adw.PreferencesGroup() { title = "Font" };
+			font_page.add(font_group);
+			var font_family = new RowFontFamily(this.config, "font-family");
+			this.add("font-family", font_family, font_group);
+			var font_size = new RowScale(this.config, "font-size", 8, 24, 1);
+			this.add("font-size", font_size, font_group);
+
+			this.theme_preview = new RowThemePreview(this);
 			theme_group.add(this.theme_preview.row);
+			this.font_preview = new RowThemePreview(this);
+			font_group.add(this.font_preview.row);
 
 			var shortcuts = new Adw.PreferencesPage() {
 				title = "Keyboard shortcuts",
@@ -108,7 +146,7 @@ namespace RooTerm.Dialog
 			shortcuts.add(keys);
 			var toggle = new RowKeySelect(this.config, "key-toggle") {
 				block_desktop = true,
-				window = this.window
+				shell = this.shell
 			};
 			this.add("key-toggle", toggle, keys);
 			this.add("key-search", new RowKeySelect(this.config, "key-search"), keys);
@@ -131,6 +169,8 @@ namespace RooTerm.Dialog
 			stack.add_titled_with_icon(
 				theme_page, "theme", "Theme and colours", "preferences-color-symbolic");
 			stack.add_titled_with_icon(
+				font_page, "font", "Font", "preferences-desktop-font-symbolic");
+			stack.add_titled_with_icon(
 				shortcuts, "shortcuts", "Keyboard shortcuts", "input-keyboard-symbolic");
 
 			var nav = new Gtk.ListBox() {
@@ -145,6 +185,13 @@ namespace RooTerm.Dialog
 				margin_bottom = 10
 			});
 			nav.append(new Gtk.Label("Theme and colours") {
+				xalign = 0f,
+				margin_start = 12,
+				margin_end = 12,
+				margin_top = 10,
+				margin_bottom = 10
+			});
+			nav.append(new Gtk.Label("Font") {
 				xalign = 0f,
 				margin_start = 12,
 				margin_end = 12,
@@ -184,6 +231,11 @@ namespace RooTerm.Dialog
 						break;
 
 					case 2:
+						stack.visible_child_name = "font";
+						split.content.title = "Font";
+						break;
+
+					case 3:
 						stack.visible_child_name = "shortcuts";
 						split.content.title = "Keyboard shortcuts";
 						break;
@@ -217,7 +269,7 @@ namespace RooTerm.Dialog
 
 			this.close_request.connect(() => {
 				((RowKeySelect) this.rows.get("key-toggle")).fill();
-				this.window.dbus.call_async("hide", new GLib.Variant("(s)", "preferences"));
+				this.dbus.call_shell_async("hide", new GLib.Variant("(s)", "preferences"));
 				return true;
 			});
 			this.fill();
@@ -247,8 +299,8 @@ namespace RooTerm.Dialog
 				row.config = this.config;
 				row.fill();
 			}
-			this.theme_preview.config = this.config;
 			this.theme_preview.fill();
+			this.font_preview.fill();
 		}
 	}
 }

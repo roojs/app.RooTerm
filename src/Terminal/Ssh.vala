@@ -34,13 +34,12 @@ namespace RooTerm.Terminal
 		 * Build a scrolled VTE for ``connection`` (call {@link spawn} to start SSH).
 		 *
 		 * @param connection Host to open
-		 * @param font Pango font string (Ásbrú ``terminal font``)
-		 * @param config App config (VTE opacity)
+		 * @param config App config (VTE opacity / font)
 		 * @param in_stream Optional stream to adopt (flags bag or pre-wired); otherwise a new stream
 		 */
-		public Ssh(Host.Connection connection, string font, RooTerm.Config config, Stream? in_stream = null)
+		public Ssh(Host.Connection connection, RooTerm.Config config, Stream? in_stream = null)
 		{
-			base(connection, font, config);
+			base(connection, config);
 
 			if (in_stream != null) {
 				this.stream = in_stream;

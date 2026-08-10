@@ -1,6 +1,9 @@
 export const DBUS_DEST = 'org.roojs.RooTerm.DBus';
 export const DBUS_PATH = '/org/roojs/RooTerm/DBus';
 export const DBUS_IFACE = 'org.roojs.RooTerm.DBus';
+export const PREFS_DBUS_DEST = 'org.roojs.RooTerm.Preferences.DBus';
+export const PREFS_DBUS_PATH = '/org/roojs/RooTerm/Preferences';
 export const APP_ID = 'org.roojs.rooterm';
+export const PREFS_APP_ID = 'org.roojs.rooterm.preferences';
 export const SHELL_DEST = 'org.roojs.RooTerm.Shell';
 export const SHELL_PATH = '/org/roojs/RooTerm/Shell';
