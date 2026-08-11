@@ -127,6 +127,16 @@ namespace RooTerm
 		[Description(nick = "Preferences", blurb = "Open the preferences window")]
 		public string key_preferences { get; set; default = "<Control>comma"; }
 		/**
+		 * Reset the focused VTE.
+		 */
+		[Description(nick = "Reset terminal", blurb = "Reset the current terminal")]
+		public string key_reset_terminal { get; set; default = "<Control><Shift>k"; }
+		/**
+		 * Quit the application.
+		 */
+		[Description(nick = "Quit", blurb = "Quit Roo Term")]
+		public string key_quit { get; set; default = "<Control><Shift>q"; }
+		/**
 		 * VTE background opacity percent (10–100). Host chrome stays opaque.
 		 */
 		[Description(nick = "Opacity", blurb = "Terminal background opacity percent")]
@@ -404,6 +414,14 @@ namespace RooTerm
 
 					case "key-preferences":
 						app.set_accels_for_action("win.preferences", { accel });
+						break;
+
+					case "key-reset-terminal":
+						app.set_accels_for_action("win.reset-terminal", { accel });
+						break;
+
+					case "key-quit":
+						app.set_accels_for_action("win.quit", { accel });
 						break;
 				}
 			});

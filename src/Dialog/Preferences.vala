@@ -162,6 +162,9 @@ namespace RooTerm.Dialog
 			this.add("key-paste", new RowKeySelect(this.config, "key-paste"), keys);
 			this.add("key-preferences",
 				new RowKeySelect(this.config, "key-preferences"), keys);
+			this.add("key-reset-terminal",
+				new RowKeySelect(this.config, "key-reset-terminal"), keys);
+			this.add("key-quit", new RowKeySelect(this.config, "key-quit"), keys);
 
 			var stack = new Adw.ViewStack();
 			stack.add_titled_with_icon(

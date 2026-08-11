@@ -158,6 +158,9 @@ namespace RooTerm
 				page.current.terminal.reset(true, true);
 			});
 			this.window.add_action(reset_action);
+			app.set_accels_for_action("win.reset-terminal", {
+				this.window.config.key_reset_terminal
+			});
 
 			var toggle_action = new GLib.SimpleAction("toggle", null);
 			toggle_action.activate.connect(() => {
@@ -194,6 +197,7 @@ namespace RooTerm
 				this.window.dbus.quit();
 			});
 			this.window.add_action(quit_action);
+			app.set_accels_for_action("win.quit", { this.window.config.key_quit });
 		}
 	}
 }
