@@ -123,6 +123,7 @@ namespace RooTerm.Terminal
 		public bool close_confirmed = false;
 		private Gtk.Box close_bar;
 		private Gtk.ProgressBar close_progress;
+		private Gtk.ShortcutController? edit_shortcuts = null;
 
 		/**
 		 * Emitted when the tab should be closed (exit / countdown).
@@ -148,7 +149,7 @@ namespace RooTerm.Terminal
 		public signal void state_changed();
 
 		/**
-		 * Build scrolled VTE with copy/paste shortcuts and busy/ready marks.
+		 * Build scrolled VTE with CAPTURE copy/paste shortcuts and busy/ready marks.
 		 * Cwd / prompt watching is {@link Stream} (created by subclasses).
 		 *
 		 * @param connection Host or Localhost this tab belongs to
@@ -182,6 +183,10 @@ namespace RooTerm.Terminal
 			config.notify.connect((s, pspec) => {
 				if (pspec.get_name() == "font-family" || pspec.get_name() == "font-size") {
 					this.terminal.font_desc = config.font_desc();
+					return;
+				}
+				if (pspec.get_name() == "key-copy" || pspec.get_name() == "key-paste") {
+					this.install_edit_shortcuts(config);
 					return;
 				}
 				if (pspec.get_name() != "opacity"
@@ -280,6 +285,7 @@ namespace RooTerm.Terminal
 				return true;
 			});
 			this.terminal.add_controller(zoom);
+			this.install_edit_shortcuts(config);
 
 			var menu_click = new Gtk.GestureClick() {
 				button = Gdk.BUTTON_SECONDARY
@@ -313,6 +319,34 @@ namespace RooTerm.Terminal
 					return false;
 				});
 			});
+		}
+
+		/**
+		 * CAPTURE copy/paste on the VTE so the chord does not fall through as ^C/^V.
+		 */
+		private void install_edit_shortcuts(RooTerm.Config config)
+		{
+			if (this.edit_shortcuts != null) {
+				this.terminal.remove_controller(this.edit_shortcuts);
+			}
+			this.edit_shortcuts = new Gtk.ShortcutController() {
+				propagation_phase = Gtk.PropagationPhase.CAPTURE
+			};
+			this.edit_shortcuts.add_shortcut(new Gtk.Shortcut(
+				Gtk.ShortcutTrigger.parse_string(config.key_copy),
+				new Gtk.CallbackAction((w, args) => {
+					this.terminal.copy_clipboard_format(Vte.Format.TEXT);
+					return true;
+				})
+			));
+			this.edit_shortcuts.add_shortcut(new Gtk.Shortcut(
+				Gtk.ShortcutTrigger.parse_string(config.key_paste),
+				new Gtk.CallbackAction((w, args) => {
+					this.terminal.paste_clipboard();
+					return true;
+				})
+			));
+			this.terminal.add_controller(this.edit_shortcuts);
 		}
 
 		/**

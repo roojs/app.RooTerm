@@ -122,10 +122,8 @@ namespace RooTerm.Terminal
 				}
 				this.menu.set_parent(term.terminal);
 			}
-			var copy = this.window.lookup_action("copy") as GLib.SimpleAction;
-			if (copy != null) {
-				copy.set_enabled(term.terminal.get_has_selection());
-			}
+			/* Never disable win.copy here — it backs Ctrl+Shift+C; a sticky
+			 * disable lets the chord fall through to VTE as ^C. */
 			this.menu.pointing_to = Gdk.Rectangle() {
 				x = (int) x,
 				y = (int) y,
