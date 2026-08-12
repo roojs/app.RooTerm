@@ -110,8 +110,8 @@ export default class RooTermExtension extends Extension {
         this.redockSignalId = Gio.DBus.session.signal_subscribe(
             DBUS_DEST, DBUS_IFACE, 'redock', DBUS_PATH, null,
             Gio.DBusSignalFlags.NONE,
-            function() {
-                self.dock.scheduleDock();
+            function(conn, sender, objectPath, ifaceName, signalName, params) {
+                self.dock.scheduleDock(params.get_child_value(0).get_boolean());
             }
         );
     }

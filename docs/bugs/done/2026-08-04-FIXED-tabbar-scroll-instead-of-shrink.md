@@ -9,7 +9,7 @@
 
 **Related:**
 
-- **ℹ️** `docs/plans/0.3-DONE-session-states-history-guake.md` — many tabs: **cramp / shrink**, ellipsis; **🚫** Guake tab scroll buttons
+- **ℹ️** `docs/plans/done/0.3-DONE-session-states-history-guake.md` — many tabs: **cramp / shrink**, ellipsis; **🚫** Guake tab scroll buttons
 - **ℹ️** `docs/bugs/done/2026-08-01-FIXED-tab-password-localhost-tree.md` — `Host.TabBar`; agreed width: **min(30% of strip, equal share)**
 - **ℹ️** `src/Host/TabBar.vala` — current: fixed `width_request = 280` + horizontal `ScrolledWindow`
 - **ℹ️** GTK CSS has **no** `max-width` (theme parser error) — cap must be Vala `width_request`

@@ -95,7 +95,9 @@ namespace RooTerm
 			this.dbus.dock_mode = true;
 			GLib.debug(
 				"show_docked size=%dx%d dock_mode=1",
-				this.monitor_geo.width * this.config.width / 100,
+				this.fullscreen
+					? this.monitor_geo.width
+					: this.monitor_geo.width * this.config.width / 100,
 				this.fullscreen
 					? this.monitor_geo.height
 					: this.monitor_geo.height * this.config.height / 100
@@ -104,7 +106,9 @@ namespace RooTerm
 			this.resizable = false;
 			this.add_css_class("drop-down");
 			this.set_default_size(
-				this.monitor_geo.width * this.config.width / 100,
+				this.fullscreen
+					? this.monitor_geo.width
+					: this.monitor_geo.width * this.config.width / 100,
 				this.fullscreen
 					? this.monitor_geo.height
 					: this.monitor_geo.height * this.config.height / 100
@@ -143,6 +147,13 @@ namespace RooTerm
 			var geo = Gdk.Rectangle() { width = 1280, height = 800 };
 			if (monitors.get_n_items() > 0) {
 				geo = ((Gdk.Monitor) monitors.get_item(0)).geometry;
+				for (var i = 1; i < monitors.get_n_items(); i++) {
+					var g = ((Gdk.Monitor) monitors.get_item(i)).geometry;
+					if (g.width * g.height <= geo.width * geo.height) {
+						continue;
+					}
+					geo = g;
+				}
 			}
 
 			Object(
@@ -427,7 +438,9 @@ namespace RooTerm
 					return;
 				}
 				this.set_default_size(
-					this.monitor_geo.width * this.config.width / 100,
+					this.fullscreen
+						? this.monitor_geo.width
+						: this.monitor_geo.width * this.config.width / 100,
 					this.fullscreen
 						? this.monitor_geo.height
 						: this.monitor_geo.height * this.config.height / 100
@@ -481,7 +494,7 @@ namespace RooTerm
 					}
 					GLib.debug("redock after ensure dock_mode=%d",
 						(int) this.dbus.dock_mode);
-					this.dbus.redock();
+					this.dbus.redock(this.fullscreen);
 				});
 				return false;
 			});

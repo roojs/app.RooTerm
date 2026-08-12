@@ -151,7 +151,7 @@ export class ShellService {
                 this.showMain();
                 actor.ease({
                     translation_y: 0,
-                    duration: 180,
+                    duration: 320,
                     mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
                     onStopped: function() {
                         actor.translation_y = 0;
@@ -237,7 +237,7 @@ export class ShellService {
             var height = Math.max(this.win[role].get_frame_rect().height, 1);
             actor.ease({
                 translation_y: -height,
-                duration: 180,
+                duration: 320,
                 mode: Clutter.AnimationMode.EASE_IN_CUBIC,
                 onStopped: function() {
                     if (!self.win[role] || !self.win[role].rootermHiding) {

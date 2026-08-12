@@ -37,7 +37,7 @@
 - **✔️** `TreeNodes.append` / `by_uuid.set` — duplicate `uuid = "localhost"` overwrites the map while **both** roots stay in the nest.
 - **✔️** Startup restore only `by_uuid.unset` then `open_local(localhost, cwd)` invents new nest rows; `save` keeps old + new.
 - **ℹ️** 0.13 assumed load left `LOCAL_PATH` in `by_uuid` only (no nest). After tree-owned connections, `TreeNodes.from_json` nests them under Localhost.
-- **ℹ️** Related: `docs/plans/0.13-DONE-auto-restore-local-tabs.md`, `docs/bugs/done/2026-08-01-FIXED-tab-password-localhost-tree.md`.
+- **ℹ️** Related: `docs/plans/done/0.13-DONE-auto-restore-local-tabs.md`, `docs/bugs/done/2026-08-01-FIXED-tab-password-localhost-tree.md`.
 
 ---
 

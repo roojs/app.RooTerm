@@ -30,8 +30,8 @@
 - **ℹ️** First open: {@link MainWindow} / {@link SessionController.open_new} → `new OpenSession` → `run()` → `spawn` + `login`.
 - **ℹ️** EXITED hint text tells the user **Enter to reconnect** (`SshTerminal` `child_exited`).
 - **✔️** {@link SshTerminal.reconnect} only resets stream marks and calls `this.spawn()` — no job.
-- **ℹ️** Already flagged as **💩** in `docs/plans/0.5-DONE-dialog-terminal-workflows.md` (dead-tab reconnect still only `spawn()`).
-- **🚫** Not a feature gap for “delete connection closes sessions” (`docs/plans/0.6-DONE-…`) — wrong place for this fix.
+- **ℹ️** Already flagged as **💩** in `docs/plans/done/0.5-DONE-dialog-terminal-workflows.md` (dead-tab reconnect still only `spawn()`).
+- **🚫** Not a feature gap for “delete connection closes sessions” (`docs/plans/done/0.6-DONE-…`) — wrong place for this fix.
 
 ---
 

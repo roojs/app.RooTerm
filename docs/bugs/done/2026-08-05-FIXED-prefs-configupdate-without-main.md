@@ -9,7 +9,7 @@
 
 **Related:**
 
-- **ℹ️** `docs/plans/0.15.1-DONE-prefs-process-dbus-cleanup.md` — prefs never wrote config; main `config_update` owned save
+- **ℹ️** `docs/plans/done/0.15.1-DONE-prefs-process-dbus-cleanup.md` — prefs never wrote config; main `config_update` owned save
 - **ℹ️** `docs/bugs/done/2026-08-04-FIXED-f1-cold-start-prefs-and-dock.md` — main/prefs process split; `exited(app_id)`
 - **ℹ️** `src/Dialog/Row.vala` — `send`
 - **ℹ️** `src/Dialog/RowScale.vala` — debounced scale send

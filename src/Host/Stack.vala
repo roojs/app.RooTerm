@@ -41,18 +41,38 @@ namespace RooTerm.Host
 		}
 
 		/**
-		 * Flip tab chrome on every page: bar into top slot (full screen) or
-		 * bottom (docked). {@link Page.tab_view} stays put; only the bar is
-		 * reparented.
+		 * Full-screen chrome + docked geometry.
+		 *
+		 * With ``window`` docked: ``redock``, then after the Shell ease
+		 * (~320 ms) flip chrome and ``set_default_size``. Without ``window``
+		 * (or undocked): chrome only — used when adding pages while already
+		 * full screen.
 		 *
 		 * Not ideal: walks every host page, including ones that are not
 		 * visible — only the current page needs the chrome flip. Leave as-is
 		 * for now.
 		 *
 		 * @param on True = strip on top (full-screen chrome); false = bottom
+		 * @param window Main window when the action owns redock / size
 		 */
-		public void fullscreen(bool on)
+		public void fullscreen(bool on, MainWindow? window = null)
 		{
+			if (window != null && window.is_docked) {
+				window.dbus.redock(on);
+				GLib.Timeout.add(320, () => {
+					this.fullscreen(window.fullscreen);
+					window.set_default_size(
+						window.fullscreen
+							? window.monitor_geo.width
+							: window.monitor_geo.width * window.config.width / 100,
+						window.fullscreen
+							? window.monitor_geo.height
+							: window.monitor_geo.height * window.config.height / 100
+					);
+					return false;
+				});
+				return;
+			}
 			for (var child = this.pages.get_first_child();
 					child != null; child = child.get_next_sibling()) {
 				var page = child as Page;
@@ -65,8 +85,10 @@ namespace RooTerm.Host
 				} else {
 					page.chrome_bottom.append(page.tab_bar);
 				}
-				page.tab_bar.fs_btn.icon_name = on ? "view-restore-symbolic" : "view-fullscreen-symbolic";
-				page.tab_bar.fs_btn.tooltip_text = on ? "Exit full screen" : "Full screen";
+				page.tab_bar.fs_btn.icon_name = on
+					? "view-restore-symbolic" : "view-fullscreen-symbolic";
+				page.tab_bar.fs_btn.tooltip_text = on
+					? "Exit full screen" : "Full screen";
 			}
 		}
 	}

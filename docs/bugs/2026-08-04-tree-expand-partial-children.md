@@ -17,7 +17,7 @@
 ## Evidence
 
 - **ℹ️** User report 2026-08-04 — reproduce by expanding; partial list; collapse + expand again fills out.
-- **ℹ️** Likely related to tree expand save/restore: **`docs/plans/0.14-DONE-tree-expand-save-restore.md`** (`Connection.expanded`, `TreeListModel` `autoexpand = false`, bind on `GROUP` / `lxc_host`).
+- **ℹ️** Likely related to tree expand save/restore: **`docs/plans/done/0.14-DONE-tree-expand-save-restore.md`** (`Connection.expanded`, `TreeListModel` `autoexpand = false`, bind on `GROUP` / `lxc_host`).
 - **🔷** 2026-08-05 — user: have **not** seen it recently; keep the bug open.
 
 ## Root cause

@@ -342,7 +342,7 @@ namespace RooTerm
 					window.monitor_geo.width * this.width / 100,
 					window.monitor_geo.height * this.height / 100
 				);
-				window.dbus.redock();
+				window.dbus.redock(window.fullscreen);
 			});
 			this.notify["width"].connect(() => {
 				if (!window.is_docked || window.fullscreen) {
@@ -352,13 +352,13 @@ namespace RooTerm
 					window.monitor_geo.width * this.width / 100,
 					window.monitor_geo.height * this.height / 100
 				);
-				window.dbus.redock();
+				window.dbus.redock(window.fullscreen);
 			});
 			this.notify["placement"].connect(() => {
 				if (!window.is_docked || window.fullscreen) {
 					return;
 				}
-				window.dbus.redock();
+				window.dbus.redock(window.fullscreen);
 			});
 			this.notify.connect((_, pspec) => {
 				if (!pspec.name.has_prefix("key-")) {

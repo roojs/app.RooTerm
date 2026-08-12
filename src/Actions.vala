@@ -179,17 +179,9 @@ namespace RooTerm
 				fullscreen_action.set_state(value);
 				this.window.fullscreen = value.get_boolean();
 				this.window.dbus.fullscreen = this.window.fullscreen;
-				this.window.host_stack.fullscreen(this.window.fullscreen);
-				if (!this.window.is_docked) {
-					return;
-				}
-				this.window.set_default_size(
-					this.window.monitor_geo.width * this.window.config.width / 100,
-					this.window.fullscreen
-						? this.window.monitor_geo.height
-						: this.window.monitor_geo.height * this.window.config.height / 100
+				this.window.host_stack.fullscreen(
+					this.window.fullscreen, this.window
 				);
-				this.window.dbus.redock();
 			});
 			fullscreen_action.activate.connect(() => {
 				fullscreen_action.change_state(

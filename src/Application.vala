@@ -200,19 +200,21 @@ namespace RooTerm
 						this.window.show_docked();
 					}
 					GLib.debug("redock after remorph dock_mode=%d", (int) this.dbus.dock_mode);
-					this.dbus.redock();
+					this.dbus.redock(this.window.fullscreen);
 				});
 				return;
 			}
 			this.dbus.call_shell("show", new GLib.Variant("(s)", "main"));
 			this.window.set_default_size(
-				this.window.monitor_geo.width * this.window.config.width / 100,
+				this.window.fullscreen
+					? this.window.monitor_geo.width
+					: this.window.monitor_geo.width * this.window.config.width / 100,
 				this.window.fullscreen
 					? this.window.monitor_geo.height
 					: this.window.monitor_geo.height * this.window.config.height / 100
 			);
 			GLib.debug("redock activate docked dock_mode=%d", (int) this.dbus.dock_mode);
-			this.dbus.redock();
+			this.dbus.redock(this.window.fullscreen);
 		}
 
 		protected override int command_line(GLib.ApplicationCommandLine command_line)

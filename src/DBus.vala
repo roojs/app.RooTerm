@@ -79,7 +79,7 @@ namespace RooTerm
 					var window = this.application.window;
 					if (window != null && window.is_docked && window.visible) {
 						GLib.debug("redock after name acquired dock_mode=%d", (int) this.dock_mode);
-						this.redock();
+						this.redock(window.fullscreen);
 					}
 				},
 				() => {
@@ -90,9 +90,12 @@ namespace RooTerm
 
 		/**
 		 * Cue the Shell extension to (re)apply underbar dock geometry on main.
+		 * ``fullscreen`` is passed explicitly so Shell does not race a Properties.Get.
+		 *
+		 * @param fullscreen True → size to the monitor work area
 		 */
 		[DBus (name = "redock")]
-		public signal void redock();
+		public signal void redock(bool fullscreen);
 
 		/**
 		 * True when {@link MainWindow} is in underbar drop-down mode.
@@ -208,7 +211,7 @@ namespace RooTerm
 					if (!window.is_docked) {
 						window.show_docked();
 					}
-					this.redock();
+					this.redock(window.fullscreen);
 				});
 				if (window.block_toggle || !window.is_docked) {
 					return;

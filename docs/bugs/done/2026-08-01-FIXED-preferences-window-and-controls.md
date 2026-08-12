@@ -9,7 +9,7 @@
 
 **Related:**
 
-- **ℹ️** `docs/plans/0.8-DONE-preferences.md` — first prefs dialog (spin + entry; apply on close; `PreferencesDialog`)
+- **ℹ️** `docs/plans/done/0.8-DONE-preferences.md` — first prefs dialog (spin + entry; apply on close; `PreferencesDialog`)
 - **ℹ️** `docs/bugs/2026-08-01-toggle-key-tooltip-and-binding.md` — global toggle binding / F1
 - **ℹ️** `docs/bugs/done/2026-08-01-FIXED-vte-transparency.md` — VTE glass (✅)
 

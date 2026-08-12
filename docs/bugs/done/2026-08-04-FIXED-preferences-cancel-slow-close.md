@@ -9,7 +9,7 @@
 
 **Related:**
 
-- **ℹ️** `docs/plans/0.15.1-DONE-prefs-process-dbus-cleanup.md` — Cancel snap restore via `Row.send` / `ConfigUpdate` (superseded UX)
+- **ℹ️** `docs/plans/done/0.15.1-DONE-prefs-process-dbus-cleanup.md` — Cancel snap restore via `Row.send` / `ConfigUpdate` (superseded UX)
 - **ℹ️** `docs/bugs/done/2026-08-01-FIXED-preferences-window-and-controls.md` — live apply prefs UX
 
 ---
