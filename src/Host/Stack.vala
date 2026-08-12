@@ -41,35 +41,32 @@ namespace RooTerm.Host
 		}
 
 		/**
-		 * Put the tab strip above the VTE on every page when ``on``, or below when off.
-		 * Updates the full-screen button icon on each {@link TabBar}.
+		 * Flip tab chrome on every page: bar into top slot (full screen) or
+		 * bottom (docked). {@link Page.tab_view} stays put; only the bar is
+		 * reparented.
 		 *
-		 * Not ideal: walks every host page, including ones that are not visible —
-		 * only the current page needs the chrome flip. Leave as-is for now.
+		 * Not ideal: walks every host page, including ones that are not
+		 * visible — only the current page needs the chrome flip. Leave as-is
+		 * for now.
 		 *
-		 * @param on True → strip on top (full-screen chrome); false → strip on bottom
+		 * @param on True = strip on top (full-screen chrome); false = bottom
 		 */
 		public void fullscreen(bool on)
 		{
-			for (
-				var child = this.pages.get_first_child();
-				child != null;
-				child = child.get_next_sibling()
-			) {
+			for (var child = this.pages.get_first_child();
+					child != null; child = child.get_next_sibling()) {
 				var page = child as Page;
 				if (page == null) {
 					continue;
 				}
-				page.remove(page.tab_bar);
-				page.remove(page.tab_view);
-				page.append(on ? page.tab_bar : page.tab_view);
-				page.append(on ? page.tab_view : page.tab_bar);
-				page.tab_bar.fs_btn.icon_name = on
-					? "view-restore-symbolic"
-					: "view-fullscreen-symbolic";
-				page.tab_bar.fs_btn.tooltip_text = on
-					? "Exit full screen"
-					: "Full screen";
+				page.tab_bar.unparent();
+				if (on) {
+					page.chrome_top.append(page.tab_bar);
+				} else {
+					page.chrome_bottom.append(page.tab_bar);
+				}
+				page.tab_bar.fs_btn.icon_name = on ? "view-restore-symbolic" : "view-fullscreen-symbolic";
+				page.tab_bar.fs_btn.tooltip_text = on ? "Exit full screen" : "Full screen";
 			}
 		}
 	}

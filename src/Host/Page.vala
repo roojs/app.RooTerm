@@ -35,6 +35,16 @@ namespace RooTerm.Host
 		public Adw.TabView tab_view;
 		public TabBar tab_bar;
 		/**
+		 * Top chrome slot — empty when docked; holds {@link tab_bar} when
+		 * full screen.
+		 */
+		public Gtk.Box chrome_top;
+		/**
+		 * Bottom chrome slot — holds {@link tab_bar} when docked; empty when
+		 * full screen.
+		 */
+		public Gtk.Box chrome_bottom;
+		/**
 		 * Selected terminal on this page (null when no tabs).
 		 */
 		public Terminal.Base current;
@@ -79,8 +89,17 @@ namespace RooTerm.Host
 			};
 			this.tab_view.add_css_class("vte-host");
 			this.tab_bar = new TabBar(this.tab_view);
+			// Fixed layout: only the bar moves between slots; tab_view stays put.
+			this.chrome_top = new Gtk.Box(Gtk.Orientation.VERTICAL, 0) {
+				hexpand = true
+			};
+			this.chrome_bottom = new Gtk.Box(Gtk.Orientation.VERTICAL, 0) {
+				hexpand = true
+			};
+			this.chrome_bottom.append(this.tab_bar);
+			this.append(this.chrome_top);
 			this.append(this.tab_view);
-			this.append(this.tab_bar);
+			this.append(this.chrome_bottom);
 			this.tab_view.notify["selected-page"].connect(() => {
 				this.wire();
 				this.changed();
