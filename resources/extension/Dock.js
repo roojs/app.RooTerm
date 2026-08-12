@@ -154,6 +154,7 @@ export class Dock {
         var height = rect.height;
         var width = rect.width;
         var placement = 'centre';
+        var fullscreen = false;
         try {
             var confPath = GLib.build_filenamev([
                 GLib.get_home_dir(), '.config', 'rooterm', 'config.json',
@@ -164,8 +165,27 @@ export class Dock {
         } catch (e) {
             console.error('rooterm: layout config: ' + e);
         }
+        try {
+            var reply = Gio.DBus.session.call_sync(
+                DBUS_DEST, DBUS_PATH,
+                'org.freedesktop.DBus.Properties', 'Get',
+                new GLib.Variant('(ss)', [DBUS_IFACE, 'fullscreen']),
+                new GLib.VariantType('(v)'),
+                Gio.DBusCallFlags.NONE,
+                500,
+                null
+            );
+            fullscreen = reply.get_child_value(0).get_variant().get_boolean();
+        } catch (e) {
+            console.error('rooterm: fullscreen: ' + e);
+        }
+        if (fullscreen) {
+            width = workArea.width;
+            height = workArea.height;
+        }
         var x = workArea.x
-            + (placement === 'centre' ? Math.floor((workArea.width - width) / 2)
+            + (fullscreen ? 0
+                : placement === 'centre' ? Math.floor((workArea.width - width) / 2)
                 : placement === 'right' ? workArea.width - width : 0);
         var y = workArea.y;
         var already = Math.abs(rect.x - x) < 2 && Math.abs(rect.y - y) < 2

@@ -170,6 +170,37 @@ namespace RooTerm
 			// Shell / media-keys own the global binding; this covers in-app when focused.
 			app.set_accels_for_action("win.toggle", { this.window.config.key_toggle });
 
+			var fullscreen_action = new GLib.SimpleAction.stateful(
+				"fullscreen",
+				null,
+				new GLib.Variant.boolean(false)
+			);
+			fullscreen_action.change_state.connect((value) => {
+				fullscreen_action.set_state(value);
+				this.window.fullscreen = value.get_boolean();
+				this.window.dbus.fullscreen = this.window.fullscreen;
+				this.window.host_stack.fullscreen(this.window.fullscreen);
+				if (!this.window.is_docked) {
+					return;
+				}
+				this.window.set_default_size(
+					this.window.monitor_geo.width * this.window.config.width / 100,
+					this.window.fullscreen
+						? this.window.monitor_geo.height
+						: this.window.monitor_geo.height * this.window.config.height / 100
+				);
+				this.window.dbus.redock();
+			});
+			fullscreen_action.activate.connect(() => {
+				fullscreen_action.change_state(
+					new GLib.Variant.boolean(!fullscreen_action.get_state().get_boolean())
+				);
+			});
+			this.window.add_action(fullscreen_action);
+			app.set_accels_for_action("win.fullscreen", {
+				this.window.config.key_fullscreen
+			});
+
 			var prefs_action = new GLib.SimpleAction("preferences", null);
 			prefs_action.activate.connect(() => {
 				try {

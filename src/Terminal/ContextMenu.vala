@@ -57,6 +57,9 @@ namespace RooTerm.Terminal
 			edit.append_item(paste_item);
 
 			var session = new GLib.Menu();
+			var fullscreen_item = new GLib.MenuItem("Full screen", "win.fullscreen");
+			fullscreen_item.set_icon(new GLib.ThemedIcon("view-fullscreen-symbolic"));
+			session.append_item(fullscreen_item);
 			var reset_item = new GLib.MenuItem("Reset", "win.reset-terminal");
 			reset_item.set_icon(new GLib.ThemedIcon("view-refresh-symbolic"));
 			session.append_item(reset_item);

@@ -103,6 +103,13 @@ namespace RooTerm
 		public bool dock_mode { get; set; default = false; }
 
 		/**
+		 * True when main fills the monitor work area (under the Shell top bar).
+		 * Runtime only — not in ``config.json``. Shell reads this for dock size.
+		 */
+		[DBus (name = "fullscreen")]
+		public bool fullscreen { get; set; default = false; }
+
+		/**
 		 * Call a method on ``org.roojs.RooTerm.Shell`` (try/catch; logs failures).
 		 *
 		 * Not exported on ``org.roojs.RooTerm.DBus``.
@@ -208,6 +215,11 @@ namespace RooTerm
 				}
 			}
 			window.terminal_menu.popdown();
+			if (window.fullscreen
+					&& this.application.active_window == window) {
+				var action = window.lookup_action("fullscreen") as GLib.SimpleAction;
+				action.change_state(new GLib.Variant.boolean(false));
+			}
 			this.call_shell("toggle", new GLib.Variant("(s)", "main"));
 		}
 

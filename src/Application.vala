@@ -207,7 +207,9 @@ namespace RooTerm
 			this.dbus.call_shell("show", new GLib.Variant("(s)", "main"));
 			this.window.set_default_size(
 				this.window.monitor_geo.width * this.window.config.width / 100,
-				this.window.monitor_geo.height * this.window.config.height / 100
+				this.window.fullscreen
+					? this.window.monitor_geo.height
+					: this.window.monitor_geo.height * this.window.config.height / 100
 			);
 			GLib.debug("redock activate docked dock_mode=%d", (int) this.dbus.dock_mode);
 			this.dbus.redock();

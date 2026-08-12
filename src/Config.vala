@@ -77,6 +77,11 @@ namespace RooTerm
 		[Description(nick = "Toggle visibility", blurb = "Show or hide the drop-down")]
 		public string key_toggle { get; set; default = "F12"; }
 		/**
+		 * Fill the monitor work area (under the Shell top bar); default ``F11``.
+		 */
+		[Description(nick = "Full screen", blurb = "Toggle work-area full screen")]
+		public string key_fullscreen { get; set; default = "F11"; }
+		/**
 		 * Focus the host search entry.
 		 */
 		[Description(nick = "Search hosts", blurb = "Focus the host tree search")]
@@ -330,7 +335,7 @@ namespace RooTerm
 		public void connect(MainWindow window)
 		{
 			this.notify["height"].connect(() => {
-				if (!window.is_docked) {
+				if (!window.is_docked || window.fullscreen) {
 					return;
 				}
 				window.set_default_size(
@@ -340,7 +345,7 @@ namespace RooTerm
 				window.dbus.redock();
 			});
 			this.notify["width"].connect(() => {
-				if (!window.is_docked) {
+				if (!window.is_docked || window.fullscreen) {
 					return;
 				}
 				window.set_default_size(
@@ -350,7 +355,7 @@ namespace RooTerm
 				window.dbus.redock();
 			});
 			this.notify["placement"].connect(() => {
-				if (!window.is_docked) {
+				if (!window.is_docked || window.fullscreen) {
 					return;
 				}
 				window.dbus.redock();
@@ -374,6 +379,10 @@ namespace RooTerm
 						} catch (GLib.Error e) {
 							GLib.warning("toggle binding: %s", e.message);
 						}
+						break;
+
+					case "key-fullscreen":
+						app.set_accels_for_action("win.fullscreen", { accel });
 						break;
 
 					case "key-search":

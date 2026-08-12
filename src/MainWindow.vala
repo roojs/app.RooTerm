@@ -59,6 +59,11 @@ namespace RooTerm
 		 */
 		public bool is_docked = false;
 		/**
+		 * True while main fills the monitor work area (tab strip on top).
+		 * Session runtime only — not saved; hide/show keeps it until the user exits.
+		 */
+		public bool fullscreen = false;
+		/**
 		 * True while a {@link GnomeShell} setup/restart dialog is open.
 		 * {@link DBus.toggle} must not hide/show the window then.
 		 */
@@ -91,14 +96,18 @@ namespace RooTerm
 			GLib.debug(
 				"show_docked size=%dx%d dock_mode=1",
 				this.monitor_geo.width * this.config.width / 100,
-				this.monitor_geo.height * this.config.height / 100
+				this.fullscreen
+					? this.monitor_geo.height
+					: this.monitor_geo.height * this.config.height / 100
 			);
 			this.decorated = false;
 			this.resizable = false;
 			this.add_css_class("drop-down");
 			this.set_default_size(
 				this.monitor_geo.width * this.config.width / 100,
-				this.monitor_geo.height * this.config.height / 100
+				this.fullscreen
+					? this.monitor_geo.height
+					: this.monitor_geo.height * this.config.height / 100
 			);
 		}
 
@@ -419,7 +428,9 @@ namespace RooTerm
 				}
 				this.set_default_size(
 					this.monitor_geo.width * this.config.width / 100,
-					this.monitor_geo.height * this.config.height / 100
+					this.fullscreen
+						? this.monitor_geo.height
+						: this.monitor_geo.height * this.config.height / 100
 				);
 			});
 

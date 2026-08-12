@@ -106,6 +106,10 @@ namespace RooTerm.Session
 				});
 				this.by_uuid.set(connection.uuid, page);
 				this.stack.pages.add_named(page, connection.uuid);
+				var win = this.stack.get_root() as MainWindow;
+				if (win != null && win.fullscreen) {
+					this.stack.fullscreen(true);
+				}
 			}
 
 			var term = new Terminal.Ssh(connection, this.config, stream);
@@ -147,6 +151,10 @@ namespace RooTerm.Session
 				});
 				this.by_uuid.set(page_connection.uuid, page);
 				this.stack.pages.add_named(page, page_connection.uuid);
+				var win = this.stack.get_root() as MainWindow;
+				if (win != null && win.fullscreen) {
+					this.stack.fullscreen(true);
+				}
 			}
 
 			var term = new Terminal.Local(connection, this.config, cwd);

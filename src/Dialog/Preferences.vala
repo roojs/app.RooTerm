@@ -149,6 +149,7 @@ namespace RooTerm.Dialog
 				shell = this.shell
 			};
 			this.add("key-toggle", toggle, keys);
+			this.add("key-fullscreen", new RowKeySelect(this.config, "key-fullscreen"), keys);
 			this.add("key-search", new RowKeySelect(this.config, "key-search"), keys);
 			this.add("key-new-terminal",
 				new RowKeySelect(this.config, "key-new-terminal"), keys);

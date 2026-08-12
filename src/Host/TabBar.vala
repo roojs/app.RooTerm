@@ -44,6 +44,10 @@ namespace RooTerm.Host
 
 		private Gtk.Box tabs;
 		private Gtk.Button add_btn;
+		/**
+		 * Full-screen toggle (right of ``+``); icon switches with {@link MainWindow.fullscreen}.
+		 */
+		public Gtk.Button fs_btn;
 		private Gtk.Widget? selected_row;
 
 		/**
@@ -85,6 +89,14 @@ namespace RooTerm.Host
 			};
 			this.add_btn.add_css_class("host-tab-add");
 			this.append(this.add_btn);
+			this.fs_btn = new Gtk.Button.from_icon_name("view-fullscreen-symbolic") {
+				tooltip_text = "Full screen",
+				has_frame = false,
+				action_name = "win.fullscreen",
+				valign = Gtk.Align.CENTER
+			};
+			this.fs_btn.add_css_class("host-tab-fullscreen");
+			this.append(this.fs_btn);
 
 			this.view.page_attached.connect((page, position) => {
 				this.attach(page, position);

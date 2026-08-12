@@ -65,7 +65,8 @@ vte-terminal {
 }
 
 .host-tab,
-.host-tab-add {
+.host-tab-add,
+.host-tab-fullscreen {
 	min-height: 24px;
 	padding: 0 2px 0 4px;
 	border-radius: 4px;
@@ -75,7 +76,8 @@ vte-terminal {
 
 /* Class set from EventControllerMotion — GTK :hover on the row is unreliable over child buttons. */
 .host-tab.hover,
-.host-tab-add:hover {
+.host-tab-add:hover,
+.host-tab-fullscreen:hover {
 	background-color: alpha(@accent_bg_color, 0.22);
 }
 
