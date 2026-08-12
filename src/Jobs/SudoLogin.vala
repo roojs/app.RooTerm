@@ -128,9 +128,9 @@ namespace RooTerm.Jobs
 					return;
 				}
 			}
-			// [sudo] password prompt
+			// [sudo] / [sudo: authenticate] password prompt
 			if (GLib.Regex.match_simple(
-					"\\[sudo\\].*password.*:\\s*$",
+					"\\[sudo[^\\]]*\\].*password.*:\\s*$",
 					cursor_line, GLib.RegexCompileFlags.CASELESS, 0)) {
 				if (this.sudo_password_fed && this.sudo_fail_armed && !this.sudo_done) {
 					this.fail_sudo();

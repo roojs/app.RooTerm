@@ -129,12 +129,12 @@ namespace RooTerm.Jobs
 				}
 				return;
 			}
-			// ssh password / passphrase (not [sudo])
+			// ssh password / passphrase (not [sudo] / [sudo: authenticate])
 			if (GLib.Regex.match_simple(
 					"(password|passphrase).*:\\s*$",
 					cursor_line, GLib.RegexCompileFlags.CASELESS, 0)
 					&& !GLib.Regex.match_simple(
-						"\\[sudo\\].*password.*:\\s*$",
+						"\\[sudo[^\\]]*\\].*password.*:\\s*$",
 						cursor_line, GLib.RegexCompileFlags.CASELESS, 0)) {
 				if (this.current_state != State.WAIT_SSH_PASSWORD) {
 					GLib.debug("job current_state name=%s %d -> %d want=%d",
