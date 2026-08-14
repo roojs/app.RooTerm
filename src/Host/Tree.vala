@@ -96,6 +96,24 @@ namespace RooTerm.Host
 					return conn.children;
 				}
 			);
+			for (var i = 0; i < this.tree_model.get_n_items(); i++) {
+				var row = this.tree_model.get_item(i) as Gtk.TreeListRow;
+				if (row == null) {
+					continue;
+				}
+				var conn = row.item as Connection;
+				if (conn == null) {
+					continue;
+				}
+				if (conn.kind == ConnectionKind.LOCAL) {
+					row.expanded = true;
+					continue;
+				}
+				if (conn.kind != ConnectionKind.GROUP && !conn.lxc_host) {
+					continue;
+				}
+				row.expanded = conn.expanded;
+			}
 
 			this.selection = new Gtk.SingleSelection(this.tree_model) {
 				autoselect = false,
@@ -170,15 +188,13 @@ namespace RooTerm.Host
 				var mark_box = (Gtk.Box) row_box.get_last_child();
 				var list_row = (Gtk.TreeListRow) list_item.item;
 				var conn = (Connection) list_row.item;
-				if (conn.kind == ConnectionKind.LOCAL) {
-					list_row.expanded = true;
-				} else if ((conn.kind == ConnectionKind.GROUP || conn.lxc_host)
+				if ((conn.kind == ConnectionKind.GROUP || conn.lxc_host)
 					&& conn.expand_binding == null) {
 					conn.expand_binding = conn.bind_property(
 						"expanded",
 						list_row,
 						"expanded",
-						GLib.BindingFlags.SYNC_CREATE | GLib.BindingFlags.BIDIRECTIONAL
+						GLib.BindingFlags.BIDIRECTIONAL
 					);
 				}
 				var old_sid = mark_box.get_data<ulong>("sessions-sid");

@@ -1,6 +1,25 @@
 # Preferences: separate process only
 
-**Status:** ⏳ design (open path not implemented this way yet)
+> Pointer: `docs/bug-fix-process.md` (emoji).
+
+**Status:** ✅ FIXED — user closed out 2026-08-14 (shipped as **0.15** / **0.15.1**)
+
+**Started:** 2026-08-10
+
+---
+
+## Problem
+
+- **🔷** Preferences sat **behind** the main underbar; stacking had to be Shell-owned.
+- **🔷** Prefs is its **own process** (`rooterm --preferences`); main must never create or present it.
+
+## Evidence
+
+- **ℹ️** Design below is the contract that **0.15** / **0.15.1** implemented.
+- **ℹ️** Plans: `docs/plans/done/0.15-DONE-prefs-process-shell-owns-main.md`, `docs/plans/done/0.15.1-DONE-prefs-process-dbus-cleanup.md`.
+- **✔️** Main `win.preferences` / panel spawn `rooterm --preferences` (`Actions.vala`, `Indicator.js`).
+- **✔️** Prefs app id `org.roojs.rooterm.preferences`; Shell Register + Show; no main D-Bus `preferences()` presenter.
+- **✅** 2026-08-14 — user: prefs issues solved; this bug is gone.
 
 ## One rule
 
@@ -55,3 +74,12 @@ Main’s underbar can stay visible underneath; Shell already knows to put **pref
 - Main D-Bus method that presents an in-process prefs window.
 - Prefs as a child/transient of MainWindow.
 - Opening prefs by any path other than `--preferences`.
+
+## Attempts / changelog
+
+- **✔️** Shipped via **0.15** / **0.15.1** (prefs process, Shell Show above main, `ConfigUpdate`).
+- **✅** 2026-08-14 — user: all prefs issues solved; close out.
+
+## Next
+
+- **✅** 2026-08-14 — closed out; moved to `docs/bugs/done/`.
