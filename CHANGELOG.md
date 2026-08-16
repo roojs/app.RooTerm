@@ -11,6 +11,37 @@ generated from this file by `scripts/release/derive-changelogs.sh`.
 
 ## [Unreleased]
 
+### Added
+
+- Preferences as its own process (`rooterm --preferences`); live updates on main via D-Bus
+- Keyboard shortcuts page (toggle, search, new terminal / SSH, tabs, copy / paste, …)
+- VTE colour themes: background category, foreground theme, live preview
+- Font page: monospace family (or system) and size, with live preview
+- Work-area full screen (tab strip on top, animated; session-only until you exit)
+- Restore local terminal tabs on startup (cwd in `connections.json`; skip missing dirs)
+- Remember last tab per GNOME workspace (on show after hide; optional, default on)
+- VTE right-click menu (copy, paste, select all, full screen, quit, …)
+- `Ctrl+Shift+T` always a local terminal; `Ctrl+Shift+S` a new SSH tab for the focused host
+- Double-click empty tab-bar space for a new local terminal
+- Add group from the tree; default **All** group on a blank install
+- Confirm quit when terminals are still open
+- Tab close countdown with cancel (selected or background)
+- RPM and AppImage packaging alongside the existing Debian workflow
+
+### Changed
+
+- GNOME Shell extension owns show / hide / stacking for main and preferences
+- Chrome settings live in `config.json`; hosts stay in `connections.json`
+- Tab strip chrome and close behaviour
+
+### Fixed
+
+- Copy and paste in the terminal
+- Duplicate Localhost rows on load
+- Drop-down show / hide reliability (X11 and Wayland)
+- Preferences startup and live `config_update`
+- Closing tabs and tab-bar width feedback
+
 ## [0.1.0] - 2026-08-01
 
 ### Added
