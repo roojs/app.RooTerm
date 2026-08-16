@@ -69,6 +69,15 @@ namespace RooTerm
 		 */
 		public bool block_toggle { get; set; default = false; }
 		/**
+		 * Active GNOME workspace index (0-based). Set by {@link DBus.workspace}.
+		 */
+		public int workspace = 0;
+		/**
+		 * True when Shell has been asked to hide the overlay (F1 / close).
+		 * Restore runs when this is true and we are about to show.
+		 */
+		public bool hidden = false;
+		/**
 		 * Shared add/edit connection window (transient of main; GTK show/hide).
 		 */
 		public Dialog.Connection connection_editor;
@@ -113,6 +122,36 @@ namespace RooTerm
 					? this.monitor_geo.height
 					: this.monitor_geo.height * this.config.height / 100
 			);
+		}
+
+		/**
+		 * Select the last tab for {@link workspace} when the overlay shows.
+		 * No-op if the pref is off, nothing is stored, or that tab is not open.
+		 */
+		public void restore()
+		{
+			if (!this.config.remember_workspace_tab) {
+				return;
+			}
+			if (!this.config.workspace_tabs.has_key(this.workspace)) {
+				return;
+			}
+			var conn = this.config.workspace_tabs.get(this.workspace);
+			if (conn.sessions.get_n_items() == 0) {
+				return;
+			}
+			var term = (Terminal.Base) conn.sessions.get_item(0);
+			var name = conn.uuid;
+			if (conn.kind == Host.ConnectionKind.LOCAL_PATH) {
+				name = conn.parent.uuid;
+			}
+			var page = this.host_stack.pages.get_child_by_name(name) as Host.Page;
+			if (page == null) {
+				return;
+			}
+			this.host_stack.pages.visible_child = page;
+			page.tab_view.selected_page = page.tab_view.get_page(term);
+			this.sessions.focus();
 		}
 
 		/**
@@ -174,6 +213,13 @@ namespace RooTerm
 				this.tree.save();
 			} else {
 				this.tree = Host.TreeNodes.load(this.config);
+			}
+			foreach (var index in this.config.workspace_uuids.keys) {
+				var uuid = this.config.workspace_uuids.get(index);
+				if (!this.tree.by_uuid.has_key(uuid)) {
+					continue;
+				}
+				this.config.workspace_tabs.set(index, this.tree.by_uuid.get(uuid));
 			}
 			this.shell = new GnomeShell(this);
 			this.connection_editor = new Dialog.Connection(this);
@@ -259,9 +305,15 @@ namespace RooTerm
 			this.sessions.display_changed.connect(() => {
 				this.title = this.sessions.display;
 				var page = this.host_stack.pages.visible_child as Host.Page;
-				if (page != null && page.current != null) {
-					this.host_tree.select(page.current.connection);
+				if (page == null || page.current == null) {
+					return;
 				}
+				this.host_tree.select(page.current.connection);
+				if (!this.config.remember_workspace_tab) {
+					return;
+				}
+				this.config.workspace_tabs.set(this.workspace, page.current.connection);
+				this.config.workspace_uuids.set(this.workspace, page.current.connection.uuid);
 			});
 			this.sessions.sudo_password_failed.connect((conn) => {
 				var alert = new Adw.AlertDialog(
@@ -459,6 +511,10 @@ namespace RooTerm
 					return true;
 				}
 				this.terminal_menu.popdown();
+				if (this.config.remember_workspace_tab) {
+					this.config.save();
+				}
+				this.hidden = true;
 				this.dbus.call_shell("hide", new GLib.Variant("(s)", "main"));
 				return true;
 			});

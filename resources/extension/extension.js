@@ -17,6 +17,7 @@ export default class RooTermExtension extends Extension {
         this.windowCreatedId = 0;
         this.mapId = 0;
         this.redockSignalId = 0;
+        this.workspaceChangedId = 0;
 
         this.shell = new ShellService(this.path);
         this.shell.enable();
@@ -78,6 +79,7 @@ export default class RooTermExtension extends Extension {
                 if (self.indicator) {
                     self.indicator.visible = true;
                 }
+                self.sendWorkspace();
                 // Name can appear after first map/Redock — retry dock then.
                 self.dock.scheduleDock();
             },
@@ -114,6 +116,10 @@ export default class RooTermExtension extends Extension {
                 self.dock.scheduleDock(params.get_child_value(0).get_boolean());
             }
         );
+        this.workspaceChangedId = global.workspace_manager.connect(
+            'active-workspace-changed', this.sendWorkspace.bind(this)
+        );
+        this.sendWorkspace();
     }
 
     disable() {
@@ -128,6 +134,10 @@ export default class RooTermExtension extends Extension {
         if (this.redockSignalId) {
             Gio.DBus.session.signal_unsubscribe(this.redockSignalId);
             this.redockSignalId = 0;
+        }
+        if (this.workspaceChangedId) {
+            global.workspace_manager.disconnect(this.workspaceChangedId);
+            this.workspaceChangedId = 0;
         }
         if (this.nameWatchId) {
             Gio.DBus.session.unwatch_name(this.nameWatchId);
@@ -150,6 +160,15 @@ export default class RooTermExtension extends Extension {
             this.shell.disable();
             this.shell = null;
         }
+    }
+
+    sendWorkspace() {
+        Gio.DBus.session.call(
+            DBUS_DEST, DBUS_PATH, DBUS_IFACE, 'workspace',
+            new GLib.Variant('(i)', [global.workspace_manager.get_active_workspace_index()]),
+            null, Gio.DBusCallFlags.NONE, 2000, null,
+            this.onDBusFinished.bind(this, 'workspace')
+        );
     }
 
     onDBusFinished(method, conn, result) {

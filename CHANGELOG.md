@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 for git tags (`v0.1.0`, etc.).
 
+Debian (`debian/changelog`), RPM (`%changelog`), and GitHub release notes are
+generated from this file by `scripts/release/derive-changelogs.sh`.
+
 ## [Unreleased]
 
 ## [0.1.0] - 2026-08-01

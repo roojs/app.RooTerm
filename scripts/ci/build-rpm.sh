@@ -56,6 +56,9 @@ tar --exclude='./.git' \
   .
 
 cp packaging/rpm/rooterm.spec "${TOPDIR}/SPECS/rooterm.spec"
+chmod +x "${ROOT}/scripts/release/derive-changelogs.sh"
+"${ROOT}/scripts/release/derive-changelogs.sh" "$ver" \
+	--splice-spec "${TOPDIR}/SPECS/rooterm.spec"
 
 rpmbuild -ba \
   --define "_topdir ${TOPDIR}" \

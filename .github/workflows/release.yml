@@ -43,13 +43,14 @@ jobs:
           # Noble’s VTE is 0.76; termprop needs ≥ 0.78 — pull Plucky VTE.
           ./scripts/ci/install-libvte-plucky.sh
 
-      - name: Sync changelog version from tag
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Derive debian/changelog from CHANGELOG.md
         run: |
           set -euo pipefail
-          ver="${GITHUB_REF_NAME#v}"
-          if head -1 debian/changelog | grep -q "^rooterm ("; then
-            sed -i "1s/^rooterm ([^)]*)/rooterm (${ver}-1)/" debian/changelog
+          chmod +x scripts/release/derive-changelogs.sh
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            ./scripts/release/derive-changelogs.sh "${GITHUB_REF_NAME#v}"
+          else
+            ./scripts/release/derive-changelogs.sh
           fi
           head -1 debian/changelog
 
@@ -218,18 +219,16 @@ jobs:
           set -euo pipefail
           ls -lh artifacts
           ver="${GITHUB_REF_NAME#v}"
-          if head -1 debian/changelog | grep -q "^rooterm ("; then
-            sed -i "1s/^rooterm ([^)]*)/rooterm (${ver}-1)/" debian/changelog
-          fi
-          notes="$(sed -n '/^  \*/,/^ -- /p' debian/changelog | sed '$d')"
+          chmod +x scripts/release/derive-changelogs.sh
+          ./scripts/release/derive-changelogs.sh "$ver" --notes notes.md
           gh release create "$GITHUB_REF_NAME" artifacts/* \
             --repo "$GITHUB_REPOSITORY" \
             --title "$GITHUB_REF_NAME" \
-            --notes "$notes" \
+            --notes-file notes.md \
           || {
             gh release upload "$GITHUB_REF_NAME" artifacts/* \
               --repo "$GITHUB_REPOSITORY" --clobber
             gh release edit "$GITHUB_REF_NAME" \
               --repo "$GITHUB_REPOSITORY" \
-              --notes "$notes"
+              --notes-file notes.md
           }

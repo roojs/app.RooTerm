@@ -223,7 +223,32 @@ namespace RooTerm
 				var action = window.lookup_action("fullscreen") as GLib.SimpleAction;
 				action.change_state(new GLib.Variant.boolean(false));
 			}
+			if (!window.hidden) {
+				if (window.config.remember_workspace_tab) {
+					window.config.save();
+				}
+				window.hidden = true;
+				this.call_shell("toggle", new GLib.Variant("(s)", "main"));
+				return;
+			}
+			window.hidden = false;
+			window.restore();
 			this.call_shell("toggle", new GLib.Variant("(s)", "main"));
+		}
+
+		/**
+		 * Cache the active GNOME workspace index from the Shell extension.
+		 * Does not change the selected tab (restore runs on show only).
+		 *
+		 * @param index 0-based workspace index from ``global.workspace_manager``
+		 */
+		[DBus (name = "workspace")]
+		public void workspace(int index)
+		{
+			if (this.application.window == null) {
+				return;
+			}
+			this.application.window.workspace = index;
 		}
 
 		/**
@@ -235,6 +260,10 @@ namespace RooTerm
 		[DBus (name = "quit")]
 		public void quit(bool force = false)
 		{
+			if (this.application.window != null
+					&& this.application.window.config.remember_workspace_tab) {
+				this.application.window.config.save();
+			}
 			if (this.quitting || force) {
 				this.quitting = true;
 				this.call_shell("exited", new GLib.Variant("(s)", this.application.application_id));
@@ -345,6 +374,10 @@ namespace RooTerm
 
 				case GLib.Type.STRING:
 					parsed.set_string(value);
+					break;
+
+				case GLib.Type.BOOLEAN:
+					parsed.set_boolean(value == "true");
 					break;
 
 				default:

@@ -49,8 +49,3 @@ passwords, optional Guake-style drop-down via a GNOME Shell extension,
 %{_datadir}/icons/hicolor/scalable/apps/org.roojs.rooterm.svg
 
 %changelog
-* Tue Aug 04 2026 Alan Knowles <alan@roojs.com> - 0.1.0-2
-- Drop system GNOME Shell extension path; app installs per-user from GResource.
-
-* Sat Aug 01 2026 Alan Knowles <alan@roojs.com> - 0.1.0-1
-- Initial RPM packaging.

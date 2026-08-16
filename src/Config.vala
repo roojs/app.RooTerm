@@ -196,6 +196,27 @@ namespace RooTerm
 			set;
 			default = new Gee.HashMap<string, string>();
 		}
+		/**
+		 * On show, restore the last tab used on this GNOME workspace.
+		 */
+		[Description(nick = "Remember tab per workspace", blurb = "On show, restore the last tab used on this desktop")]
+		public bool remember_workspace_tab { get; set; default = true; }
+		/**
+		 * Workspace index → {@link Host.Connection.uuid} (written to ``config.json``).
+		 */
+		public Gee.HashMap<int, string> workspace_uuids {
+			get;
+			set;
+			default = new Gee.HashMap<int, string>();
+		}
+		/**
+		 * Workspace index → live {@link Host.Connection}. Runtime only — not serialized.
+		 */
+		public Gee.HashMap<int, Host.Connection> workspace_tabs {
+			get;
+			set;
+			default = new Gee.HashMap<int, Host.Connection>();
+		}
 
 		public unowned ParamSpec? find_property(string name)
 		{
@@ -221,7 +242,18 @@ namespace RooTerm
 				case "pending-secrets":
 				case "need-migrate":
 				case "themes":
+				case "workspace-tabs":
 					return null;
+				case "workspace-uuids":
+					var obj = new Json.Object();
+					foreach (var index in this.workspace_uuids.keys) {
+						obj.set_string_member(
+							index.to_string(), this.workspace_uuids.get(index)
+						);
+					}
+					var node = new Json.Node(Json.NodeType.OBJECT);
+					node.take_object(obj);
+					return node;
 				default:
 					return default_serialize_property(property_name, value, pspec);
 			}
@@ -234,6 +266,20 @@ namespace RooTerm
 					this.need_migrate = true;
 					value = Value(typeof(Gee.ArrayList));
 					value.set_object(this.connections);
+					return true;
+				case "workspace-uuids":
+					this.workspace_uuids.clear();
+					value = Value(typeof(Gee.HashMap));
+					value.set_object(this.workspace_uuids);
+					if (property_node.get_node_type() != Json.NodeType.OBJECT) {
+						return true;
+					}
+					var obj = property_node.get_object();
+					foreach (var name in obj.get_members()) {
+						this.workspace_uuids.set(
+							int.parse(name), obj.get_string_member(name)
+						);
+					}
 					return true;
 				default:
 					return default_deserialize_property(property_name, out value, pspec, property_node);

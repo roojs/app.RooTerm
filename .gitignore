@@ -5,6 +5,7 @@
 /.rpmbuild/
 /.ci-cache/
 /artifacts/
+/packaging/rpm/changelog
 /.deps/
 *.debug.log
 *~

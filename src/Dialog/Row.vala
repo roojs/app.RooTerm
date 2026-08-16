@@ -126,6 +126,10 @@ namespace RooTerm.Dialog
 									parsed.set_string(value);
 									break;
 
+								case GLib.Type.BOOLEAN:
+									parsed.set_boolean(value == "true");
+									break;
+
 								default:
 									GLib.warning(
 										"unsupported config type for %s", this.key
@@ -149,6 +153,10 @@ namespace RooTerm.Dialog
 
 					case GLib.Type.STRING:
 						parsed.set_string(value);
+						break;
+
+					case GLib.Type.BOOLEAN:
+						parsed.set_boolean(value == "true");
 						break;
 
 					default:

@@ -1,5 +1,14 @@
 rooterm (0.1.0-1) unstable; urgency=medium
 
-  * Initial packaging.
+  * Added: GTK4 + Libadwaita + VTE SSH host manager and terminal (Vala)
+  * Added: Host tree with per-host terminal tabs and per-tab session icons
+  * Added: Multi-connection tab bar for several sessions to the same host
+  * Added: Guake-style drop-down via optional GNOME Shell extension (global toggle, panel menu)
+  * Added: libsecret-backed passwords and SSH key passphrases
+  * Added: JSON config under `~/.config/rooterm/`; Ásbrú `asbru.yml` import on first run
+  * Added: Host search pulldown (`Ctrl+Shift+O`)
+  * Added: Local port forwards; SSH key create / install / replace / retire helpers
+  * Added: Local PTY tabs; optional `sudo -i` (and LXC-host helpers) after login
+  * Added: Debian packaging (`debian/`) and GitHub Actions release workflow for `.deb` builds on `v*` tags
 
- -- Alan Knowles <alan@roojs.com>  Sat, 01 Aug 2026 20:34:12 +0800
+ -- Alan Knowles <alan@roojs.com>  Sat, 01 Aug 2026 00:00:00 +0000

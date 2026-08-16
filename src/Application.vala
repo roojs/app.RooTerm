@@ -204,6 +204,8 @@ namespace RooTerm
 				});
 				return;
 			}
+			this.window.hidden = false;
+			this.window.restore();
 			this.dbus.call_shell("show", new GLib.Variant("(s)", "main"));
 			this.window.set_default_size(
 				this.window.fullscreen

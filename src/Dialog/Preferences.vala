@@ -108,6 +108,13 @@ namespace RooTerm.Dialog
 			this.add("placement",
 				new RowCombo(this.config, "placement", { "left", "centre", "right" }), appearance);
 
+			var behaviour = new Adw.PreferencesGroup() {
+				title = "Behaviour"
+			};
+			general.add(behaviour);
+			this.add("remember-workspace-tab",
+				new RowSwitch(this.config, "remember-workspace-tab"), behaviour);
+
 			var theme_page = new Adw.PreferencesPage() {
 				title = "Theme and colours",
 				icon_name = "preferences-color-symbolic"

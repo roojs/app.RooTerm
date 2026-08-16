@@ -96,6 +96,10 @@ tree is enough.
 
 ### Packaging / releases
 
+[`CHANGELOG.md`](CHANGELOG.md) is the only changelog to edit. Debian,
+RPM, and GitHub release notes are generated from it
+(`scripts/release/derive-changelogs.sh`) at package / release time.
+
 GitHub Actions (see [`.github/workflows/release.yml`](.github/workflows/release.yml))
 builds three package formats in parallel on `v*` tags (and via workflow
 dispatch), then a managing job attaches them to the GitHub Release:
@@ -106,9 +110,10 @@ dispatch), then a managing job attaches them to the GitHub Release:
 | `.rpm` (Fedora 42) | `build-rpm` | [`packaging/rpm/rooterm.spec`](packaging/rpm/rooterm.spec) |
 | AppImage (x86_64 + aarch64) | `build-appimage` | [`sqgipkg.json`](sqgipkg.json) |
 
-Local Debian package:
+Local Debian package (regenerates `debian/changelog` from `CHANGELOG.md`):
 
 ```bash
+./scripts/release/derive-changelogs.sh
 dpkg-buildpackage -us -uc -b
 ```
 
