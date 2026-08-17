@@ -291,7 +291,7 @@ namespace RooTerm
 				hexpand = true,
 				vexpand = false,
 				margin_start = 6,
-				margin_end = 4,
+				margin_end = 0,
 				margin_top = 4,
 				margin_bottom = 6,
 				placeholder_text = "Ctrl+Shift+O — search hosts"
@@ -457,7 +457,24 @@ namespace RooTerm
 			};
 			left.add_css_class("host-pane");
 			left.append(this.host_tree);
-			left.append(this.host_search);
+			var all_btn = new Gtk.ToggleButton() {
+				icon_name = "view-list-symbolic",
+				tooltip_text = "Show all hosts",
+				valign = Gtk.Align.CENTER,
+				margin_end = 4,
+				margin_top = 4,
+				margin_bottom = 6
+			};
+			all_btn.add_css_class("flat");
+			all_btn.bind_property("active", this.host_tree, "show-all",
+				GLib.BindingFlags.BIDIRECTIONAL | GLib.BindingFlags.SYNC_CREATE);
+			var search_row = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 0) {
+				hexpand = true,
+				vexpand = false
+			};
+			search_row.append(this.host_search);
+			search_row.append(all_btn);
+			left.append(search_row);
 
 			var paned = new Gtk.Paned(Gtk.Orientation.HORIZONTAL) {
 				start_child = left,

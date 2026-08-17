@@ -52,6 +52,11 @@ namespace RooTerm.Host
 		 * Used for groups and LXC hosts only; Localhost always expanded on bind.
 		 */
 		public bool expanded { get; set; default = true; }
+		/**
+		 * How many child rows currently have a tab (nested children included).
+		 * Not JSON; maintained when sessions open or close.
+		 */
+		public int children_open { get; set; default = 0; }
 
 		/** Active row↔expanded binding from {@link Tree}; not serialized. */
 		public GLib.Binding? expand_binding;
@@ -229,6 +234,7 @@ namespace RooTerm.Host
 				case "hide-expander":
 				case "tree-icon":
 				case "local-tab":
+				case "children-open":
 					return null;
 
 				case "kind":

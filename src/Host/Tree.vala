@@ -27,7 +27,13 @@ namespace RooTerm.Host
 		private Gtk.ListView list_view;
 		public Gtk.SingleSelection selection;
 		private Gtk.TreeListModel tree_model;
+		private Gtk.CustomFilter open_filter;
 		private TreeMenu menu;
+		/**
+		 * When false, hide rows that are not open and not a parent of an open row.
+		 * When true, the full tree is shown. Bottom toggle binds this.
+		 */
+		public bool show_all { get; set; default = false; }
 		/**
 		 * Row under the context menu. Separate from {@link selection} (active
 		 * terminal); drives the ``menu-target`` row chrome only.
@@ -84,8 +90,45 @@ namespace RooTerm.Host
 				vexpand: true
 			);
 
+			var hint = new Gtk.Label("Click to show all hosts") {
+				wrap = true,
+				justify = Gtk.Justification.CENTER,
+				valign = Gtk.Align.END,
+				halign = Gtk.Align.CENTER,
+				can_target = false,
+				hexpand = true,
+				visible = false,
+				margin_bottom = 16,
+				margin_start = 8,
+				margin_end = 8
+			};
+			hint.add_css_class("dim-label");
+			hint.add_css_class("open-hint");
+			var prev_open = window.tree.num_open;
+			this.open_filter = new Gtk.CustomFilter((item) => {
+				if (this.show_all || window.tree.num_open == 0) {
+					return true;
+				}
+				var conn = item as Connection;
+				if (conn == null) {
+					return false;
+				}
+				return conn.sessions.get_n_items() > 0 || conn.children_open > 0;
+			});
+			window.tree.open_changed.connect(() => {
+				this.open_filter.changed(Gtk.FilterChange.DIFFERENT);
+				if (this.show_all && window.tree.num_open > prev_open) {
+					this.show_all = false;
+				}
+				prev_open = window.tree.num_open;
+				hint.visible = !this.show_all && window.tree.num_open > 0;
+			});
+			this.notify["show-all"].connect(() => {
+				this.open_filter.changed(Gtk.FilterChange.DIFFERENT);
+				hint.visible = !this.show_all && window.tree.num_open > 0;
+			});
 			this.tree_model = new Gtk.TreeListModel(
-				window.tree,
+				new Gtk.FilterListModel(window.tree, this.open_filter),
 				false,
 				false,
 				(item) => {
@@ -93,7 +136,7 @@ namespace RooTerm.Host
 					if (conn == null) {
 						return null;
 					}
-					return conn.children;
+					return new Gtk.FilterListModel(conn.children, this.open_filter);
 				}
 			);
 			for (var i = 0; i < this.tree_model.get_n_items(); i++) {
@@ -126,6 +169,13 @@ namespace RooTerm.Host
 					return;
 				}
 				this.connection_highlighted(conn);
+				if (!this.show_all) {
+					return;
+				}
+				if (conn.sessions.get_n_items() == 0 && conn.children_open == 0) {
+					return;
+				}
+				this.show_all = false;
 			});
 
 			var factory = new Gtk.SignalListItemFactory();
@@ -281,6 +331,20 @@ namespace RooTerm.Host
 				this.menu.popup_for(null, x, y);
 			});
 			this.list_view.add_controller(menu_click);
+			var empty_click = new Gtk.GestureClick() {
+				button = Gdk.BUTTON_PRIMARY
+			};
+			empty_click.pressed.connect((n_press, x, y) => {
+				if (this.show_all) {
+					return;
+				}
+				var picked = this.list_view.pick((float) x, (float) y, Gtk.PickFlags.DEFAULT);
+				if (picked != null && picked != this.list_view) {
+					return;
+				}
+				this.show_all = true;
+			});
+			this.list_view.add_controller(empty_click);
 			this.list_view.activate.connect((pos) => {
 				this.selection.selected = pos;
 				var row = this.selection.selected_item as Gtk.TreeListRow;
@@ -291,8 +355,14 @@ namespace RooTerm.Host
 				this.connection_activated(conn);
 			});
 
-			var scrolled = new Gtk.ScrolledWindow() {
+			var overlay = new Gtk.Overlay() {
 				child = this.list_view,
+				hexpand = true,
+				vexpand = true
+			};
+			overlay.add_overlay(hint);
+			var scrolled = new Gtk.ScrolledWindow() {
+				child = overlay,
 				hexpand = true,
 				vexpand = true,
 				overlay_scrolling = false,
@@ -356,6 +426,7 @@ namespace RooTerm.Host
 				term.disconnect(label_sid);
 			});
 			btn.clicked.connect(() => {
+				this.show_all = false;
 				this.terminal_selected(conn, index);
 			});
 			mark_box.append(btn);

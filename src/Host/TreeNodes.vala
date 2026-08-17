@@ -54,6 +54,16 @@ namespace RooTerm.Host
 		 * Owning config (set by {@link load} on the window tree); used to save on expand.
 		 */
 		public weak RooTerm.Config? config;
+		/**
+		 * Number of connections that currently have at least one tab.
+		 * Root list only.
+		 */
+		public int num_open { get; set; default = 0; }
+		/**
+		 * A nested row opened or closed a tab.
+		 * {@link Tree} refilters the open-only view.
+		 */
+		public signal void open_changed();
 
 		/**
 		 * Number of rows (Vala ``foreach`` / index access).
@@ -157,6 +167,29 @@ namespace RooTerm.Host
 			if (conn.uuid.length > 0) {
 				this.by_uuid.set(conn.uuid, conn);
 			}
+			conn.sessions.items_changed.connect((pos, removed, added) => {
+				var n = conn.sessions.get_n_items();
+				var prev = n - added + removed;
+				var adjust = prev == 0 && n > 0 ? 1 : prev > 0 && n == 0 ? -1 : 0;
+				if (adjust == 0) {
+					return;
+				}
+				this.num_open += adjust;
+				var up = conn.parent;
+				while (up != null) {
+					up.children_open += adjust;
+					up = up.parent;
+				}
+				this.open_changed();
+			});
+			if (conn.sessions.get_n_items() > 0) {
+				this.num_open++;
+				var up = conn.parent;
+				while (up != null) {
+					up.children_open++;
+					up = up.parent;
+				}
+			}
 			if ((conn.kind == ConnectionKind.GROUP || conn.lxc_host)
 				&& conn.expand_save_sid == 0) {
 				conn.expand_save_sid = conn.notify["expanded"].connect(() => {
@@ -164,9 +197,11 @@ namespace RooTerm.Host
 				});
 			}
 			if (conn.deleted || conn.kind == ConnectionKind.GROUP) {
+				this.open_changed();
 				return;
 			}
 			this.flat.append(conn);
+			this.open_changed();
 		}
 
 		/**
