@@ -13,6 +13,12 @@ generated from this file by `scripts/release/derive-changelogs.sh`.
 
 ### Added
 
+- Auto-fill SSH TOTP verification codes (liboath); dialog to type a code or store the authenticator secret
+
+## [0.1.2] - 2026-08-16
+
+### Added
+
 - Preferences as its own process (`rooterm --preferences`); live updates on main via D-Bus
 - Keyboard shortcuts page (toggle, search, new terminal / SSH, tabs, copy / paste, …)
 - VTE colour themes: background category, foreground theme, live preview
@@ -59,5 +65,7 @@ generated from this file by `scripts/release/derive-changelogs.sh`.
 - Debian packaging (`debian/`) and GitHub Actions release workflow for `.deb`
   builds on `v*` tags
 
-[Unreleased]: https://github.com/roojs/app.RooTerm/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/roojs/app.RooTerm/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/roojs/app.RooTerm/releases/tag/v0.1.2
+[0.1.1]: https://github.com/roojs/app.RooTerm/releases/tag/v0.1.1
 [0.1.0]: https://github.com/roojs/app.RooTerm/releases/tag/v0.1.0
