@@ -27,7 +27,10 @@ namespace RooTerm
 	 */
 	public class MainWindow : Gtk.ApplicationWindow, ShellInterface
 	{
-		public Host.SearchPulldown host_search;
+		/**
+		 * Host-tree name filter. Bound to {@link Host.Tree.search}.
+		 */
+		public Gtk.SearchEntry host_search;
 		public Host.Tree host_tree;
 		public Host.Stack host_stack;
 		public Session.Controller sessions;
@@ -286,7 +289,7 @@ namespace RooTerm
 				return false;
 			});
 
-			this.host_search = new Host.SearchPulldown(this.tree) {
+			this.host_search = new Gtk.SearchEntry() {
 				halign = Gtk.Align.FILL,
 				hexpand = true,
 				vexpand = false,
@@ -294,7 +297,8 @@ namespace RooTerm
 				margin_end = 0,
 				margin_top = 4,
 				margin_bottom = 6,
-				placeholder_text = "Ctrl+Shift+O — search hosts"
+				placeholder_text = "Ctrl+Shift+O — search hosts",
+				tooltip_text = "Ctrl+Shift+O"
 			};
 
 			this.host_stack = new Host.Stack();
@@ -400,47 +404,8 @@ namespace RooTerm
 				page.tab_view.selected_page = page.tab_view.get_nth_page(index);
 				this.sessions.focus();
 			});
-			this.host_search.connection_selected.connect((conn) => {
-				this.host_tree.select(conn);
-				if (conn.kind == Host.ConnectionKind.LOCAL_PATH) {
-					var term = (Terminal.Base) conn.sessions.get_item(0);
-					var local_page = this.host_stack.pages.get_child_by_name(conn.parent.uuid) as Host.Page;
-					if (local_page == null) {
-						return;
-					}
-					this.host_stack.pages.visible_child = local_page;
-					local_page.tab_view.selected_page = local_page.tab_view.get_page(term);
-					this.sessions.focus();
-					term.terminal.grab_focus();
-					return;
-				}
-				var page = this.host_stack.pages.get_child_by_name(conn.uuid) as Host.Page;
-				if (page == null || page.tab_view.n_pages == 0) {
-					if (conn.kind == Host.ConnectionKind.LOCAL) {
-						this.sessions.open_local(conn);
-						return;
-					}
-					var job = new Jobs.OpenSession(this, conn);
-					GLib.Idle.add(() => {
-						this.present();
-						job.terminal.terminal.grab_focus();
-						return false;
-					});
-					job.run.begin((obj, res) => {
-						try {
-							job.run.end(res);
-						} catch (Jobs.Error e) {
-							GLib.warning("open session failed name=%s: %s",
-								conn.name, e.message);
-						}
-					});
-					return;
-				}
-				this.host_stack.pages.visible_child = page;
-				page.tab_view.selected_page = page.tab_view.get_nth_page(0);
-				this.sessions.focus();
-				((Terminal.Base) page.tab_view.selected_page.child).terminal.grab_focus();
-			});
+			this.host_search.bind_property("text", this.host_tree, "search",
+				GLib.BindingFlags.BIDIRECTIONAL | GLib.BindingFlags.SYNC_CREATE);
 
 			this.actions = new Actions(this);
 

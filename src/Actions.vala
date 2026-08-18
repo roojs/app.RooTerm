@@ -46,7 +46,7 @@ namespace RooTerm
 			var search_action = new GLib.SimpleAction("search", null);
 			search_action.activate.connect(() => {
 				this.window.host_search.grab_focus();
-				this.window.host_search.entry.select_region(0, -1);
+				this.window.host_search.select_region(0, -1);
 			});
 			this.window.add_action(search_action);
 			app.set_accels_for_action("win.search", { this.window.config.key_search });

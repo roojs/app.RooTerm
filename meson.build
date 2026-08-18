@@ -34,6 +34,17 @@ rooterm_resources = gnome.compile_resources(
   c_name: 'rooterm_resources',
 )
 
+rooterm_version_vala = vcs_tag(
+  input: 'src/version.vala.in',
+  output: 'version.vala',
+  command: [
+    find_program('scripts/version-string.sh'),
+    meson.project_version(),
+    meson.project_source_root(),
+  ],
+  fallback: meson.project_version(),
+)
+
 executable('rooterm',
   files(
     'src/main.vala',
@@ -71,7 +82,6 @@ executable('rooterm',
     'src/Asbru/Cipher.vala',
     'src/Host/Tree.vala',
     'src/Host/TreeMenu.vala',
-    'src/Host/SearchPulldown.vala',
     'src/Terminal/Ssh.vala',
     'src/Terminal/Local.vala',
     'src/Terminal/Base.vala',
@@ -90,6 +100,7 @@ executable('rooterm',
     'src/Jobs/FetchHosts.vala',
     'src/Jobs/OpenSession.vala',
   ),
+  rooterm_version_vala,
   rooterm_resources,
   dependencies: [
     gtk_dep,

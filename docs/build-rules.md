@@ -63,3 +63,8 @@ restart once before Shell runs the new `extension.js`.
 
 - Never call `valac` directly — always use `ninja -C build`
 - In-tree `vapi/` is only for thin bindings not shipped by the distro (`yaml-0.1`, `libgcrypt`)
+- Runtime `VERSION` is generated at compile time (`scripts/version-string.sh`): tagged
+  `vX.Y.Z` or a tarball without git is `X.Y.Z`; other git trees are
+  `<tag>-dev.<short>[-dirty]`
+- **Do not** run `scripts/release.sh`, create git tags, or push a release.
+  That script is human-only (see [BUILD.md](../BUILD.md)).

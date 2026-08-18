@@ -14,8 +14,7 @@ window.drop-down {
 	background-color: @window_bg_color;
 }
 
-entry.suggestion {
-	padding-right: 24px;
+searchentry {
 	background-color: @view_bg_color;
 }
 
@@ -42,7 +41,8 @@ vte-terminal {
 }
 
 .host-tree .open-hint {
-	color: alpha(@window_fg_color, 0.35);
+	font-size: 2em;
+	color: alpha(@window_fg_color, 0.7);
 }
 
 .host-tree listview > row {

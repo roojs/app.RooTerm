@@ -389,25 +389,29 @@ namespace RooTerm
 		}
 
 		/**
-		 * Present {@link Adw.AboutDialog} (Shell panel menu).
+		 * Present About (Shell panel menu / VTE menu).
+		 *
+		 * Overlay {@link Adw.AboutDialog} on the drop-down
+		 * clips the close control. {@link Adw.AboutWindow}
+		 * is a real window with titlebar close — not a
+		 * Shell role.
 		 */
 		[DBus (name = "about")]
 		public void about()
 		{
-			if (this.application.window == null) {
-				this.application.activate();
-			}
-			var about = new Adw.AboutDialog() {
+			var about = new Adw.AboutWindow() {
+				application = this.application,
 				application_name = "Roo Term",
 				application_icon = "org.roojs.rooterm",
 				developer_name = "Alan Knowles",
-				version = "0.1.0",
+				version = VERSION,
 				website = "https://github.com/roojs/app.RooTerm",
 				issue_url = "https://github.com/roojs/app.RooTerm/issues",
 				license_type = Gtk.License.LGPL_3_0,
 				comments = "Guake-style drop-down terminal with Ásbrú-cm-like hosts."
 			};
-			about.present(this.application.window);
+			about.add_css_class("floating-dialog");
+			about.present();
 		}
 	}
 }

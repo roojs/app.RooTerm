@@ -30,10 +30,24 @@ namespace RooTerm.Host
 		private Gtk.CustomFilter open_filter;
 		private TreeMenu menu;
 		/**
+		 * UUIDs visible under the current name search:
+		 * own match plus parents.
+		 */
+		private Gee.HashSet<string> search_uuids = new Gee.HashSet<string>();
+		/**
 		 * When false, hide rows that are not open and not a parent of an open row.
 		 * When true, the full tree is shown. Bottom toggle binds this.
+		 * Typing in search sets this true;
+		 * open or select of an open host clears it.
 		 */
 		public bool show_all { get; set; default = false; }
+		/**
+		 * Case-insensitive substring filter on {@link Connection.name}.
+		 * Empty: open-only / show-all as usual. Non-empty: a row is visible
+		 * if its uuid is in the search uuid set
+		 * (own match or a parent of one). Bound to the search entry.
+		 */
+		public string search { get; set; default = ""; }
 		/**
 		 * Row under the context menu. Separate from {@link selection} (active
 		 * terminal); drives the ``menu-target`` row chrome only.
@@ -90,8 +104,7 @@ namespace RooTerm.Host
 				vexpand: true
 			);
 
-			var hint = new Gtk.Label("Click to show all hosts") {
-				wrap = true,
+			var hint = new Gtk.Label("Click to show\nall hosts") {
 				justify = Gtk.Justification.CENTER,
 				valign = Gtk.Align.END,
 				halign = Gtk.Align.CENTER,
@@ -102,16 +115,18 @@ namespace RooTerm.Host
 				margin_start = 8,
 				margin_end = 8
 			};
-			hint.add_css_class("dim-label");
 			hint.add_css_class("open-hint");
 			var prev_open = window.tree.num_open;
 			this.open_filter = new Gtk.CustomFilter((item) => {
-				if (this.show_all || window.tree.num_open == 0) {
-					return true;
-				}
 				var conn = item as Connection;
 				if (conn == null) {
 					return false;
+				}
+				if (this.search != "") {
+					return this.search_uuids.contains(conn.uuid);
+				}
+				if (this.show_all || window.tree.num_open == 0) {
+					return true;
 				}
 				return conn.sessions.get_n_items() > 0 || conn.children_open > 0;
 			});
@@ -119,13 +134,41 @@ namespace RooTerm.Host
 				this.open_filter.changed(Gtk.FilterChange.DIFFERENT);
 				if (this.show_all && window.tree.num_open > prev_open) {
 					this.show_all = false;
+					this.search = "";
 				}
 				prev_open = window.tree.num_open;
-				hint.visible = !this.show_all && window.tree.num_open > 0;
+				hint.visible = !this.show_all && this.search == "" && window.tree.num_open > 0;
 			});
 			this.notify["show-all"].connect(() => {
+				if (!this.show_all && this.search != "") {
+					this.search = "";
+				}
 				this.open_filter.changed(Gtk.FilterChange.DIFFERENT);
-				hint.visible = !this.show_all && window.tree.num_open > 0;
+				hint.visible = !this.show_all && this.search == "" && window.tree.num_open > 0;
+			});
+			this.notify["search"].connect(() => {
+				this.search_uuids.clear();
+				if (this.search == "") {
+					this.open_filter.changed(Gtk.FilterChange.DIFFERENT);
+					hint.visible = !this.show_all && window.tree.num_open > 0;
+					return;
+				}
+				var needle = this.search.casefold();
+				foreach (var conn in window.tree.by_uuid.values) {
+					if (!conn.name.casefold().contains(needle)) {
+						continue;
+					}
+					this.search_uuids.add(conn.uuid);
+					var up = conn.parent;
+					while (up != null) {
+						this.search_uuids.add(up.uuid);
+						up.expanded = true;
+						up = up.parent;
+					}
+				}
+				this.show_all = true;
+				this.open_filter.changed(Gtk.FilterChange.DIFFERENT);
+				hint.visible = false;
 			});
 			this.tree_model = new Gtk.TreeListModel(
 				new Gtk.FilterListModel(window.tree, this.open_filter),
@@ -169,13 +212,14 @@ namespace RooTerm.Host
 					return;
 				}
 				this.connection_highlighted(conn);
-				if (!this.show_all) {
+				if (!this.show_all && this.search == "") {
 					return;
 				}
 				if (conn.sessions.get_n_items() == 0 && conn.children_open == 0) {
 					return;
 				}
 				this.show_all = false;
+				this.search = "";
 			});
 
 			var factory = new Gtk.SignalListItemFactory();
@@ -244,7 +288,7 @@ namespace RooTerm.Host
 						"expanded",
 						list_row,
 						"expanded",
-						GLib.BindingFlags.BIDIRECTIONAL
+						GLib.BindingFlags.BIDIRECTIONAL | GLib.BindingFlags.SYNC_CREATE
 					);
 				}
 				var old_sid = mark_box.get_data<ulong>("sessions-sid");
@@ -427,6 +471,7 @@ namespace RooTerm.Host
 			});
 			btn.clicked.connect(() => {
 				this.show_all = false;
+				this.search = "";
 				this.terminal_selected(conn, index);
 			});
 			mark_box.append(btn);

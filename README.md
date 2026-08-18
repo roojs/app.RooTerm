@@ -4,8 +4,50 @@ A thin SSH host manager and terminal for GNOME — a crossover between
 [Guake](https://guake.github.io/) and
 [Ásbrú Connection Manager](https://www.asbru-cm.net/).
 
-**Status:** early / usable for day-to-day SSH testing (version **0.1.0**).
+**Status:** early / usable for day-to-day SSH testing (version **0.1.2**).
 Screenshot coming later.
+
+## Install
+
+Packages are published from [roojs/repos](https://github.com/roojs/repos)
+at **https://roojs.github.io/repos/**.
+
+### APT (Debian / Ubuntu)
+
+Debian 13 (`trixie`). Ubuntu 25.04 (`plucky`), 25.10 (`questing`), 26.04
+(`resolute`). Architectures: `amd64`, `arm64`.
+
+Add the signing key and the sources file, replacing `@suite@` with your
+suite from `lsb_release -cs`:
+
+```bash
+sudo install -d -m 0755 /etc/apt/keyrings
+curl -fsSL https://roojs.github.io/repos/key.gpg \
+  | sudo gpg --dearmor -o /etc/apt/keyrings/roojs.gpg
+
+curl -fsSL https://roojs.github.io/repos/sources \
+  | sed "s/@suite@/$(lsb_release -cs)/" \
+  | sudo tee /etc/apt/sources.list.d/roojs.sources
+
+sudo apt update
+sudo apt install rooterm
+```
+
+### DNF (Fedora)
+
+```bash
+sudo curl -fsSL https://roojs.github.io/repos/key.gpg \
+  -o /etc/pki/rpm-gpg/RPM-GPG-KEY-roojs
+sudo curl -fsSL https://roojs.github.io/repos/repo \
+  -o /etc/yum.repos.d/roojs.repo
+sudo dnf makecache
+sudo dnf install rooterm
+```
+
+More details (supported suites, package list, and repository layout) are on
+the [roojs package repositories](https://roojs.github.io/repos/) page.
+
+To build from source instead, see [BUILD.md](BUILD.md).
 
 ## Features
 
@@ -45,91 +87,6 @@ passphrased identity, installs it on the host (using the stored password once),
 and switches the connection to key auth. If you already use an identity with
 **no** passphrase, Edit connection can offer **Replace with passphrased key**
 so you can move to the same pattern.
-
-## Dependencies (Debian / Ubuntu)
-
-Build (matches `meson.build` minimums: GTK ≥ 4.14, Libadwaita ≥ 1.5,
-VTE GTK4 ≥ 0.78):
-
-```bash
-sudo apt-get install -y \
-  valac meson ninja-build pkg-config desktop-file-utils \
-  libgtk-4-dev libadwaita-1-dev \
-  libvte-2.91-gtk4-dev \
-  libgee-0.8-dev libgcrypt20-dev \
-  libyaml-dev libjson-glib-dev libsecret-1-dev
-```
-
-Runtime also needs **openssh-client** (`ssh`, `ssh-keygen`). The `-dev`
-packages pull in the matching shared libraries.
-
-## Build and run (for testing)
-
-```bash
-meson setup build
-ninja -C build
-./build/rooterm --debug
-```
-
-Debug log: `~/.cache/rooterm/rooterm.debug.log`
-
-After code changes:
-
-```bash
-meson setup --reconfigure build
-ninja -C build
-```
-
-### Install (optional)
-
-Default prefix is `/usr` (needs root):
-
-```bash
-sudo meson install -C build
-```
-
-That installs `rooterm`, the desktop entry, the app icon, and the GNOME Shell
-extension. For day-to-day testing, running `./build/rooterm` from the build
-tree is enough.
-
-**Do not** call `valac` directly — always build with Meson/Ninja.
-
-### Packaging / releases
-
-[`CHANGELOG.md`](CHANGELOG.md) is the only changelog to edit. Debian,
-RPM, and GitHub release notes are generated from it
-(`scripts/release/derive-changelogs.sh`) at package / release time.
-
-GitHub Actions (see [`.github/workflows/release.yml`](.github/workflows/release.yml))
-builds three package formats in parallel on `v*` tags (and via workflow
-dispatch), then a managing job attaches them to the GitHub Release:
-
-| Artifact | Job | Config |
-|----------|-----|--------|
-| `.deb` (amd64) | `build-debian` | [`debian/`](debian/) |
-| `.rpm` (Fedora 42) | `build-rpm` | [`packaging/rpm/rooterm.spec`](packaging/rpm/rooterm.spec) |
-| AppImage (x86_64 + aarch64) | `build-appimage` | [`sqgipkg.json`](sqgipkg.json) |
-
-Local Debian package (regenerates `debian/changelog` from `CHANGELOG.md`):
-
-```bash
-./scripts/release/derive-changelogs.sh
-dpkg-buildpackage -us -uc -b
-```
-
-Local RPM (Fedora / `rpmbuild`):
-
-```bash
-./scripts/ci/build-rpm.sh
-```
-
-Local AppImages need [sqgi](https://github.com/supercamel/sqgi) / `sqgipkg`
-installed, then:
-
-```bash
-sqgipkg --target appimage --appimage-arch x86_64
-sqgipkg --target appimage --appimage-arch aarch64
-```
 
 ## Config paths
 

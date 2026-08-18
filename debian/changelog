@@ -1,3 +1,36 @@
+rooterm (0.1.2-1) unstable; urgency=medium
+
+  * Added: Preferences as its own process (`rooterm --preferences`); live updates on main via D-Bus
+  * Added: Keyboard shortcuts page (toggle, search, new terminal / SSH, tabs, copy / paste, …)
+  * Added: VTE colour themes: background category, foreground theme, live preview
+  * Added: Font page: monospace family (or system) and size, with live preview
+  * Added: Work-area full screen (tab strip on top, animated; session-only until you exit)
+  * Added: Restore local terminal tabs on startup (cwd in `connections.json`; skip missing dirs)
+  * Added: Remember last tab per GNOME workspace (on show after hide; optional, default on)
+  * Added: VTE right-click menu (copy, paste, select all, full screen, quit, …)
+  * Added: `Ctrl+Shift+T` always a local terminal; `Ctrl+Shift+S` a new SSH tab for the focused host
+  * Added: Double-click empty tab-bar space for a new local terminal
+  * Added: Add group from the tree; default **All** group on a blank install
+  * Added: Confirm quit when terminals are still open
+  * Added: Tab close countdown with cancel (selected or background)
+  * Added: RPM and AppImage packaging alongside the existing Debian workflow
+  * Changed: GNOME Shell extension owns show / hide / stacking for main and preferences
+  * Changed: Chrome settings live in `config.json`; hosts stay in `connections.json`
+  * Changed: Tab strip chrome and close behaviour
+  * Fixed: Copy and paste in the terminal
+  * Fixed: Duplicate Localhost rows on load
+  * Fixed: Drop-down show / hide reliability (X11 and Wayland)
+  * Fixed: Preferences startup and live `config_update`
+  * Fixed: Closing tabs and tab-bar width feedback
+
+ -- Alan Knowles <alan@roojs.com>  Sun, 16 Aug 2026 00:00:00 +0000
+
+rooterm (0.1.1-1) unstable; urgency=medium
+
+  * Added: Initial packaging
+
+ -- Alan Knowles <alan@roojs.com>  Thu, 06 Aug 2026 00:00:00 +0000
+
 rooterm (0.1.0-1) unstable; urgency=medium
 
   * Added: GTK4 + Libadwaita + VTE SSH host manager and terminal (Vala)

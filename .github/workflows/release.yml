@@ -1,7 +1,7 @@
 name: Release build
 
-# Parallel package jobs (Debian, RPM, AppImage) plus a managing publish job
-# that attaches artifacts to the GitHub Release for tags like `v0.1.0`.
+# Tag `vX.Y.Z` (via scripts/release.sh): build Debian + Fedora + AppImage
+# packages and publish a GitHub Release whose notes come from CHANGELOG.md.
 # Also runnable via workflow_dispatch (artifact upload only when untagged).
 
 run-name: Release build · ${{ github.ref_name }}
@@ -75,7 +75,7 @@ jobs:
     name: Build RPM package
     runs-on: ubuntu-24.04
     container:
-      image: fedora:42
+      image: fedora:44
     steps:
       # Fedora container image has no git; checkout needs it.
       - name: Install git

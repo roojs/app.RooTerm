@@ -161,6 +161,7 @@ namespace RooTerm
 		protected override void startup()
 		{
 			base.startup();
+			GLib.message("RooTerm %s", VERSION);
 			this.dbus = new DBus(this);
 			this.hold();
 		}

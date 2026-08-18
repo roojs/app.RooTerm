@@ -7,9 +7,14 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 for git tags (`v0.1.0`, etc.).
 
 Debian (`debian/changelog`), RPM (`%changelog`), and GitHub release notes are
-generated from this file by `scripts/release/derive-changelogs.sh`.
+generated from this file by `scripts/release/derive-changelogs.sh` in CI.
+Humans tag a release with `scripts/release.sh` after stamping `[Unreleased]`
+as `## [X.Y.Z] - YYYY-MM-DD` and setting `meson.build` to the same version
+(see [BUILD.md](BUILD.md)).
 
 ## [Unreleased]
+
+## [0.1.2] - 2026-08-16
 
 ### Added
 
@@ -47,6 +52,12 @@ generated from this file by `scripts/release/derive-changelogs.sh`.
 - Drop-down show / hide reliability (X11 and Wayland)
 - Preferences startup and live `config_update`
 - Closing tabs and tab-bar width feedback
+
+## [0.1.1] - 2026-08-06
+
+### Added
+
+- Initial packaging
 
 ## [0.1.0] - 2026-08-01
 

@@ -22,8 +22,7 @@ namespace RooTerm.Dialog
 	 * Foreground theme selector: ← | {@link Adw.ComboRow} | → on a
 	 * {@link Gtk.FilterListModel} over {@link RooTerm.Themes} (category filter).
 	 *
-	 * Bound to ``theme-name``. {@link category_row} updates the filter search
-	 * (same idea as {@link Host.SearchPulldown}).
+	 * Bound to ``theme-name``. {@link category_row} updates the filter search.
 	 *
 	 * == Example ==
 	 *
