@@ -49,7 +49,7 @@ namespace RooTerm.Host
 		/**
 		 * Whether this row is expanded in the host tree.
 		 * Default true matches previous TreeListModel autoexpand.
-		 * Used for groups and LXC hosts only; Localhost always expanded on bind.
+		 * Persist is parked (0.19); still JSON, not saved on toggle.
 		 */
 		public bool expanded { get; set; default = true; }
 		/**
@@ -60,7 +60,7 @@ namespace RooTerm.Host
 
 		/** Active row↔expanded binding from {@link Tree}; not serialized. */
 		public GLib.Binding? expand_binding;
-		/** ``notify["expanded"]`` → save from {@link TreeNodes}; not serialized. */
+		/** ``notify["expanded"]`` → save (parked); not serialized. */
 		public ulong expand_save_sid;
 		/**
 		 * Search / filter label (parent prefix for LXC children); not stored / not JSON.

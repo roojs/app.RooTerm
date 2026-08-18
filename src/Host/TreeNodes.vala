@@ -21,8 +21,9 @@ namespace RooTerm.Host
 	/**
 	 * Nested collection of {@link Connection} rows for the host tree.
 	 *
-	 * Implements {@link GLib.ListModel} over a {@link Gee.ArrayList}; mutations
-	 * emit ``items-changed`` so {@link Gtk.TreeListModel} / filters update.
+		 * Implements {@link GLib.ListModel} over a {@link Gee.ArrayList}; mutations
+		 * emit ``items-changed`` so {@link Gtk.TreeListModel} / filters update,
+		 * and {@link added} / {@link removed} with the {@link Connection}.
 	 *
 	 * The root list (``MainWindow.tree``) also owns {@link flat}; use
 	 * {@link append} / {@link remove} for nest + flat updates.
@@ -51,7 +52,7 @@ namespace RooTerm.Host
 			default = new Gee.HashMap<string, Connection>();
 		}
 		/**
-		 * Owning config (set by {@link load} on the window tree); used to save on expand.
+		 * Owning config (set by {@link load} on the window tree).
 		 */
 		public weak RooTerm.Config? config;
 		/**
@@ -64,6 +65,29 @@ namespace RooTerm.Host
 		 * {@link Tree} refilters the open-only view.
 		 */
 		public signal void open_changed();
+		/**
+		 * ``conn`` was just attached ({@link append} on the root list).
+		 * ``conn.parent`` is already set.
+		 *
+		 * @param conn Row that was attached
+		 */
+		public signal void added(Connection conn);
+		/**
+		 * ``conn`` was just detached ({@link remove} on the root list).
+		 * ``conn.parent`` is still the old parent.
+		 *
+		 * @param conn Row that was detached
+		 */
+		public signal void removed(Connection conn);
+		/**
+		 * Connections that currently have children (root list only).
+		 * Updated in {@link append} / {@link remove}.
+		 */
+		public Gee.ArrayList<Connection> expandable {
+			get;
+			set;
+			default = new Gee.ArrayList<Connection>();
+		}
 
 		/**
 		 * Number of rows (Vala ``foreach`` / index access).
@@ -164,6 +188,10 @@ namespace RooTerm.Host
 			add_to.items_changed(position, 0, 1);
 			conn.parent = parent;
 			conn.parent_uuid = parent == null ? "" : parent.uuid;
+			if (parent != null && add_to.size == 1) {
+				this.expandable.add(parent);
+			}
+			this.added(conn);
 			if (conn.uuid.length > 0) {
 				this.by_uuid.set(conn.uuid, conn);
 			}
@@ -190,12 +218,6 @@ namespace RooTerm.Host
 					up = up.parent;
 				}
 			}
-			if ((conn.kind == ConnectionKind.GROUP || conn.lxc_host)
-				&& conn.expand_save_sid == 0) {
-				conn.expand_save_sid = conn.notify["expanded"].connect(() => {
-					this.save();
-				});
-			}
 			if (conn.deleted || conn.kind == ConnectionKind.GROUP) {
 				this.open_changed();
 				return;
@@ -212,16 +234,17 @@ namespace RooTerm.Host
 		 */
 		public void remove(Connection conn)
 		{
-			if (conn.expand_save_sid != 0) {
-				conn.disconnect(conn.expand_save_sid);
-				conn.expand_save_sid = 0;
-			}
 			var add_to = conn.parent == null ? this : conn.parent.children;
 			var pos = 0u;
 			if (add_to.find(conn, out pos)) {
 				add_to.items.remove_at((int) pos);
 				add_to.items_changed(pos, 1, 0);
 			}
+			this.expandable.remove(conn);
+			if (conn.parent != null && add_to.size == 0) {
+				this.expandable.remove(conn.parent);
+			}
+			this.removed(conn);
 			conn.parent = null;
 			this.flat.remove(conn);
 			if (conn.uuid.length > 0) {
@@ -265,7 +288,7 @@ namespace RooTerm.Host
 		}
 
 		/**
-		 * Load the host nest and bind ``config`` for expand→save.
+		 * Load the host nest and bind ``config`` on the root list.
 		 * Migrate if {@link Config.need_migrate}, else ``connections.json`` when present.
 		 * Read failures log a warning only.
 		 *
