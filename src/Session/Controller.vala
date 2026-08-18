@@ -83,6 +83,8 @@ namespace RooTerm.Session
 
 		/**
 		 * Create an SSH terminal tab for ``connection`` without spawning (host page if needed).
+		 * {@link Host.ConnectionKind.LXC} tabs share the parent host page, like
+		 * {@link Host.ConnectionKind.LOCAL_PATH} on Localhost.
 		 *
 		 * Caller sets stream flags if needed, then {@link Terminal.Ssh.spawn} and
 		 * ``terminal.grab_focus()`` when ready.
@@ -93,19 +95,19 @@ namespace RooTerm.Session
 		 */
 		public Terminal.Ssh create(Host.Connection connection, Terminal.Stream? stream = null)
 		{
-			Host.Page page;
-			if (this.by_uuid.has_key(connection.uuid)) {
-				page = this.by_uuid.get(connection.uuid);
-			} else {
-				page = new Host.Page(connection, this.tree, this.config);
+			var page_connection = connection.kind == Host.ConnectionKind.LXC
+				? connection.parent : connection;
+			var page = this.by_uuid.get(page_connection.uuid);
+			if (page == null) {
+				page = new Host.Page(page_connection, this.tree, this.config);
 				page.empty.connect(() => {
 					this.close(page);
 				});
 				page.changed.connect(() => {
 					this.focus();
 				});
-				this.by_uuid.set(connection.uuid, page);
-				this.stack.pages.add_named(page, connection.uuid);
+				this.by_uuid.set(page_connection.uuid, page);
+				this.stack.pages.add_named(page, page_connection.uuid);
 				var win = this.stack.get_root() as MainWindow;
 				if (win != null && win.fullscreen) {
 					this.stack.fullscreen(true);

@@ -145,8 +145,14 @@ namespace RooTerm
 			}
 			var term = (Terminal.Base) conn.sessions.get_item(0);
 			var name = conn.uuid;
-			if (conn.kind == Host.ConnectionKind.LOCAL_PATH) {
-				name = conn.parent.uuid;
+			switch (conn.kind) {
+				case Host.ConnectionKind.LOCAL_PATH:
+				case Host.ConnectionKind.LXC:
+					name = conn.parent.uuid;
+					break;
+
+				default:
+					break;
 			}
 			var page = this.host_stack.pages.get_child_by_name(name) as Host.Page;
 			if (page == null) {
@@ -364,44 +370,51 @@ namespace RooTerm
 				});
 			});
 			this.host_tree.connection_highlighted.connect((conn) => {
-				if (conn.kind == Host.ConnectionKind.LOCAL_PATH) {
-					var term = (Terminal.Base) conn.sessions.get_item(0);
-					var local_page = this.host_stack.pages.get_child_by_name(conn.parent.uuid) as Host.Page;
-					if (local_page == null) {
-						return;
-					}
-					this.host_stack.pages.visible_child = local_page;
-					local_page.tab_view.selected_page = local_page.tab_view.get_page(term);
-					this.sessions.focus();
-					return;
+				var name = conn.uuid;
+				switch (conn.kind) {
+					case Host.ConnectionKind.LOCAL_PATH:
+					case Host.ConnectionKind.LXC:
+						name = conn.parent.uuid;
+						break;
+
+					default:
+						break;
 				}
-				var page = this.host_stack.pages.get_child_by_name(conn.uuid) as Host.Page;
+				var page = this.host_stack.pages.get_child_by_name(name) as Host.Page;
 				if (page == null) {
 					return;
+				}
+				if (conn.sessions.get_n_items() > 0) {
+					var term = page.current != null && page.current.connection == conn
+						? page.current
+						: (Terminal.Base) conn.sessions.get_item(0);
+					page.tab_view.selected_page = page.tab_view.get_page(term);
 				}
 				this.host_stack.pages.visible_child = page;
 				this.sessions.focus();
 			});
 			this.host_tree.terminal_selected.connect((conn, index) => {
-				if (conn.kind == Host.ConnectionKind.LOCAL_PATH) {
-					var term = (Terminal.Base) conn.sessions.get_item(0);
-					var local_page = this.host_stack.pages.get_child_by_name(conn.parent.uuid) as Host.Page;
-					if (local_page == null) {
-						return;
-					}
-					this.host_tree.select(conn);
-					this.host_stack.pages.visible_child = local_page;
-					local_page.tab_view.selected_page = local_page.tab_view.get_page(term);
-					this.sessions.focus();
+				if (index < 0 || index >= (int) conn.sessions.get_n_items()) {
 					return;
 				}
-				var page = this.host_stack.pages.get_child_by_name(conn.uuid) as Host.Page;
-				if (page == null || index < 0 || index >= page.tab_view.n_pages) {
+				var term = (Terminal.Base) conn.sessions.get_item(index);
+				var name = conn.uuid;
+				switch (conn.kind) {
+					case Host.ConnectionKind.LOCAL_PATH:
+					case Host.ConnectionKind.LXC:
+						name = conn.parent.uuid;
+						break;
+
+					default:
+						break;
+				}
+				var page = this.host_stack.pages.get_child_by_name(name) as Host.Page;
+				if (page == null) {
 					return;
 				}
 				this.host_tree.select(conn);
 				this.host_stack.pages.visible_child = page;
-				page.tab_view.selected_page = page.tab_view.get_nth_page(index);
+				page.tab_view.selected_page = page.tab_view.get_page(term);
 				this.sessions.focus();
 			});
 			this.host_search.bind_property("text", this.host_tree, "search",

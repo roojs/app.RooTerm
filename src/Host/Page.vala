@@ -22,9 +22,10 @@ namespace RooTerm.Host
 	 * One host: {@link Adw.TabView} of {@link Terminal.Base}s with a {@link TabBar}
 	 * (bottom when docked; top when {@link MainWindow.fullscreen}). Localhost children are
 	 * {@link ConnectionKind.LOCAL_PATH} rows owned by each local tab’s
-	 * {@link Terminal.Base.connection}.
+	 * {@link Terminal.Base.connection}. LXC children share this host page the
+	 * same way; each tab’s {@link Terminal.Base.connection} is the LXC row.
 	 * Tab-strip ``+`` / blank double-click run ``win.new-terminal`` (Ctrl+Shift+T → local).
-	 * Ctrl+Shift+S is ``win.new-ssh`` (SSH host / LXC page only).
+	 * Ctrl+Shift+S is ``win.new-ssh`` (SSH host page only).
 	 * Open terminals live on {@link Connection.sessions} for the host tree.
 	 */
 	public class Page : Gtk.Box
@@ -118,7 +119,9 @@ namespace RooTerm.Host
 					this.tree.remove(term.connection);
 					this.tree.save();
 				} else {
-					this.connection.sessions.remove(at);
+					var pos = 0u;
+					term.connection.sessions.find(term, out pos);
+					term.connection.sessions.remove(pos);
 				}
 				this.tab_view.close_page_finish(page, true);
 				if (this.tab_view.n_pages > 0) {
@@ -164,10 +167,6 @@ namespace RooTerm.Host
 			tab.title = text;
 			tab.tooltip = this.tab_tooltip(term, text);
 			switch (term.connection.kind) {
-				case ConnectionKind.LOCAL_PATH:
-					term.connection.sessions.append(term);
-					break;
-
 				case ConnectionKind.LOCAL:
 					var row = new Connection() {
 						uuid = GLib.Uuid.string_random(),
@@ -183,7 +182,7 @@ namespace RooTerm.Host
 					break;
 
 				default:
-					this.connection.sessions.append(term);
+					term.connection.sessions.append(term);
 					break;
 			}
 			return tab;
