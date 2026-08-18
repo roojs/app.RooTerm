@@ -1,0 +1,4 @@
+namespace RooTerm
+{
+	public const string VERSION = "@VCS_TAG@";
+}
