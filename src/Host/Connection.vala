@@ -60,6 +60,12 @@ namespace RooTerm.Host
 
 		/** Active row↔expanded binding from {@link Tree}; not serialized. */
 		public GLib.Binding? expand_binding;
+		/**
+		 * Flattened {@link Gtk.TreeListRow} while this connection is in the tree model.
+		 * Strong (GTK ``get_item`` is transfer-full; the model only borrows).
+		 * Not JSON. {@link Tree} sets it from ``items-changed``.
+		 */
+		public Gtk.TreeListRow? tree_row;
 		/** ``notify["expanded"]`` → save (parked); not serialized. */
 		public ulong expand_save_sid;
 		/**
@@ -235,6 +241,7 @@ namespace RooTerm.Host
 				case "tree-icon":
 				case "local-tab":
 				case "children-open":
+				case "tree-row":
 					return null;
 
 				case "kind":

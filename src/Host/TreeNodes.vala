@@ -80,8 +80,8 @@ namespace RooTerm.Host
 		 */
 		public signal void removed(Connection conn);
 		/**
-		 * Connections that currently have children (root list only).
-		 * Updated in {@link append} / {@link remove}.
+		 * Rows in this layer that can expand (group, localhost, LXC host).
+		 * Filled in {@link append} / {@link remove}.
 		 */
 		public Gee.ArrayList<Connection> expandable {
 			get;
@@ -188,8 +188,20 @@ namespace RooTerm.Host
 			add_to.items_changed(position, 0, 1);
 			conn.parent = parent;
 			conn.parent_uuid = parent == null ? "" : parent.uuid;
-			if (parent != null && add_to.size == 1) {
-				this.expandable.add(parent);
+			switch (conn.kind) {
+				case ConnectionKind.GROUP:
+				case ConnectionKind.LOCAL:
+					add_to.expandable.add(conn);
+					break;
+
+				case ConnectionKind.HOST:
+					if (conn.lxc_host) {
+						add_to.expandable.add(conn);
+					}
+					break;
+
+				default:
+					break;
 			}
 			this.added(conn);
 			if (conn.uuid.length > 0) {
@@ -240,16 +252,38 @@ namespace RooTerm.Host
 				add_to.items.remove_at((int) pos);
 				add_to.items_changed(pos, 1, 0);
 			}
-			this.expandable.remove(conn);
-			if (conn.parent != null && add_to.size == 0) {
-				this.expandable.remove(conn.parent);
-			}
+			add_to.expandable.remove(conn);
+			conn.tree_row = null;
 			this.removed(conn);
 			conn.parent = null;
 			this.flat.remove(conn);
 			if (conn.uuid.length > 0) {
 				this.by_uuid.unset(conn.uuid);
 			}
+		}
+
+		/**
+		 * Expand this layer's rows that have children, then
+		 * {@link GLib.Idle.add} {@link expand_all} on those children's lists.
+		 * Nested {@link Gtk.TreeListRow}s exist only after the parent expands.
+		 */
+		public void expand_all()
+		{
+			if (this.expandable.size == 0) {
+				return;
+			}
+			foreach (var conn in this.expandable) {
+				if (conn.tree_row == null) {
+					continue;
+				}
+				conn.tree_row.expanded = true;
+			}
+			GLib.Idle.add(() => {
+				foreach (var conn in this.expandable) {
+					conn.children.expand_all();
+				}
+				return false;
+			});
 		}
 
 		/**

@@ -30,8 +30,8 @@ namespace RooTerm.Host
 		private Gtk.CustomFilter open_filter;
 		private TreeMenu menu;
 		/**
-		 * Name-match uuids plus parents of those matches.
-		 * The filter also shows children: walk ``parent`` into this set.
+		 * Name-match uuids plus parents of those matches (path to the hit).
+		 * Children of a match are not in this set; the filter tests ancestor names.
 		 */
 		private Gee.HashSet<string> search_uuids = new Gee.HashSet<string>();
 		/**
@@ -44,8 +44,8 @@ namespace RooTerm.Host
 		/**
 		 * Case-insensitive substring filter on {@link Connection.name}.
 		 * Empty: open-only / show-all as usual. Non-empty: a row is visible
-		 * if it or a parent is in the search uuid set
-		 * (own match, parent of a match, or child of a match).
+		 * if it is a name match or a parent of one, or an ancestor's name matches
+		 * (matched host / group still shows its children; siblings of a hit do not).
 		 * Bound to the search entry.
 		 */
 		public string search { get; set; default = ""; }
@@ -81,20 +81,22 @@ namespace RooTerm.Host
 		 */
 		public void select(Connection connection)
 		{
-			var up = connection.parent;
-			while (up != null) {
-				up.expanded = true;
-				up = up.parent;
-			}
-			for (var i = 0; i < this.tree_model.get_n_items(); i++) {
-				var row = this.tree_model.get_item(i) as Gtk.TreeListRow;
-				if (row == null || row.item != connection) {
-					continue;
+			while (connection.tree_row == null && connection.parent != null) {
+				var up = connection.parent;
+				while (up != null && up.tree_row == null) {
+					up = up.parent;
 				}
-				this.selection.selected = i;
-				this.list_view.scroll_to(i, Gtk.ListScrollFlags.FOCUS, null);
+				if (up == null) {
+					break;
+				}
+				up.tree_row.expanded = true;
+			}
+			if (connection.tree_row == null) {
 				return;
 			}
+			var i = connection.tree_row.get_position();
+			this.selection.selected = i;
+			this.list_view.scroll_to(i, Gtk.ListScrollFlags.FOCUS, null);
 		}
 
 		/**
@@ -130,9 +132,13 @@ namespace RooTerm.Host
 					return false;
 				}
 				if (this.search != "") {
-					var up = conn;
+					if (this.search_uuids.contains(conn.uuid)) {
+						return true;
+					}
+					var needle = this.search.casefold();
+					var up = conn.parent;
 					while (up != null) {
-						if (this.search_uuids.contains(up.uuid)) {
+						if (up.name.casefold().contains(needle)) {
 							return true;
 						}
 						up = up.parent;
@@ -153,9 +159,7 @@ namespace RooTerm.Host
 				prev_open = window.tree.num_open;
 				hint.visible = !this.show_all && this.search == "" && window.tree.num_open > 0;
 				if (this.search != "" || !this.show_all) {
-					foreach (var conn in window.tree.expandable) {
-						conn.expanded = true;
-					}
+					window.tree.expand_all();
 				}
 			});
 			this.notify["show-all"].connect(() => {
@@ -164,18 +168,14 @@ namespace RooTerm.Host
 				}
 				this.open_filter.changed(Gtk.FilterChange.DIFFERENT);
 				hint.visible = !this.show_all && this.search == "" && window.tree.num_open > 0;
-				foreach (var conn in window.tree.expandable) {
-					conn.expanded = true;
-				}
+				window.tree.expand_all();
 			});
 			this.notify["search"].connect(() => {
 				this.search_uuids.clear();
 				if (this.search == "") {
 					this.open_filter.changed(Gtk.FilterChange.DIFFERENT);
 					hint.visible = !this.show_all && window.tree.num_open > 0;
-					foreach (var conn in window.tree.expandable) {
-						conn.expanded = true;
-					}
+					window.tree.expand_all();
 					return;
 				}
 				var needle = this.search.casefold();
@@ -193,9 +193,7 @@ namespace RooTerm.Host
 				this.show_all = true;
 				this.open_filter.changed(Gtk.FilterChange.DIFFERENT);
 				hint.visible = false;
-				foreach (var conn in window.tree.expandable) {
-					conn.expanded = true;
-				}
+				window.tree.expand_all();
 			});
 			this.tree_model = new Gtk.TreeListModel(
 				new Gtk.FilterListModel(window.tree, this.open_filter),
@@ -209,10 +207,31 @@ namespace RooTerm.Host
 					return new Gtk.FilterListModel(conn.children, this.open_filter);
 				}
 			);
-
-			foreach (var conn in window.tree.expandable) {
-				conn.expanded = true;
+			this.tree_model.items_changed.connect((pos, removed, added) => {
+				for (var i = 0; i < added; i++) {
+					var row = this.tree_model.get_item(pos + i) as Gtk.TreeListRow;
+					if (row == null) {
+						continue;
+					}
+					var conn = row.item as Connection;
+					if (conn == null) {
+						continue;
+					}
+					conn.tree_row = row;
+				}
+			});
+			for (var i = 0; i < this.tree_model.get_n_items(); i++) {
+				var row = this.tree_model.get_item(i) as Gtk.TreeListRow;
+				if (row == null) {
+					continue;
+				}
+				var conn = row.item as Connection;
+				if (conn == null) {
+					continue;
+				}
+				conn.tree_row = row;
 			}
+			window.tree.expand_all();
 
 			this.selection = new Gtk.SingleSelection(this.tree_model) {
 				autoselect = false,
@@ -301,7 +320,7 @@ namespace RooTerm.Host
 						"expanded",
 						list_row,
 						"expanded",
-						GLib.BindingFlags.BIDIRECTIONAL | GLib.BindingFlags.SYNC_CREATE
+						GLib.BindingFlags.BIDIRECTIONAL
 					);
 				}
 				var old_sid = mark_box.get_data<ulong>("sessions-sid");
