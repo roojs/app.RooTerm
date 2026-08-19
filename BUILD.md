@@ -69,11 +69,15 @@ To publish a tagged release:
 2. Commit
 3. Run `scripts/release.sh` in a normal terminal (not an agent). It checks
    that meson matches the changelog, tags `vX.Y.Z`, and pushes — GitHub
-   Actions then builds packages
+   Actions then builds packages. If that run was cancelled or failed, commit
+   any fix then `scripts/release.sh --retry` (deletes the tag, retags HEAD).
 
 ```bash
 # after editing CHANGELOG.md + meson.build (and committing):
 scripts/release.sh
+
+# after a cancelled or failed CI run for the same version:
+scripts/release.sh --retry
 ```
 
 Local `ninja` builds (git checkout, not a release tarball) show a development

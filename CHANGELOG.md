@@ -18,7 +18,6 @@ as `## [X.Y.Z] - YYYY-MM-DD` and setting `meson.build` to the same version
 
 ### Added
 
-- Auto-fill SSH TOTP verification codes (liboath); dialog to type a code or store the authenticator secret
 - Host tree search as a filter (`Ctrl+Shift+O`); Up / Down walk visible hosts and containers, Enter picks; wraps
 - Open-only host tree by default; click empty space to show all hosts
 - LXC container tabs on the parent host’s page
