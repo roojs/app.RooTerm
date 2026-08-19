@@ -1,5 +1,5 @@
 project('rooterm', 'vala', 'c',
-  version: '0.1.0',
+  version: '0.1.3',
   license: 'LGPL-3.0-or-later',
   default_options: [
     'warning_level=1',

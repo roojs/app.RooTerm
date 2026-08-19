@@ -14,11 +14,19 @@ as `## [X.Y.Z] - YYYY-MM-DD` and setting `meson.build` to the same version
 
 ## [Unreleased]
 
-## [0.1.2] - 2026-08-16
+## [0.1.3] - 2026-08-19
 
 ### Added
 
 - Auto-fill SSH TOTP verification codes (liboath); dialog to type a code or store the authenticator secret
+- Host tree search as a filter (`Ctrl+Shift+O`); Up / Down walk visible hosts and containers, Enter picks; wraps
+- Open-only host tree by default; click empty space to show all hosts
+- LXC container tabs on the parent host’s page
+
+### Changed
+
+- Matching search rows expand so containers under a host stay visible
+- Focused session icon is solid blue; restoring tabs stay idle until the first prompt
 
 ## [0.1.2] - 2026-08-16
 
@@ -76,7 +84,8 @@ as `## [X.Y.Z] - YYYY-MM-DD` and setting `meson.build` to the same version
 - Debian packaging (`debian/`) and GitHub Actions release workflow for `.deb`
   builds on `v*` tags
 
-[Unreleased]: https://github.com/roojs/app.RooTerm/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/roojs/app.RooTerm/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/roojs/app.RooTerm/releases/tag/v0.1.3
 [0.1.2]: https://github.com/roojs/app.RooTerm/releases/tag/v0.1.2
 [0.1.1]: https://github.com/roojs/app.RooTerm/releases/tag/v0.1.1
 [0.1.0]: https://github.com/roojs/app.RooTerm/releases/tag/v0.1.0
