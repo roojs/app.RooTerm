@@ -57,6 +57,11 @@ namespace RooTerm.Host
 		 * Not JSON; maintained when sessions open or close.
 		 */
 		public int children_open { get; set; default = 0; }
+		/**
+		 * Expander widget ``name`` while this row is the search cursor.
+		 * ``search-target`` or empty. Not JSON.
+		 */
+		public string search_css { get; set; default = ""; }
 
 		/** Active row↔expanded binding from {@link Tree}; not serialized. */
 		public GLib.Binding? expand_binding;
@@ -242,6 +247,7 @@ namespace RooTerm.Host
 				case "local-tab":
 				case "children-open":
 				case "tree-row":
+				case "search-css":
 					return null;
 
 				case "kind":

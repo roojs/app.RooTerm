@@ -36,6 +36,11 @@ namespace RooTerm.Session
 		BUSY,
 		READY,
 		/**
+		 * Spawned until the first shell prompt; then {@link IDLE}.
+		 * Output does not mark busy or ready.
+		 */
+		RESTORING,
+		/**
 		 * Child process has exited (SSH); tab may still be open for reconnect / close.
 		 */
 		EXITED

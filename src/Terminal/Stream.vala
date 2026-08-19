@@ -153,9 +153,10 @@ namespace RooTerm.Terminal
 			this.prompt_queued = true;
 			this.terminal.commit.connect(this.on_commit);
 			this.terminal.contents_changed.connect(() => {
-				if (!this.await_prompt) {
+				if (this.session.state == Session.State.EXITED) {
 					return;
 				}
+				this.await_prompt = true;
 				this.prompt_activity = GLib.get_monotonic_time();
 				if (!this.prompt_queued) {
 					prompt_waiters.add(this);
@@ -281,13 +282,17 @@ namespace RooTerm.Terminal
 			if (GLib.Regex.match_simple("(password|passphrase).*:\\s*$", last, GLib.RegexCompileFlags.CASELESS, 0)) {
 				return;
 			}
-			var is_prompt = GLib.Regex.match_simple("^[^\\s@]+@[^\\s:]+:.*[#$]\\s*$", last, 0, 0)
+			// Hostname may contain spaces (``user@router in house:~$``).
+			var is_prompt = GLib.Regex.match_simple("^[^\\s@]+@[^:]+:.*[#$%]\\s*$", last, 0, 0)
 				|| GLib.Regex.match_simple("^(MariaDB|mysql|sqlite3?|postgres|plsql)\\b.*>\\s*$", last, GLib.RegexCompileFlags.CASELESS, 0)
 				|| ((last.has_suffix("$") || last.has_suffix("#") || last.has_suffix("%")) && last.length < 160);
 			if (!is_prompt) {
 				return;
 			}
 			this.await_prompt = false;
+			if (this.session.state == Session.State.RESTORING) {
+				this.session.state = Session.State.IDLE;
+			}
 			var local = this.session as Local;
 			if (local != null && this.session.child_pid > 0) {
 				// ``/proc`` st_uid works for root shells; cwd often EACCES after ``sudo su``.
@@ -331,10 +336,9 @@ namespace RooTerm.Terminal
 			GLib.debug("prompt_hint name=%s hint=%s", this.connection.name, last);
 			this.prompt_hint = last;
 			// Local tabs use ``/proc``; prompt path is often ``~`` and would clobber it.
-			if (local == null && GLib.Regex.match_simple("^[^\\s@]+@[^\\s:]+:.+[#$]\\s*$", last, 0, 0)) {
-				var colon = last.index_of_char(':');
-				var dir = last.substring(colon + 1);
-				dir = dir.substring(0, dir.length - 1);
+			if (local == null && GLib.Regex.match_simple("^[^\\s@]+@[^:]+:.+[#$%]\\s*$", last, 0, 0)) {
+				var bits = GLib.Regex.split_simple("^[^\\s@]+@[^:]+:", last);
+				var dir = GLib.Regex.split_simple("[#$%]\\s*$", bits[bits.length - 1])[0].strip();
 				if (dir.length > 0 && dir != this.session.cwd) {
 					this.session.cwd = dir;
 					this.session.label_changed();
@@ -396,7 +400,7 @@ namespace RooTerm.Terminal
 			if (line.length > 500 || line.index_of("\x1b") >= 0) {
 				return;
 			}
-			if (GLib.Regex.match_simple("^[^\\s@]+@[^\\s:]+:.*[#$]\\s*$", line, 0, 0)
+			if (GLib.Regex.match_simple("^[^\\s@]+@[^:]+:.*[#$%]\\s*$", line, 0, 0)
 				|| line.has_suffix("$") || line.has_suffix("#") || line.has_suffix("%")) {
 				return;
 			}

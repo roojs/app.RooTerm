@@ -67,7 +67,7 @@ namespace RooTerm.Terminal
 				this.state_changed();
 			}
 		}
-		private Session.State _state = Session.State.IDLE;
+		private Session.State _state = Session.State.RESTORING;
 		/**
 		 * True when this tab is the selected one on its host (tree mark emphasis).
 		 */
@@ -83,6 +83,11 @@ namespace RooTerm.Terminal
 			}
 		}
 		private bool _tree_active = false;
+		/**
+		 * Last cursor cell counted as output (redraws that do not move it are not unread).
+		 */
+		private long activity_col = -1;
+		private long activity_row = -1;
 		/**
 		 * CSS modifier for the tree session icon (``session-active`` / idle / busy / …).
 		 */
@@ -300,9 +305,24 @@ namespace RooTerm.Terminal
 			this.terminal.add_controller(menu_click);
 
 			this.terminal.contents_changed.connect(() => {
-				if (this.selected || this.state == Session.State.EXITED) {
+				if (this.selected) {
 					return;
 				}
+				switch (this.state) {
+					case Session.State.EXITED:
+					case Session.State.RESTORING:
+						return;
+
+					default:
+						break;
+				}
+				long col, row;
+				this.terminal.get_cursor_position(out col, out row);
+				if (col == this.activity_col && row == this.activity_row) {
+					return;
+				}
+				this.activity_col = col;
+				this.activity_row = row;
 				if (this.settle_timeout != 0) {
 					GLib.Source.remove(this.settle_timeout);
 					this.settle_timeout = 0;
@@ -364,10 +384,15 @@ namespace RooTerm.Terminal
 				GLib.Source.remove(this.settle_timeout);
 				this.settle_timeout = 0;
 			}
-			if (this.state == Session.State.IDLE) {
-				return;
+			switch (this.state) {
+				case Session.State.IDLE:
+				case Session.State.RESTORING:
+					return;
+
+				default:
+					this.state = Session.State.IDLE;
+					break;
 			}
-			this.state = Session.State.IDLE;
 		}
 
 		/**

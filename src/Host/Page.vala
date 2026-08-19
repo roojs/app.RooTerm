@@ -201,6 +201,7 @@ namespace RooTerm.Host
 			this.on_screen = on;
 			if (this.current != null) {
 				this.current.select(on);
+				this.current.tree_active = on;
 			}
 		}
 

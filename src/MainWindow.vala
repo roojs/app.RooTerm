@@ -370,6 +370,16 @@ namespace RooTerm
 				});
 			});
 			this.host_tree.connection_highlighted.connect((conn) => {
+				if (conn.sessions.get_n_items() == 0) {
+					switch (conn.kind) {
+						case Host.ConnectionKind.LOCAL_PATH:
+						case Host.ConnectionKind.LXC:
+							return;
+
+						default:
+							break;
+					}
+				}
 				var name = conn.uuid;
 				switch (conn.kind) {
 					case Host.ConnectionKind.LOCAL_PATH:
@@ -536,6 +546,7 @@ namespace RooTerm
 			GLib.Idle.add(() => {
 				this.host_tree.select(term.connection);
 				this.sessions.focus();
+				this.restore();
 				this.shell.ensure(() => {
 					if (!this.shell.is_ready) {
 						return;

@@ -34,6 +34,7 @@ namespace RooTerm.Host
 		 * Children of a match are not in this set; the filter tests ancestor names.
 		 */
 		private Gee.HashSet<string> search_uuids = new Gee.HashSet<string>();
+		private Gee.ArrayList<Connection> search_hits = new Gee.ArrayList<Connection>();
 		/**
 		 * When false, hide rows that are not open and not a parent of an open row.
 		 * When true, the full tree is shown. Bottom toggle binds this.
@@ -54,6 +55,11 @@ namespace RooTerm.Host
 		 * terminal); drives the ``menu-target`` row chrome only.
 		 */
 		public Connection? menu_target { get; set; default = null; }
+		/**
+		 * Search keyboard cursor. Separate from {@link selection} (active
+		 * terminal); {@link search_step} / {@link search_pick} drive it.
+		 */
+		public Connection? search_target { get; set; default = null; }
 
 		/**
 		 * Emitted on double-click / activate of a non-group connection.
@@ -97,6 +103,61 @@ namespace RooTerm.Host
 			var i = connection.tree_row.get_position();
 			this.selection.selected = i;
 			this.list_view.scroll_to(i, Gtk.ListScrollFlags.FOCUS, null);
+		}
+
+		/**
+		 * Move {@link search_target} by ``delta`` entries in {@link search_hits}.
+		 * Does not change {@link selection}. Wraps past either end.
+		 *
+		 * @param delta ``1`` Down, ``-1`` Up
+		 */
+		private void search_step(int delta)
+		{
+			if (this.search == "" || this.search_hits.size == 0) {
+				return;
+			}
+			var i = -1;
+			if (this.search_target != null) {
+				i = this.search_hits.index_of(this.search_target);
+			}
+			if (i < 0) {
+				i = delta > 0 ? -1 : this.search_hits.size;
+			}
+			i += delta;
+			if (i < 0) {
+				i = this.search_hits.size - 1;
+			}
+			if (i >= this.search_hits.size) {
+				i = 0;
+			}
+			var hit = this.search_hits.get(i);
+			if (hit == this.search_target) {
+				return;
+			}
+			if (this.search_target != null) {
+				this.search_target.search_css = "";
+			}
+			this.search_target = hit;
+			this.search_target.search_css = "search-target";
+			if (this.search_target.tree_row == null) {
+				return;
+			}
+			this.list_view.scroll_to(this.search_target.tree_row.get_position(), Gtk.ListScrollFlags.NONE, null);
+		}
+
+		/**
+		 * Apply the search cursor: select an open row, otherwise activate.
+		 */
+		private void search_pick()
+		{
+			if (this.search_target == null) {
+				return;
+			}
+			if (this.search_target.sessions.get_n_items() > 0) {
+				this.select(this.search_target);
+				return;
+			}
+			this.connection_activated(this.search_target);
 		}
 
 		/**
@@ -172,6 +233,11 @@ namespace RooTerm.Host
 			});
 			this.notify["search"].connect(() => {
 				this.search_uuids.clear();
+				this.search_hits.clear();
+				if (this.search_target != null) {
+					this.search_target.search_css = "";
+				}
+				this.search_target = null;
 				if (this.search == "") {
 					this.open_filter.changed(Gtk.FilterChange.DIFFERENT);
 					hint.visible = !this.show_all && window.tree.num_open > 0;
@@ -190,10 +256,40 @@ namespace RooTerm.Host
 						up = up.parent;
 					}
 				}
+				var pending = new Gee.ArrayList<Connection>();
+				for (var i = window.tree.size - 1; i >= 0; i--) {
+					pending.add(window.tree.get(i));
+				}
+				while (pending.size > 0) {
+					var conn = pending.get(pending.size - 1);
+					pending.remove_at(pending.size - 1);
+					for (var c = conn.children.size - 1; c >= 0; c--) {
+						pending.add(conn.children.get(c));
+					}
+					if (conn.kind == ConnectionKind.GROUP) {
+						continue;
+					}
+					if (this.search_uuids.contains(conn.uuid)) {
+						this.search_hits.add(conn);
+						continue;
+					}
+					var up = conn.parent;
+					while (up != null) {
+						if (up.name.casefold().contains(needle)) {
+							this.search_hits.add(conn);
+							break;
+						}
+						up = up.parent;
+					}
+				}
 				this.show_all = true;
 				this.open_filter.changed(Gtk.FilterChange.DIFFERENT);
 				hint.visible = false;
 				window.tree.expand_all();
+				GLib.Idle.add(() => {
+					this.search_step(1);
+					return false;
+				});
 			});
 			this.tree_model = new Gtk.TreeListModel(
 				new Gtk.FilterListModel(window.tree, this.open_filter),
@@ -306,6 +402,15 @@ namespace RooTerm.Host
 					),
 					"hide-expander"
 				).bind(expander, "hide-expander", list_item);
+				new Gtk.PropertyExpression(
+					typeof(Connection),
+					new Gtk.PropertyExpression(
+						typeof(Gtk.TreeListRow),
+						new Gtk.PropertyExpression(typeof(Gtk.ListItem), null, "item"),
+						"item"
+					),
+					"search-css"
+				).bind(expander, "name", list_item);
 			});
 			factory.bind.connect((obj) => {
 				var list_item = (Gtk.ListItem) obj;
@@ -421,6 +526,32 @@ namespace RooTerm.Host
 				this.show_all = true;
 			});
 			this.list_view.add_controller(empty_click);
+			var search_keys = new Gtk.EventControllerKey() {
+				propagation_phase = Gtk.PropagationPhase.CAPTURE
+			};
+			search_keys.key_pressed.connect((keyval, keycode, state) => {
+				if (this.search == "") {
+					return false;
+				}
+				switch (keyval) {
+					case Gdk.Key.Up:
+						this.search_step(-1);
+						return true;
+
+					case Gdk.Key.Down:
+						this.search_step(1);
+						return true;
+
+					case Gdk.Key.Return:
+					case Gdk.Key.KP_Enter:
+						this.search_pick();
+						return true;
+
+					default:
+						return false;
+				}
+			});
+			window.host_search.add_controller(search_keys);
 			this.list_view.activate.connect((pos) => {
 				this.selection.selected = pos;
 				var row = this.selection.selected_item as Gtk.TreeListRow;

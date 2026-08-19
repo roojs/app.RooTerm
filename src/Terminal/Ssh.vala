@@ -138,7 +138,7 @@ namespace RooTerm.Terminal
 			this.stream.hide_input = false;
 			this.stream.log_line = -1;
 			this.stream.prompt_hint = "";
-			this.state = Session.State.IDLE;
+			this.state = Session.State.RESTORING;
 			var window = this.get_root() as RooTerm.MainWindow;
 			if (window == null) {
 				this.spawn();
