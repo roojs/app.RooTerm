@@ -268,7 +268,8 @@ namespace RooTerm.Session
 		}
 
 		/**
-		 * Refresh {@link display} from the focused terminal (or ``Roo Term``).
+		 * Refresh {@link display} from the current terminal and put the
+		 * keyboard in that VTE (or ``Roo Term`` when none).
 		 */
 		public void focus()
 		{
@@ -285,6 +286,7 @@ namespace RooTerm.Session
 			}
 			this.display = page.current.label();
 			this.display_changed();
+			page.current.terminal.grab_focus();
 		}
 	}
 }

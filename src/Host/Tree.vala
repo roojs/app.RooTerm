@@ -102,7 +102,7 @@ namespace RooTerm.Host
 			}
 			var i = connection.tree_row.get_position();
 			this.selection.selected = i;
-			this.list_view.scroll_to(i, Gtk.ListScrollFlags.FOCUS, null);
+			this.list_view.scroll_to(i, Gtk.ListScrollFlags.NONE, null);
 		}
 
 		/**

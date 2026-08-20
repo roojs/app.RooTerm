@@ -371,14 +371,7 @@ namespace RooTerm
 			});
 			this.host_tree.connection_highlighted.connect((conn) => {
 				if (conn.sessions.get_n_items() == 0) {
-					switch (conn.kind) {
-						case Host.ConnectionKind.LOCAL_PATH:
-						case Host.ConnectionKind.LXC:
-							return;
-
-						default:
-							break;
-					}
+					return;
 				}
 				var name = conn.uuid;
 				switch (conn.kind) {
