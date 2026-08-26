@@ -60,6 +60,13 @@ namespace RooTerm.Host
 		 * terminal); {@link search_step} / {@link search_pick} drive it.
 		 */
 		public Connection? search_target { get; set; default = null; }
+		/**
+		 * True while search is refiltering / expanding the tree.
+		 * Cleared when {@link TreeNodes.expand_queue} returns to 0.
+		 * Selection changes from that must not emit
+		 * {@link connection_highlighted} (VTE grab) or clear search.
+		 */
+		private bool block_vte = false;
 
 		/**
 		 * Emitted on double-click / activate of a non-group connection.
@@ -211,6 +218,18 @@ namespace RooTerm.Host
 				}
 				return conn.sessions.get_n_items() > 0 || conn.children_open > 0;
 			});
+			window.tree.notify["expand-queue"].connect(() => {
+				if (window.tree.expand_queue != 0 || !this.block_vte) {
+					return;
+				}
+				GLib.Idle.add(() => {
+					if (this.search != "") {
+						this.search_step(1);
+					}
+					this.block_vte = false;
+					return false;
+				});
+			});
 			window.tree.open_changed.connect(() => {
 				this.open_filter.changed(Gtk.FilterChange.DIFFERENT);
 				if (this.show_all && window.tree.num_open > prev_open) {
@@ -238,10 +257,18 @@ namespace RooTerm.Host
 					this.search_target.search_css = "";
 				}
 				this.search_target = null;
+				this.block_vte = true;
 				if (this.search == "") {
 					this.open_filter.changed(Gtk.FilterChange.DIFFERENT);
 					hint.visible = !this.show_all && window.tree.num_open > 0;
 					window.tree.expand_all();
+					if (window.tree.expand_queue != 0) {
+						return;
+					}
+					GLib.Idle.add(() => {
+						this.block_vte = false;
+						return false;
+					});
 					return;
 				}
 				var needle = this.search.casefold();
@@ -286,10 +313,6 @@ namespace RooTerm.Host
 				this.open_filter.changed(Gtk.FilterChange.DIFFERENT);
 				hint.visible = false;
 				window.tree.expand_all();
-				GLib.Idle.add(() => {
-					this.search_step(1);
-					return false;
-				});
 			});
 			this.tree_model = new Gtk.TreeListModel(
 				new Gtk.FilterListModel(window.tree, this.open_filter),
@@ -334,6 +357,10 @@ namespace RooTerm.Host
 				can_unselect = true
 			};
 			this.selection.notify["selected"].connect(() => {
+				if (this.block_vte) {
+					GLib.debug("block_vte skip selected search=%s", this.search);
+					return;
+				}
 				var row = this.selection.selected_item as Gtk.TreeListRow;
 				var conn = row != null ? row.item as Connection : null;
 				if (conn == null || conn.kind == ConnectionKind.GROUP) {

@@ -61,6 +61,13 @@ namespace RooTerm.Host
 		 */
 		public int num_open { get; set; default = 0; }
 		/**
+		 * In-flight {@link expand_all} work on this list (the window tree).
+		 * Each layer that schedules an idle increments; that idle decrements
+		 * after dispatching children. Nested calls pass this same instance
+		 * so the count is one queue, not per layer.
+		 */
+		public int expand_queue { get; set; default = 0; }
+		/**
 		 * A nested row opened or closed a tab.
 		 * {@link Tree} refilters the open-only view.
 		 */
@@ -266,12 +273,18 @@ namespace RooTerm.Host
 		 * Expand this layer's rows that have children, then
 		 * {@link GLib.Idle.add} {@link expand_all} on those children's lists.
 		 * Nested {@link Gtk.TreeListRow}s exist only after the parent expands.
+		 * ``counter`` is the window tree whose {@link expand_queue} counts
+		 * the work.
+		 *
+		 * @param counter Queue owner; this list when omitted
 		 */
-		public void expand_all()
+		public void expand_all(TreeNodes? counter = null)
 		{
+			var owner = counter != null ? counter : this;
 			if (this.expandable.size == 0) {
 				return;
 			}
+			owner.expand_queue++;
 			foreach (var conn in this.expandable) {
 				if (conn.tree_row == null) {
 					continue;
@@ -280,8 +293,9 @@ namespace RooTerm.Host
 			}
 			GLib.Idle.add(() => {
 				foreach (var conn in this.expandable) {
-					conn.children.expand_all();
+					conn.children.expand_all(owner);
 				}
+				owner.expand_queue--;
 				return false;
 			});
 		}
