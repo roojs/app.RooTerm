@@ -29,7 +29,6 @@ namespace RooTerm.Jobs
 		 * Previous identity to retire later (Dialog.Connection stores on success).
 		 */
 		public string old_identity = "";
-
 		/**
 		 * @param window Main window
 		 * @param connection Host the job acts on

@@ -70,7 +70,8 @@ namespace RooTerm.Dialog
 				box.append(new Gtk.Label(
 """Create a new passphrased key (stored in the secret store) to replace
 the unprotected one. Next we install it on the server. Removing the
-old key is a separate step after you verify the new key works."""
+old key from the server is a separate step after you verify the new
+key works. The local unprotected key is left on disk."""
 				) {
 					xalign = 0,
 					wrap = true

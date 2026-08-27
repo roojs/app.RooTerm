@@ -103,6 +103,7 @@ namespace RooTerm.Host
 		public string public_key { get; set; default = ""; }
 		/**
 		 * Old private-key path still on the server; clear after {@link Dialog.Connection} remove step.
+		 * The local identity file is not deleted.
 		 */
 		public string retire_key { get; set; default = ""; }
 		public string options { get; set; default = ""; }

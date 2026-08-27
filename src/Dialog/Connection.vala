@@ -47,6 +47,8 @@ namespace RooTerm.Dialog
 		private Gtk.Button setup_key_btn;
 		private Gtk.Button upgrade_key_btn;
 		private Gtk.Button retire_key_btn;
+		private Gtk.Switch key_switch;
+		private Gtk.Box key_box;
 		private GLib.ListStore forward_store;
 		private Gtk.SingleSelection forward_selection;
 		private Gtk.ColumnView forward_view;
@@ -138,6 +140,29 @@ namespace RooTerm.Dialog
 			basic.append(this.user_entry);
 			basic.append(this.pass_box);
 
+			this.key_switch = new Gtk.Switch() {
+				valign = Gtk.Align.CENTER
+			};
+			var key_row = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 12);
+			key_row.append(new Gtk.Label("Use protected private key") {
+				xalign = 0,
+				hexpand = true
+			});
+			key_row.append(this.key_switch);
+			this.key_box = new Gtk.Box(Gtk.Orientation.VERTICAL, 6) {
+				visible = false
+			};
+			this.key_box.append(key_row);
+			this.key_box.append(new Gtk.Label(
+"""A password-protected key is safer. Turn this off only when
+scripts or other tools need an unprotected key."""
+			) {
+				xalign = 0,
+				wrap = true,
+				css_classes = { "dim-label" }
+			});
+			basic.append(this.key_box);
+
 			this.sudo_check = new Gtk.CheckButton.with_label("sudo -i after login");
 			this.lxc_host_check = new Gtk.CheckButton.with_label("LXC host") {
 				sensitive = false
@@ -198,6 +223,7 @@ namespace RooTerm.Dialog
 					: "Password";
 				if (this.auth_password.active) {
 					this.auth_key.visible = false;
+					this.key_box.visible = false;
 					this.setup_key_btn.visible = !this.is_new
 						&& this.target != null
 						&& this.target.kind != Host.ConnectionKind.LXC;
@@ -210,6 +236,7 @@ namespace RooTerm.Dialog
 					: "Password";
 				if (this.auth_key.active) {
 					this.auth_key.visible = true;
+					this.key_box.visible = true;
 					this.setup_key_btn.visible = false;
 				}
 			});
@@ -220,6 +247,7 @@ namespace RooTerm.Dialog
 					: "Password";
 				if (this.auth_manual.active) {
 					this.auth_key.visible = false;
+					this.key_box.visible = false;
 					this.setup_key_btn.visible = !this.is_new
 						&& this.target != null
 						&& this.target.kind != Host.ConnectionKind.LXC;
@@ -583,6 +611,8 @@ namespace RooTerm.Dialog
 			this.setup_key_btn.visible = false;
 			this.auth_key.visible = true;
 			this.auth_key.active = true;
+			this.key_box.visible = true;
+			this.key_switch.active = true;
 			this.window.tree.save();
 			this.pass_box.visible = this.auth_password.active || this.sudo_check.active;
 			this.pass_label.label = this.auth_key.active && this.sudo_check.active
@@ -596,6 +626,7 @@ namespace RooTerm.Dialog
 		/**
 		 * Step 1: ensure the shared passphrased identity exists, install it on this host,
 		 * keep {@link Connection.retire_key} for the old identity until step 2.
+		 * The local unprotected key is not deleted.
 		 *
 		 * One key for all hosts: ``~/.ssh/id_ed25519_rooterm`` (reused if already present).
 		 */
@@ -684,7 +715,7 @@ namespace RooTerm.Dialog
 		 * Run {@link Jobs.ReplaceKey} after the new identity exists.
 		 *
 		 * @param identity New private key path
-		 * @param old_identity Previous identity to retire later
+		 * @param old_identity Previous identity to retire later (server only)
 		 */
 		private async void run_key_upgrade(string identity, string old_identity)
 		{
@@ -711,6 +742,8 @@ namespace RooTerm.Dialog
 			this.setup_key_btn.visible = false;
 			this.auth_key.visible = true;
 			this.auth_key.active = true;
+			this.key_box.visible = true;
+			this.key_switch.active = true;
 			this.upgrade_key_btn.visible = false;
 			this.retire_key_btn.visible = true;
 			this.window.tree.save();
@@ -719,7 +752,8 @@ namespace RooTerm.Dialog
 			var done = new Adw.AlertDialog(
 				"New key installed",
 """Verify login with the new key works, then use
-“Remove old key from server” on this connection."""
+“Remove old key from server” on this connection.
+The local unprotected key is left on disk."""
 			);
 			done.add_response("ok", "OK");
 			done.default_response = "ok";
@@ -732,6 +766,7 @@ namespace RooTerm.Dialog
 
 		/**
 		 * Step 2: after the new key works, remove the old pubkey from the server.
+		 * Does not delete the local identity.
 		 */
 		private void begin_key_retire()
 		{
@@ -820,8 +855,23 @@ namespace RooTerm.Dialog
 			} else if (this.auth_key.active) {
 				this.target.auth = "ssh_key";
 				this.target.pass = this.sudo_check.active ? this.pass_entry.text : "";
-				if (this.pending_key_identity.length > 0) {
+				if (this.key_switch.active) {
 					this.target.public_key = this.pending_key_identity;
+					if (this.target.public_key.length == 0) {
+						this.target.public_key = GLib.Path.build_filename(
+							GLib.Environment.get_home_dir(), ".ssh", "id_ed25519_rooterm"
+						);
+					}
+				}
+				if (!this.key_switch.active) {
+					var home = GLib.Environment.get_home_dir();
+					this.target.public_key = GLib.Path.build_filename(home, ".ssh", "id_ed25519");
+					if (!GLib.FileUtils.test(this.target.public_key, GLib.FileTest.IS_REGULAR)) {
+						this.target.public_key = GLib.Path.build_filename(home, ".ssh", "id_rsa");
+					}
+					if (!GLib.FileUtils.test(this.target.public_key, GLib.FileTest.IS_REGULAR)) {
+						this.target.public_key = "";
+					}
 				}
 			} else {
 				this.target.auth = "manual";
@@ -894,14 +944,11 @@ namespace RooTerm.Dialog
 			}
 			this.window.tree.save();
 
-			if (this.target.auth == "ssh_key" && this.target.retire_key.length == 0
-					&& this.key_open()) {
+			if (this.target.auth == "ssh_key" && this.key_switch.active && this.key_open()) {
 				var alert = new Adw.AlertDialog(
 					"Unprotected SSH key",
 """This private key has no passphrase. Replace it with a new
-passphrased key (stored in the secret store). Installing the new
-key and removing the old one from the server are two separate
-steps so you can verify the new key works first."""
+passphrased key (stored in the secret store)."""
 				);
 				alert.add_response("later", "Later");
 				alert.add_response("replace", "Replace key…");
@@ -1027,6 +1074,10 @@ steps so you can verify the new key works first."""
 			this.lxc_host_check.sensitive = this.sudo_check.active;
 			this.lxc_host_check.visible = this.target.kind != Host.ConnectionKind.LXC;
 			this.fetch_hosts_btn.visible = this.lxc_host_check.active && !this.is_new;
+			this.key_box.visible = using_key;
+			this.key_switch.active = this.target.public_key == GLib.Path.build_filename(
+				GLib.Environment.get_home_dir(), ".ssh", "id_ed25519_rooterm"
+			);
 			this.retire_key_btn.visible = using_key && this.target.retire_key.length > 0;
 			this.upgrade_key_btn.visible = using_key && this.target.retire_key.length == 0
 				&& this.key_open() && !this.is_new && this.target.kind != Host.ConnectionKind.LXC;

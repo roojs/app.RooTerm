@@ -86,7 +86,11 @@ connection, use **Set up SSH key**, and RooTerm creates or reuses the shared
 passphrased identity, installs it on the host (using the stored password once),
 and switches the connection to key auth. If you already use an identity with
 **no** passphrase, Edit connection can offer **Replace with passphrased key**
-so you can move to the same pattern.
+so you can move to the same pattern. After the new key works, **Remove old
+key from server** strips that pubkey from `authorized_keys` — the local
+unprotected identity stays on disk. Each SSH-key connection has a **Use
+protected private key** switch (on uses `id_ed25519_rooterm`; off uses the
+normal unprotected identity when scripts or other tools need it).
 
 ## Config paths
 
