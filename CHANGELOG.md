@@ -18,6 +18,11 @@ as `## [X.Y.Z] - YYYY-MM-DD` and setting `meson.build` to the same version
 
 - Connection dialog switch to use the passphrased identity; unprotected keys stay available for scripts
 
+### Fixed
+
+- Selecting a host with no sessions no longer jumps to an open child (wrong LXC / host)
+- Typing in host search keeps focus in the search box instead of the VTE
+
 ## [0.1.3] - 2026-08-19
 
 ### Added
