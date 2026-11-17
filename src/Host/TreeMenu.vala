@@ -125,7 +125,11 @@ namespace RooTerm.Host
 						kind = ConnectionKind.GROUP
 					};
 					this.window.tree.append(null, conn);
-					this.window.tree.save();
+					conn.position = this.window.tree.size - 1;
+					conn.kind_code = (int) conn.kind;
+					conn.added_dt = (int) new GLib.DateTime.now_local().to_unix();
+					conn.updated_dt = conn.added_dt;
+					new SQ.Query<Connection>(this.window.tree.db, "connection").insert(conn);
 				});
 				alert.present(this.window);
 			});
@@ -185,7 +189,26 @@ namespace RooTerm.Host
 							Posix.kill(pid, Posix.Signal.TERM);
 						}
 					}
-					this.window.tree.save();
+					var gone = new Gee.ArrayList<Connection>();
+					gone.add(conn);
+					var n = 0;
+					while (n < gone.size) {
+						var row = gone.get(n);
+						n++;
+						for (var i = 0; i < row.children.size; i++) {
+							gone.add(row.children.get(i));
+						}
+					}
+					foreach (var row in gone) {
+						if (row.id < 1) {
+							continue;
+						}
+						var binds = new Gee.HashMap<string, int>();
+						binds.set("connection_id", (int) row.id);
+						new SQ.Query<Forward>(this.window.tree.db, "forward").deleteWhere(
+							"WHERE connection_id = $connection_id", binds, null);
+						new SQ.Query<Connection>(this.window.tree.db, "connection").deleteId(row.id);
+					}
 				});
 				alert.present(this.window);
 			});

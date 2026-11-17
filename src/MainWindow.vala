@@ -85,6 +85,10 @@ namespace RooTerm
 		 */
 		public Dialog.Connection connection_editor;
 		/**
+		 * Script library window. Opened from the terminal right-click menu.
+		 */
+		public Tab.Script scripts;
+		/**
 		 * Extension install / readiness / window {@link GnomeShell.register}.
 		 */
 		public GnomeShell shell;
@@ -177,19 +181,34 @@ namespace RooTerm
 		 */
 		public MainWindow(Application app)
 		{
-			var connections_path = GLib.Path.build_filename(
-				GLib.Environment.get_home_dir(), ".config", "rooterm", "connections.json"
+			var config_dir = GLib.Path.build_filename(
+				GLib.Environment.get_home_dir(), ".config", "rooterm"
 			);
-			var first_run = !GLib.FileUtils.test(connections_path, GLib.FileTest.IS_REGULAR);
+			GLib.DirUtils.create_with_parents(config_dir, 0755);
+			var db_path = GLib.Path.build_filename(config_dir, "rooterm.db");
+			var db = new SQ.Database(db_path, false);
+			Sqlite.Database filedb;
+			if (Sqlite.Database.open(db_path, out filedb) != Sqlite.OK) {
+				GLib.warning("database open failed");
+			} else {
+				db.db = (owned) filedb;
+			}
+			RooTerm.SQT.init_db(db);
+			var connections_path = GLib.Path.build_filename(config_dir, "connections.json");
+			var stored = new Gee.ArrayList<Host.Connection>();
+			new SQ.Query<Host.Connection>(db, "connection").select("", stored);
+			var config = Config.load();
+			var first_run = stored.size == 0
+				&& !GLib.FileUtils.test(connections_path, GLib.FileTest.IS_REGULAR)
+				&& !config.need_migrate;
 
 			Asbru.Config? asbru = new Asbru.Config();
 			if (!first_run || !asbru.exists()) {
 				asbru = null;
 			} else {
 				asbru.load();
+				config = asbru.to_config();
 			}
-
-			var config = asbru != null ? asbru.to_config() : Config.load();
 
 			var monitors = Gdk.Display.get_default().get_monitors();
 			var geo = Gdk.Rectangle() { width = 1280, height = 800 };
@@ -218,10 +237,11 @@ namespace RooTerm
 			if (asbru != null) {
 				this.tree = asbru.to_host_tree();
 				this.tree.config = this.config;
+				this.tree.db = db;
 				this.config.save();
-				this.tree.save();
+				this.tree.migrate();
 			} else {
-				this.tree = Host.TreeNodes.load(this.config);
+				this.tree = Host.TreeNodes.load(this.config, db);
 			}
 			foreach (var index in this.config.workspace_uuids.keys) {
 				var uuid = this.config.workspace_uuids.get(index);
@@ -232,6 +252,7 @@ namespace RooTerm
 			}
 			this.shell = new GnomeShell(this);
 			this.connection_editor = new Dialog.Connection(this);
+			this.scripts = new Tab.Script(this);
 			this.map.connect(() => {
 				this.shell.register(this, "main");
 			});
@@ -257,12 +278,17 @@ namespace RooTerm
 				Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
 			);
 			if (!this.tree.by_uuid.has_key("localhost")) {
-				this.tree.append(null, new Host.Connection() {
+				var localhost = new Host.Connection() {
 					uuid = "localhost",
 					name = "Localhost",
 					kind = Host.ConnectionKind.LOCAL
-				});
-				this.tree.save();
+				};
+				this.tree.append(null, localhost);
+				localhost.position = this.tree.size - 1;
+				localhost.kind_code = (int) localhost.kind;
+				localhost.added_dt = (int) new GLib.DateTime.now_local().to_unix();
+				localhost.updated_dt = localhost.added_dt;
+				new SQ.Query<Host.Connection>(this.tree.db, "connection").insert(localhost);
 			}
 			this.localhost = this.tree.by_uuid.get("localhost");
 			var has_group = false;
@@ -279,7 +305,11 @@ namespace RooTerm
 					kind = Host.ConnectionKind.GROUP
 				};
 				this.tree.append(null, all);
-				this.tree.save();
+				all.position = this.tree.size - 1;
+				all.kind_code = (int) all.kind;
+				all.added_dt = (int) new GLib.DateTime.now_local().to_unix();
+				all.updated_dt = all.added_dt;
+				new SQ.Query<Host.Connection>(this.tree.db, "connection").insert(all);
 			}
 			this.tree.sort((a, b) => {
 				if (a.kind == Host.ConnectionKind.LOCAL) {
@@ -526,6 +556,9 @@ namespace RooTerm
 				}
 				if (!GLib.FileUtils.test(conn.cwd, GLib.FileTest.IS_DIR)) {
 					this.tree.remove(conn);
+					if (conn.id > 0) {
+						new SQ.Query<Host.Connection>(this.tree.db, "connection").deleteId(conn.id);
+					}
 					continue;
 				}
 				term = this.sessions.open_local(conn);
@@ -534,7 +567,6 @@ namespace RooTerm
 			if (term == null) {
 				term = this.sessions.open_local(this.localhost);
 			}
-			this.tree.save();
 			// After Application add_window + present: focus + dock cue.
 			GLib.Idle.add(() => {
 				this.host_tree.select(term.connection);

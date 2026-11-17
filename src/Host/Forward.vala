@@ -21,12 +21,8 @@ namespace RooTerm.Host
 	/**
 	 * One SSH local port forward (``-L``).
 	 */
-	public class Forward : Object, Json.Serializable
+	public class Forward : RooTerm.SQT.Forward, Json.Serializable
 	{
-		public string local_host { get; set; default = "127.0.0.1"; }
-		public int local_port { get; set; default = 0; }
-		public string remote_host { get; set; default = ""; }
-		public int remote_port { get; set; default = 0; }
 
 		public unowned ParamSpec? find_property(string name)
 		{
@@ -47,7 +43,18 @@ namespace RooTerm.Host
 
 		public Json.Node serialize_property(string property_name, Value value, ParamSpec pspec)
 		{
-			return default_serialize_property(property_name, value, pspec);
+			switch (property_name) {
+				case "id":
+				case "connection-id":
+				case "position":
+				case "added-dt":
+				case "updated-dt":
+				case "deleted-dt":
+					return null;
+
+				default:
+					return default_serialize_property(property_name, value, pspec);
+			}
 		}
 
 		public bool deserialize_property(string property_name, out Value value, ParamSpec pspec, Json.Node property_node)

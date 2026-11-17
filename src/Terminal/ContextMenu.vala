@@ -68,6 +68,9 @@ namespace RooTerm.Terminal
 			session.append_item(close_item);
 
 			var app_section = new GLib.Menu();
+			var scripts_item = new GLib.MenuItem("Script sender", "win.script-sender");
+			scripts_item.set_icon(new GLib.ThemedIcon("text-x-script-symbolic"));
+			app_section.append_item(scripts_item);
 			var prefs_item = new GLib.MenuItem("Preferences", "win.preferences");
 			prefs_item.set_icon(new GLib.ThemedIcon("preferences-system-symbolic"));
 			app_section.append_item(prefs_item);

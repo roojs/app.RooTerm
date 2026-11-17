@@ -117,7 +117,9 @@ namespace RooTerm.Host
 				if (term.connection.kind == ConnectionKind.LOCAL_PATH) {
 					term.connection.sessions.remove_all();
 					this.tree.remove(term.connection);
-					this.tree.save();
+					if (term.connection.id > 0) {
+						new SQ.Query<Connection>(this.tree.db, "connection").deleteId(term.connection.id);
+					}
 				} else {
 					var pos = 0u;
 					term.connection.sessions.find(term, out pos);
@@ -157,7 +159,8 @@ namespace RooTerm.Host
 							|| local.peer_user == GLib.Environment.get_user_name())
 						&& term.connection.cwd != term.cwd) {
 						term.connection.cwd = term.cwd;
-						this.tree.save();
+						term.connection.updated_dt = (int) new GLib.DateTime.now_local().to_unix();
+						new SQ.Query<Connection>(this.tree.db, "connection").updateById(term.connection);
 					}
 				}
 				this.changed();
@@ -178,7 +181,11 @@ namespace RooTerm.Host
 					term.connection = row;
 					row.sessions.append(term);
 					this.tree.append(this.connection, row);
-					this.tree.save();
+					row.position = this.connection.children.size - 1;
+					row.kind_code = (int) row.kind;
+					row.added_dt = (int) new GLib.DateTime.now_local().to_unix();
+					row.updated_dt = row.added_dt;
+					new SQ.Query<Connection>(this.tree.db, "connection").insert(row);
 					break;
 
 				default:

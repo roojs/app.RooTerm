@@ -79,7 +79,8 @@ export class Dock {
             }
             return;
         }
-        if (win === this.shell.win.preferences) {
+        if (win === this.shell.win.preferences || win === this.shell.win.script
+                || win === this.shell.win['script-form'] || win === this.shell.win.plan) {
             this.raiseDialog(win);
             if (this.shell.win.main) {
                 this.shell.win.main.unmake_above();
@@ -109,8 +110,12 @@ export class Dock {
     }
 
     raiseOpenDialogs() {
-        if (this.shell.win.preferences && !this.shell.win.preferences.minimized) {
-            this.raiseDialog(this.shell.win.preferences);
+        var roles = ['preferences', 'script', 'script-form', 'plan'];
+        for (var i = 0; i < roles.length; i++) {
+            var win = this.shell.win[roles[i]];
+            if (win && !win.minimized) {
+                this.raiseDialog(win);
+            }
         }
     }
 
@@ -279,7 +284,7 @@ export class Dock {
                 self.dockWindow(win);
             });
         }
-        if (this.shell.win.preferences && !this.shell.win.preferences.minimized) {
+        if (this.shell.frontDialog()) {
             win.unmake_above();
             win.stick();
             return;

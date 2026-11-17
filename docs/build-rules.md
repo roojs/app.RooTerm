@@ -10,6 +10,7 @@ Canonical build workflow for this project. Written for **AI agents** — **manda
 sudo apt-get install -y \
   libvte-2.91-gtk4-0 libvte-2.91-gtk4-dev \
   libgtk-4-dev libadwaita-1-dev libgcrypt20-dev libgee-0.8-dev \
+  libsqlite3-dev \
   valac meson ninja-build
 ```
 

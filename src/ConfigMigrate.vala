@@ -20,7 +20,7 @@ namespace RooTerm
 {
 	/**
 	 * One-shot: re-read settings JSON that still has flat ``connections``,
-	 * build the live tree, write nested ``connections.json`` + clean ``config.json``.
+	 * build the live tree, write it to sqlite, and write a clean ``config.json``.
 	 * Trash when unused. Called from {@link Host.TreeNodes.load}.
 	 *
 	 * == Example ==
@@ -101,7 +101,7 @@ namespace RooTerm
 			}
 
 			config.need_migrate = false;
-			tree.save();
+			tree.migrate();
 			GLib.FileUtils.set_contents(config_path, Json.to_string(root, true));
 			GLib.debug("migrated flat → tree connections=%d roots=%d",
 				tree.by_uuid.size, tree.size);

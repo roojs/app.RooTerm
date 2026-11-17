@@ -193,6 +193,16 @@ namespace RooTerm
 				this.window.config.key_fullscreen
 			});
 
+			var scripts_action = new GLib.SimpleAction("script-sender", null);
+			scripts_action.activate.connect(() => {
+				this.window.scripts.present();
+				GLib.Timeout.add(50, () => {
+					this.window.dbus.call_shell_async("show", new GLib.Variant("(s)", "script"));
+					return false;
+				});
+			});
+			this.window.add_action(scripts_action);
+
 			var prefs_action = new GLib.SimpleAction("preferences", null);
 			prefs_action.activate.connect(() => {
 				try {

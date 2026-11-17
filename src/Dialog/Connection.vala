@@ -613,7 +613,9 @@ scripts or other tools need an unprotected key."""
 			this.auth_key.active = true;
 			this.key_box.visible = true;
 			this.key_switch.active = true;
-			this.window.tree.save();
+			this.target.kind_code = (int) this.target.kind;
+			this.target.updated_dt = (int) new GLib.DateTime.now_local().to_unix();
+			new SQ.Query<Host.Connection>(this.window.tree.db, "connection").updateById(this.target);
 			this.pass_box.visible = this.auth_password.active || this.sudo_check.active;
 			this.pass_label.label = this.auth_key.active && this.sudo_check.active
 				? "Password (required for sudo)"
@@ -746,7 +748,9 @@ scripts or other tools need an unprotected key."""
 			this.key_switch.active = true;
 			this.upgrade_key_btn.visible = false;
 			this.retire_key_btn.visible = true;
-			this.window.tree.save();
+			this.target.kind_code = (int) this.target.kind;
+			this.target.updated_dt = (int) new GLib.DateTime.now_local().to_unix();
+			new SQ.Query<Host.Connection>(this.window.tree.db, "connection").updateById(this.target);
 			GLib.debug("key replaced new=%s old=%s name=%s",
 				job.installed_identity, old_identity, this.target.name);
 			var done = new Adw.AlertDialog(
@@ -823,7 +827,9 @@ The local unprotected key is left on disk."""
 			}
 			this.target.retire_key = "";
 			this.retire_key_btn.visible = false;
-			this.window.tree.save();
+			this.target.kind_code = (int) this.target.kind;
+			this.target.updated_dt = (int) new GLib.DateTime.now_local().to_unix();
+			new SQ.Query<Host.Connection>(this.window.tree.db, "connection").updateById(this.target);
 			GLib.debug("retire_key cleared name=%s", this.target.name);
 			this.present();
 		}
@@ -941,8 +947,45 @@ The local unprotected key is left on disk."""
 			}
 			if (this.is_new && this.parent_group != null) {
 				this.window.tree.append(this.parent_group, this.target);
+				this.target.position = this.parent_group.children.size - 1;
 			}
-			this.window.tree.save();
+			this.target.kind_code = (int) this.target.kind;
+			this.target.updated_dt = (int) new GLib.DateTime.now_local().to_unix();
+			var is_new_row = this.target.id < 1;
+			if (is_new_row) {
+				this.target.added_dt = this.target.updated_dt;
+				new SQ.Query<Host.Connection>(this.window.tree.db, "connection").insert(this.target);
+			}
+			if (!is_new_row) {
+				new SQ.Query<Host.Connection>(this.window.tree.db, "connection").updateById(this.target);
+			}
+			var keep = new Gee.HashSet<int>();
+			var forwards = new SQ.Query<Host.Forward>(this.window.tree.db, "forward");
+			for (var i = 0; i < this.target.forwards.size; i++) {
+				var fwd = this.target.forwards.get(i);
+				fwd.connection_id = this.target.id;
+				fwd.position = i;
+				fwd.updated_dt = this.target.updated_dt;
+				var fwd_new = fwd.id < 1;
+				if (fwd_new) {
+					fwd.added_dt = this.target.updated_dt;
+					forwards.insert(fwd);
+				}
+				if (!fwd_new) {
+					forwards.updateById(fwd);
+				}
+				keep.add((int) fwd.id);
+			}
+			var binds = new Gee.HashMap<string, int>();
+			binds.set("connection_id", (int) this.target.id);
+			var stored_fwd = new Gee.ArrayList<Host.Forward>();
+			forwards.selectWhere("WHERE connection_id = $connection_id", binds, null, stored_fwd);
+			foreach (var fwd in stored_fwd) {
+				if (keep.contains((int) fwd.id)) {
+					continue;
+				}
+				forwards.deleteId(fwd.id);
+			}
 
 			if (this.target.auth == "ssh_key" && this.key_switch.active && this.key_open()) {
 				var alert = new Adw.AlertDialog(

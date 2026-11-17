@@ -8,7 +8,7 @@ import {APP_ID, DBUS_DEST, DBUS_IFACE, DBUS_PATH, PREFS_DBUS_DEST, PREFS_DBUS_PA
 
 /**
  * Session bus org.roojs.RooTerm.Shell — register / show / hide / toggle / exited
- * and Meta window slots for main / preferences.
+ * and Meta window slots for main / preferences / script / script-form.
  *
  * Hide is Meta minimize (keeps slots alive). Main slides then minimizes.
  * skip_taskbar is cleared briefly around minimize (GNOME 48: app D-Bus
@@ -21,6 +21,9 @@ export class ShellService {
         this.win = {
             main: false,
             preferences: false,
+            script: false,
+            'script-form': false,
+            plan: false,
         };
         this.waylandPending = [];
         this.export = null;
@@ -48,6 +51,9 @@ export class ShellService {
     disable() {
         this.win.main = false;
         this.win.preferences = false;
+        this.win.script = false;
+        this.win['script-form'] = false;
+        this.win.plan = false;
         this.waylandPending = [];
         if (this.nameId) {
             Gio.DBus.session.unown_name(this.nameId);
@@ -114,6 +120,23 @@ export class ShellService {
         );
     }
 
+    /**
+     * Open dialog slot, script form above the list above preferences.
+     */
+    frontDialog(except) {
+        var roles = ['plan', 'script-form', 'script', 'preferences'];
+        for (var i = 0; i < roles.length; i++) {
+            if (roles[i] === except) {
+                continue;
+            }
+            var win = this.win[roles[i]];
+            if (win && !win.minimized) {
+                return win;
+            }
+        }
+        return false;
+    }
+
     show(role) {
         var self = this;
         if (!this.win[role]) {
@@ -140,7 +163,7 @@ export class ShellService {
                 self.win[role].hide_from_window_list();
             }
         });
-        if (role !== 'preferences') {
+        if (role === 'main') {
             var actor = this.win[role].get_compositor_private();
             if (actor) {
                 actor.remove_all_transitions();
@@ -192,12 +215,10 @@ export class ShellService {
     }
 
     /**
-     * Show main underbar; yield stacking if preferences is open.
+     * Show main underbar; yield stacking while a dialog slot is open.
      */
     showMain() {
-        var front = (this.win.preferences && !this.win.preferences.minimized)
-            ? this.win.preferences
-            : false;
+        var front = this.frontDialog();
         this.win.main.make_above();
         this.win.main.raise();
         if (front) {
@@ -230,7 +251,7 @@ export class ShellService {
         }
         var actor = this.win[role].get_compositor_private();
         // Main: slide off-screen first, then re-enter to minimize.
-        if (role !== 'preferences'
+        if (role === 'main'
                 && actor && !this.win[role].rootermReadyToMinimize) {
             this.win[role].rootermHiding = true;
             actor.remove_all_transitions();
@@ -299,11 +320,15 @@ export class ShellService {
 
                            console.error('rooterm: hide role=' + role + ' id=' + this.win[role].get_id()
             + ' minimized=' + this.win[role].minimized);
-        if (role !== 'preferences') {
+        if (role === 'main') {
             return;
         }
-        if ((this.win.preferences && !this.win.preferences.minimized)
-                || !this.win.main || this.win.main.minimized) {
+        var front = this.frontDialog(role);
+        if (front) {
+            this.show(front);
+            return;
+        }
+        if (!this.win.main || this.win.main.minimized) {
             return;
         }
         this.win.main.make_above();
@@ -328,8 +353,12 @@ export class ShellService {
         console.error('rooterm: exited app_id=' + appId);
         if (appId === 'org.roojs.rooterm') {
             this.win.main = false;
+            this.win.script = false;
+            this.win['script-form'] = false;
+            this.win.plan = false;
             this.waylandPending = this.waylandPending.filter(function(p) {
-                return p.role !== 'main';
+                return p.role !== 'main' && p.role !== 'script'
+                    && p.role !== 'script-form' && p.role !== 'plan';
             });
             return;
         }
@@ -411,7 +440,9 @@ export class ShellService {
             if (!win || win.minimized || !this.isRooTerm(win)) {
                 continue;
             }
-            if (win === this.win.main || win === this.win.preferences) {
+            if (win === this.win.main || win === this.win.preferences
+                    || win === this.win.script || win === this.win['script-form']
+                    || win === this.win.plan) {
                 continue;
             }
             // Skip tiny surfaces (GTK map noise) so they do not steal pending roles.

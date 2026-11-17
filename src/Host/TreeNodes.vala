@@ -56,6 +56,10 @@ namespace RooTerm.Host
 		 */
 		public weak RooTerm.Config? config;
 		/**
+		 * Database for this tree. Set before {@link load} and {@link save}.
+		 */
+		public SQ.Database db;
+		/**
 		 * Number of connections that currently have at least one tab.
 		 * Root list only.
 		 */
@@ -336,37 +340,97 @@ namespace RooTerm.Host
 		}
 
 		/**
-		 * Load the host nest and bind ``config`` on the root list.
-		 * Migrate if {@link Config.need_migrate}, else ``connections.json`` when present.
-		 * Read failures log a warning only.
+		 * Load the host nest and bind ``config`` and ``db`` on the root list.
+		 *
+		 * Rows already in ''connection'' win. Otherwise a flat
+		 * {@link Config.need_migrate} file or ``connections.json`` is
+		 * imported through {@link migrate}, and the JSON file is renamed to
+		 * ``connections.json.migrated``.
 		 *
 		 * @param config From {@link Config.load}
+		 * @param db Open database, tables already created
 		 * @return Host tree for the window
 		 */
-		public static TreeNodes load(RooTerm.Config config)
+		public static TreeNodes load(RooTerm.Config config, SQ.Database db)
 		{
 			var tree = new TreeNodes();
 			tree.config = config;
+			tree.db = db;
+			var path = GLib.Path.build_filename(
+				GLib.Environment.get_home_dir(), ".config", "rooterm", "connections.json"
+			);
 			if (config.need_migrate) {
 				try {
 					ConfigMigrate.run(tree, config);
 				} catch (GLib.Error e) {
 					GLib.warning("connections migrate failed: %s", e.message);
 				}
+				if (GLib.FileUtils.test(path, GLib.FileTest.IS_REGULAR)) {
+					if (GLib.FileUtils.rename(path, path + ".migrated") != 0) {
+						GLib.warning("connections rename failed");
+					}
+				}
 				return tree;
 			}
-			var path = GLib.Path.build_filename(
-				GLib.Environment.get_home_dir(), ".config", "rooterm", "connections.json"
-			);
+			var rows = new Gee.ArrayList<Connection>();
+			new SQ.Query<Connection>(db, "connection").select("ORDER BY position, id", rows);
+			if (rows.size == 0 && !GLib.FileUtils.test(path, GLib.FileTest.IS_REGULAR)) {
+				return tree;
+			}
+			if (rows.size == 0) {
+				try {
+					string hosts;
+					GLib.FileUtils.get_contents(path, out hosts);
+					TreeNodes.from_json(Json.from_string(hosts), tree);
+					tree.migrate();
+				} catch (GLib.Error e) {
+					GLib.warning("connections load failed: %s", e.message);
+				}
+				if (GLib.FileUtils.rename(path, path + ".migrated") != 0) {
+					GLib.warning("connections rename failed");
+				}
+				return tree;
+			}
+			var left = rows;
+			var guard = 0;
+			while (left.size > 0 && guard < 8) {
+				guard++;
+				var still = new Gee.ArrayList<Connection>();
+				foreach (var conn in left) {
+					conn.kind = (ConnectionKind) conn.kind_code;
+					if (conn.uuid.length > 0 && tree.by_uuid.has_key(conn.uuid)) {
+						continue;
+					}
+					if (conn.parent_uuid.length == 0) {
+						tree.append(null, conn);
+						continue;
+					}
+					if (!tree.by_uuid.has_key(conn.parent_uuid)) {
+						still.add(conn);
+						continue;
+					}
+					tree.append(tree.by_uuid.get(conn.parent_uuid), conn);
+				}
+				left = still;
+			}
+			var by_id = new Gee.HashMap<int, Connection>();
+			foreach (var conn in tree.by_uuid.values) {
+				by_id.set((int) conn.id, conn);
+			}
+			var forwards = new Gee.ArrayList<Forward>();
+			new SQ.Query<Forward>(db, "forward").select("ORDER BY position, id", forwards);
+			foreach (var fwd in forwards) {
+				if (!by_id.has_key((int) fwd.connection_id)) {
+					continue;
+				}
+				by_id.get((int) fwd.connection_id).forwards.add(fwd);
+			}
+			GLib.debug("connections loaded count=%d", rows.size);
 			if (!GLib.FileUtils.test(path, GLib.FileTest.IS_REGULAR)) {
 				return tree;
 			}
-			try {
-				string hosts;
-				GLib.FileUtils.get_contents(path, out hosts);
-				TreeNodes.from_json(Json.from_string(hosts), tree);
-			} catch (GLib.Error e) {
-				GLib.warning("connections load failed: %s", e.message);
+			if (GLib.FileUtils.rename(path, path + ".migrated") != 0) {
+				GLib.warning("connections rename failed");
 			}
 			return tree;
 		}
@@ -408,23 +472,43 @@ namespace RooTerm.Host
 		}
 
 		/**
-		 * Write ``~/.config/rooterm/connections.json`` as nested roots (no passwords).
+		 * Insert a tree loaded from JSON or Ásbrú. Every row is new.
+		 * Used once, from {@link load}, {@link ConfigMigrate.run}, and first-run import.
 		 */
-		public void save()
+		public void migrate()
 		{
-			var path = GLib.Path.build_filename(
-				GLib.Environment.get_home_dir(), ".config", "rooterm", "connections.json"
-			);
-			var arr = new Json.Array();
-			foreach (var conn in this) {
-				arr.add_element(Json.gobject_serialize(conn));
+			var pending = new Gee.ArrayList<Connection>();
+			for (var i = 0; i < this.size; i++) {
+				var conn = this.get(i);
+				conn.position = i;
+				pending.add(conn);
 			}
-			var node = new Json.Node(Json.NodeType.ARRAY);
-			node.take_array(arr);
-			try {
-				GLib.FileUtils.set_contents(path, Json.to_string(node, true));
-			} catch (GLib.Error e) {
-				GLib.warning("connections save failed: %s", e.message);
+			var n = 0;
+			while (n < pending.size) {
+				var conn = pending.get(n);
+				n++;
+				for (var i = 0; i < conn.children.size; i++) {
+					var child = conn.children.get(i);
+					child.position = i;
+					pending.add(child);
+				}
+			}
+			var now = (int) new GLib.DateTime.now_local().to_unix();
+			var connections = new SQ.Query<Connection>(this.db, "connection");
+			var forwards = new SQ.Query<Forward>(this.db, "forward");
+			foreach (var conn in pending) {
+				conn.kind_code = (int) conn.kind;
+				conn.added_dt = now;
+				conn.updated_dt = now;
+				connections.insert(conn);
+				for (var i = 0; i < conn.forwards.size; i++) {
+					var fwd = conn.forwards.get(i);
+					fwd.connection_id = conn.id;
+					fwd.position = i;
+					fwd.added_dt = now;
+					fwd.updated_dt = now;
+					forwards.insert(fwd);
+				}
 			}
 		}
 	}

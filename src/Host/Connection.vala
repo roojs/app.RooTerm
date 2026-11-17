@@ -37,21 +37,8 @@ namespace RooTerm.Host
 	/**
 	 * Connection or group ({@link ConnectionKind}); JSON via {@link Json.Serializable}.
 	 */
-	public class Connection : Object, Json.Serializable
+	public class Connection : RooTerm.SQT.Connection, Json.Serializable
 	{
-		public string uuid { get; set; default = ""; }
-		public string name { get; set; default = ""; }
-		/**
-		 * Absolute working directory for {@link ConnectionKind.LOCAL_PATH} restore.
-		 * Empty for other kinds.
-		 */
-		public string cwd { get; set; default = ""; }
-		/**
-		 * Whether this row is expanded in the host tree.
-		 * Default true matches previous TreeListModel autoexpand.
-		 * Persist is parked (0.19); still JSON, not saved on toggle.
-		 */
-		public bool expanded { get; set; default = true; }
 		/**
 		 * How many child rows currently have a tab (nested children included).
 		 * Not JSON; maintained when sessions open or close.
@@ -86,40 +73,16 @@ namespace RooTerm.Host
 		}
 		/**
 		 * Row role (host, group, localhost, path, LXC container).
+		 * Stored as {@link RooTerm.SQT.Connection.kind_code}. ``HOST`` is 0, and
+		 * ocsqlite refuses to load an enum whose value is 0.
 		 */
 		public ConnectionKind kind { get; set; default = ConnectionKind.HOST; }
-		public string parent_uuid { get; set; default = ""; }
 		/**
-		 * Live parent in the host tree; not JSON ({@link parent_uuid} is).
+		 * Live parent in the host tree; not JSON ({@link RooTerm.SQT.Connection.parent_uuid} is).
 		 */
 		public weak Connection? parent { get; set; default = null; }
-		public string method { get; set; default = ""; }
-		public string host { get; set; default = ""; }
-		public int port { get; set; default = 22; }
-		public string user { get; set; default = ""; }
 		public string pass { get; set; default = ""; }
 		public string passphrase { get; set; default = ""; }
-		public string auth { get; set; default = ""; }
-		public string public_key { get; set; default = ""; }
-		/**
-		 * Old private-key path still on the server; clear after {@link Dialog.Connection} remove step.
-		 * The local identity file is not deleted.
-		 */
-		public string retire_key { get; set; default = ""; }
-		public string options { get; set; default = ""; }
-		public bool deleted { get; set; default = false; }
-		/**
-		 * After shell login, run ``sudo -i`` and feed the connection password.
-		 */
-		public bool sudo_after_login { get; set; default = false; }
-		/**
-		 * Host may have LXC containers (refresh / children).
-		 */
-		public bool lxc_host { get; set; default = false; }
-		/**
-		 * Container name for ``lxc-console -n`` (on the host or this child row).
-		 */
-		public string lxc_name { get; set; default = ""; }
 		public Gee.ArrayList<Forward> forwards {
 			get;
 			set;
@@ -239,6 +202,12 @@ namespace RooTerm.Host
 			switch (property_name) {
 				case "pass":
 				case "passphrase":
+				case "id":
+				case "position":
+				case "kind-code":
+				case "added-dt":
+				case "updated-dt":
+				case "deleted-dt":
 				case "sessions":
 				case "parent":
 				case "search-name":
@@ -380,6 +349,11 @@ namespace RooTerm.Host
 					lxc_name = name
 				};
 				window.tree.append(this, child);
+				child.position = this.children.size - 1;
+				child.kind_code = (int) child.kind;
+				child.added_dt = (int) new GLib.DateTime.now_local().to_unix();
+				child.updated_dt = child.added_dt;
+				new SQ.Query<Connection>(window.tree.db, "connection").insert(child);
 				GLib.debug("containers_found add name=%s uuid=%s", name, child.uuid);
 			}
 			var gone = new Gee.ArrayList<Connection>();
@@ -395,8 +369,11 @@ namespace RooTerm.Host
 			}
 			foreach (var child in gone) {
 				window.tree.remove(child);
+				if (child.id < 1) {
+					continue;
+				}
+				new SQ.Query<Connection>(window.tree.db, "connection").deleteId(child.id);
 			}
-			window.tree.save();
 		}
 	}
 }

@@ -336,6 +336,31 @@ namespace RooTerm
 					target = this.application.preferences;
 					break;
 
+				case "script":
+					if (this.application.application_id == "org.roojs.rooterm.preferences"
+							|| this.application.window == null) {
+						return;
+					}
+					target = this.application.window.scripts;
+					break;
+
+				case "script-form":
+					if (this.application.application_id == "org.roojs.rooterm.preferences"
+							|| this.application.window == null) {
+						return;
+					}
+					target = this.application.window.scripts.dialog;
+					break;
+
+				case "plan":
+					if (this.application.application_id == "org.roojs.rooterm.preferences"
+							|| this.application.window == null
+							|| this.application.window.scripts.batch == null) {
+						return;
+					}
+					target = this.application.window.scripts.batch;
+					break;
+
 				default:
 					return;
 			}
