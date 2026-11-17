@@ -53,6 +53,8 @@ namespace RooTerm.Dialog
 		private Gtk.Button run;
 		private Adw.ToggleGroup scopes;
 		private Gtk.Stack body;
+		private int opened = 0;
+		private int goal = 0;
 		private bool closing = false;
 
 		/**
@@ -270,6 +272,21 @@ namespace RooTerm.Dialog
 			}, "list");
 			this.body.add_named(empty, "empty");
 			this.body.visible_child_name = "empty";
+			var tabs = new Adw.TabView() {
+				hexpand = true,
+				vexpand = true
+			};
+			var strip = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 2) {
+				hexpand = true
+			};
+			strip.add_css_class("host-tabbar");
+			var running = new Gtk.Box(Gtk.Orientation.VERTICAL, 0) {
+				hexpand = true,
+				vexpand = true
+			};
+			running.append(tabs);
+			running.append(strip);
+			this.body.add_named(running, "run");
 			var close = new Gtk.Button.with_label("Close");
 			close.clicked.connect(() => {
 				this.close();
@@ -278,12 +295,6 @@ namespace RooTerm.Dialog
 				sensitive = false
 			};
 			this.run.add_css_class("suggested-action");
-			var header = new Adw.HeaderBar() {
-				show_start_title_buttons = false,
-				show_end_title_buttons = false
-			};
-			header.pack_start(close);
-			header.pack_end(this.run);
 			var tools = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 12) {
 				margin_start = 16,
 				margin_end = 16,
@@ -293,6 +304,89 @@ namespace RooTerm.Dialog
 			tools.append(this.search);
 			tools.append(this.scopes);
 			tools.append(this.select);
+			this.run.clicked.connect(() => {
+				if (this.run.label == "Cancel") {
+					this.run.sensitive = false;
+					return;
+				}
+				this.task.is_draft = false;
+				this.tasks.save(this.task);
+				this.run.sensitive = false;
+				var chosen = new Gee.ArrayList<Host.Connection>();
+				var pending = new Gee.ArrayList<Host.Connection>();
+				for (var i = 0; i < this.hosts.size; i++) {
+					pending.add(this.hosts.get(i));
+				}
+				var at = 0;
+				while (at < pending.size) {
+					var conn = pending.get(at);
+					at++;
+					for (var i = 0; i < conn.children.size; i++) {
+						pending.add(conn.children.get(i));
+					}
+					if (!this.picks.has_key((int) conn.id)) {
+						continue;
+					}
+					switch (conn.kind) {
+						case Host.ConnectionKind.HOST:
+						case Host.ConnectionKind.LXC:
+							break;
+
+						default:
+							continue;
+					}
+					chosen.add(conn);
+				}
+				this.goal = chosen.size;
+				this.opened = 0;
+				if (this.goal == 0) {
+					return;
+				}
+				tools.visible = false;
+				this.body.visible_child_name = "run";
+				this.title = "executing .... 0/" + this.goal.to_string();
+				for (var i = 0; i < chosen.size; i++) {
+					var conn = chosen.get(i);
+					var term = new Terminal.Ssh(conn, this.main.config);
+					var page = tabs.append(term);
+					page.title = conn.name;
+					var chip = new Gtk.Button.with_label(conn.name);
+					chip.add_css_class("flat");
+					chip.clicked.connect(() => {
+						tabs.selected_page = page;
+					});
+					strip.append(chip);
+					var job = new Jobs.Batch(this.main, conn, term);
+					job.run.begin((obj, res) => {
+						try {
+							job.run.end(res);
+						} catch (Jobs.Error e) {
+							GLib.warning("batch open failed name=%s: %s",
+								conn.name, e.message);
+						}
+						this.opened++;
+						this.title = "executing .... " + this.opened.to_string()
+							+ "/" + this.goal.to_string();
+						if (this.opened < this.goal) {
+							return;
+						}
+						this.title = "starting...";
+						GLib.Timeout.add(10000, () => {
+							this.run.label = "Cancel";
+							this.run.sensitive = true;
+							this.run.remove_css_class("suggested-action");
+							this.run.add_css_class("destructive-action");
+							return false;
+						});
+					});
+				}
+			});
+			var header = new Adw.HeaderBar() {
+				show_start_title_buttons = false,
+				show_end_title_buttons = false
+			};
+			header.pack_start(close);
+			header.pack_end(this.run);
 			var box = new Gtk.Box(Gtk.Orientation.VERTICAL, 0);
 			box.append(tools);
 			box.append(this.body);
