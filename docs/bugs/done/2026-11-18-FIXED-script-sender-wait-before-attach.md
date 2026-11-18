@@ -1,9 +1,9 @@
 # Script sender waits before attach and never runs the command
 
 > Pointer: `docs/bug-fix-process.md` (emoji).
-> Related: `docs/plans/0.23-script-sender.md` (Phase 4 — the ten-second wait currently wraps attach and the body).
+> Related: `docs/plans/done/0.23-DONE-script-sender.md`.
 
-**Status:** ✔️ fix applied — awaiting user verify
+**Status:** ✅ FIXED — user closed out 2026-11-18
 
 **Started:** 2026-11-18
 
@@ -53,7 +53,7 @@ The hunks below are the first fix. They are already applied.
 - **🔷** Cancel during the dots still sets `halt` and does not send the body. The two-second delay before the Run button becomes Cancel stays (double-click guard).
 - **💩** One target: the batch window title is the dots. Several targets in the wait at once would each write that title; last write wins. Revisit if a multi-target run needs dots on each chip.
 - **💩** `Batch` needs the plan window to set the title. Field below, not a new method.
-- **ℹ️** When this lands, update `docs/plans/0.23-script-sender.md` Phase 4: the wait is after attach, shown as a shrinking dot row, not ten seconds after Run and not the word `starting...`.
+- **ℹ️** Landed in `docs/plans/done/0.23-DONE-script-sender.md`: the wait is after attach, shown as a shrinking dot row.
 
 ### `src/Jobs/Batch.vala`
 
@@ -119,7 +119,7 @@ Leave the two-second timeout that turns Run into Cancel.
 - **✔️** 2026-11-18 — `GLib.debug` at shell up, feed skip, attach send / prompt / timeout, dots start / one / halt, body start, blank skip, each body line, line prompt / timeout, body loop done. No timestamps. Run with `--debug`. Log: `~/.cache/rooterm/rooterm.debug.log`.
 - **✔️** 2026-11-18 — log: attach died on `WAIT_ROOT_PROMPT` before dots. Wait now skips the typed row and accepts a shell or root prompt. Empty criteria titles are `completed n/N`. Run left, Close right. Window 1008×728. Batch font copied from the visible main terminal.
 - **✔️** 2026-11-18 — countdown title is `about to run` plus five dots, not ten. Body still starts at one dot.
-- **✔️** 2026-11-18 — Run stays on the left. Right side is Cancel while a run is in progress, Close otherwise. Cancel stops the jobs and shows Close.
+- **✔️** 2026-11-18 — one countdown for the batch, after every target has attached or failed login. Title order is `starting n/N` (no dots), then `about to run` for three seconds, then `running`, then `completed` only when every target has finished. Cancel is shown as soon as Run is pressed. Run and Cancel are different buttons, so there is no two-second delay.
 
 ## Next
 

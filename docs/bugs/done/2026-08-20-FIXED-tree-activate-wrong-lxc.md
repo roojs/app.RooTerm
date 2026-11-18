@@ -2,7 +2,7 @@
 
 > Pointer: `docs/bug-fix-process.md` (emoji).
 
-**Status:** ✔️ fix applied — awaiting user verify
+**Status:** ✅ FIXED — user closed out 2026-11-18
 
 **Started:** 2026-08-20
 

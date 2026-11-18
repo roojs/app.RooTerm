@@ -60,6 +60,15 @@ vte-terminal {
 	box-shadow: inset 3px 0 0 @accent_bg_color;
 }
 
+/* Group under a host drag. The row is the visible target. */
+.host-tree listview > row.drop-hover {
+	border-radius: 6px;
+	background-color: alpha(@accent_bg_color, 0.55);
+	box-shadow:
+		inset 4px 0 0 @accent_bg_color,
+		inset 0 0 0 2px @accent_bg_color;
+}
+
 /* Search keyboard cursor (not ListView selection — that is the active term). */
 .host-tree treeexpander#search-target {
 	border-radius: 4px;

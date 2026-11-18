@@ -14,14 +14,23 @@ as `## [X.Y.Z] - YYYY-MM-DD` and setting `meson.build` to the same version
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-11-18
+
 ### Added
 
+- Script sender: list and edit scripts, pick hosts, and run one script on many machines from the same window
+- Batch run opens a terminal per host (LXC via `lxc-attach`), counts down, then sends the script; a success pattern can tick that tab
+- Host tree stored in sqlite (`~/.config/rooterm/rooterm.db`); an existing `connections.json` is imported once
 - Connection dialog switch to use the passphrased identity; unprotected keys stay available for scripts
+- Drag hosts into a top-level group (Ctrl-click selects several); folders stay collapsed while dragging and the folder under the pointer is highlighted
+- Add a top-level group from a group's menu; double-click a group to rename it
+- Nested groups become top-level groups on load
 
 ### Fixed
 
 - Selecting a host with no sessions no longer jumps to an open child (wrong LXC / host)
 - Typing in host search keeps focus in the search box instead of the VTE
+- Clicking or dropping in the host tree no longer refilters the list while that click is still in progress
 
 ## [0.1.3] - 2026-08-19
 
@@ -92,7 +101,8 @@ as `## [X.Y.Z] - YYYY-MM-DD` and setting `meson.build` to the same version
 - Debian packaging (`debian/`) and GitHub Actions release workflow for `.deb`
   builds on `v*` tags
 
-[Unreleased]: https://github.com/roojs/app.RooTerm/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/roojs/app.RooTerm/compare/v0.1.4...HEAD
+[0.1.4]: https://github.com/roojs/app.RooTerm/releases/tag/v0.1.4
 [0.1.3]: https://github.com/roojs/app.RooTerm/releases/tag/v0.1.3
 [0.1.2]: https://github.com/roojs/app.RooTerm/releases/tag/v0.1.2
 [0.1.1]: https://github.com/roojs/app.RooTerm/releases/tag/v0.1.1

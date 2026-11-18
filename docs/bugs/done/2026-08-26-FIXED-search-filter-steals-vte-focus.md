@@ -2,7 +2,7 @@
 
 > Pointer: `docs/bug-fix-process.md` (emoji).
 
-**Status:** ✔️ fix applied — awaiting user verify
+**Status:** ✅ FIXED — user closed out 2026-11-18
 
 **Started:** 2026-08-26
 
@@ -28,7 +28,7 @@
   on and the row has sessions.
 - **ℹ️** `expand_all` continues on `Idle.add`, so selection can fire after
   the search notify returns.
-- **ℹ️** 0.22 (`docs/plans/0.22-search-result-cursor.md`): focus stays in
+- **ℹ️** 0.22 (`docs/plans/done/0.22-DONE-search-result-cursor.md`): focus stays in
   the search entry; ListView selection is the active terminal, not the walk.
 
 ## Root cause

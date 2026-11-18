@@ -111,6 +111,14 @@ namespace RooTerm.Host
 				alert.default_response = "add";
 				alert.close_response = "cancel";
 				alert.set_response_appearance("add", Adw.ResponseAppearance.SUGGESTED);
+				alert.set_focus(entry);
+				alert.map.connect(() => {
+					GLib.Idle.add(() => {
+						entry.grab_focus();
+						entry.select_region(0, -1);
+						return false;
+					});
+				});
 				alert.response.connect((response) => {
 					if (response != "add") {
 						return;
@@ -134,6 +142,14 @@ namespace RooTerm.Host
 				alert.present(this.window);
 			});
 			group.add_action(add_group);
+			var rename_group = new GLib.SimpleAction("rename-group", null);
+			rename_group.activate.connect(() => {
+				if (this.target == null || this.target.kind != ConnectionKind.GROUP) {
+					return;
+				}
+				this.rename_group(this.target);
+			});
+			group.add_action(rename_group);
 			var edit_connection = new GLib.SimpleAction("edit-connection", null);
 			edit_connection.activate.connect(() => {
 				if (this.target == null || this.target.kind == ConnectionKind.LXC) {
@@ -275,6 +291,12 @@ namespace RooTerm.Host
 					break;
 
 				case ConnectionKind.GROUP:
+					var rename = new GLib.MenuItem("Rename", "tree.rename-group");
+					rename.set_icon(new GLib.ThemedIcon("document-edit-symbolic"));
+					model.append_item(rename);
+					var add_top = new GLib.MenuItem("Add top-level group", "tree.add-group");
+					add_top.set_icon(new GLib.ThemedIcon("folder-new-symbolic"));
+					model.append_item(add_top);
 					var add = new GLib.MenuItem("Add connection", "tree.add-connection");
 					add.set_icon(new GLib.ThemedIcon("list-add-symbolic"));
 					model.append_item(add);
@@ -321,6 +343,55 @@ namespace RooTerm.Host
 				height = 1
 			};
 			this.menu.popup();
+		}
+
+		/**
+		 * Ask for a new name for ``conn`` and save it.
+		 *
+		 * @param conn Group to rename
+		 */
+		public void rename_group(Connection conn)
+		{
+			if (conn.kind != ConnectionKind.GROUP) {
+				return;
+			}
+			var entry = new Gtk.Entry() {
+				text = conn.name,
+				hexpand = true,
+				activates_default = true
+			};
+			var alert = new Adw.AlertDialog("Rename group", null);
+			alert.extra_child = entry;
+			alert.add_response("cancel", "Cancel");
+			alert.add_response("save", "Save");
+			alert.default_response = "save";
+			alert.close_response = "cancel";
+			alert.set_response_appearance("save", Adw.ResponseAppearance.SUGGESTED);
+			alert.set_focus(entry);
+			alert.map.connect(() => {
+				GLib.Idle.add(() => {
+					entry.grab_focus();
+					entry.select_region(0, -1);
+					return false;
+				});
+			});
+			alert.response.connect((response) => {
+				if (response != "save") {
+					return;
+				}
+				var name = entry.text.strip();
+				if (name.length == 0 || name == conn.name) {
+					return;
+				}
+				conn.name = name;
+				conn.kind_code = (int) conn.kind;
+				conn.updated_dt = (int) new GLib.DateTime.now_local().to_unix();
+				if (conn.id < 1) {
+					return;
+				}
+				new SQ.Query<Connection>(this.window.tree.db, "connection").updateById(conn);
+			});
+			alert.present(this.window);
 		}
 	}
 }

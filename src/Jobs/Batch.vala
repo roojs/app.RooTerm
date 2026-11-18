@@ -36,16 +36,25 @@ namespace RooTerm.Jobs
 	public class Batch : OpenSession
 	{
 		public RooTerm.SQT.Script script = new RooTerm.SQT.Script();
-		public RooTerm.Dialog.Plan plan;
+		public RooTerm.Tab.Script.Run plan;
 		public RooTerm.SQT.TaskTarget target = new RooTerm.SQT.TaskTarget();
 		public RooTerm.Store.TaskTarget targets;
 		public Adw.TabPage page;
 		public Gtk.Button chip;
-		public Gtk.Image tick_icon = new Gtk.Image.from_icon_name("emblem-ok-symbolic");
+		public Gtk.Image tick_icon {
+			get;
+			set;
+			default = new Gtk.Image.from_icon_name("object-select-symbolic");
+		}
 		public bool halt = false;
 		public bool feeding = false;
 		public bool tick = false;
 		public bool passed = false;
+		/**
+		 * True after the shared countdown.
+		 * The body waits for this.
+		 */
+		public bool released = false;
 		/**
 		 * Cursor row of the command just sent.
 		 * That row is still the old prompt.
@@ -133,9 +142,9 @@ namespace RooTerm.Jobs
 		/**
 		 * Feed {@link RooTerm.SQT.Script.body} after the shell is up.
 		 *
-		 * An LXC row runs ``lxc-attach`` first. The title then
-		 * says ``about to run`` and counts five dots down
-		 * to one. Blank lines are
+		 * An LXC row runs ``lxc-attach`` first. The window then
+		 * counts ``about to run`` for three seconds.
+		 * Blank lines are
 		 * skipped. Each other line is {@link inject_line}. The text
 		 * from the last line to that prompt is matched with
 		 * {@link RooTerm.SQT.Script.success_regex}.
@@ -175,13 +184,10 @@ namespace RooTerm.Jobs
 					this.connection.name, this.current_state.to_string());
 			}
 			GLib.debug("dots start name=%s", this.connection.name);
-			for (var dots = 5; dots > 0; dots--) {
-				this.plan.title = "about to run " + string.nfill(dots, '.');
-				if (dots == 1) {
-					GLib.debug("dots one name=%s", this.connection.name);
-					break;
-				}
-				GLib.Timeout.add(1000, () => {
+			this.released = false;
+			this.plan.sync_title(true);
+			while (!this.released) {
+				GLib.Timeout.add(200, () => {
 					this.inject.callback();
 					return false;
 				});

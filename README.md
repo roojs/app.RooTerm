@@ -4,7 +4,7 @@ A thin SSH host manager and terminal for GNOME — a crossover between
 [Guake](https://guake.github.io/) and
 [Ásbrú Connection Manager](https://www.asbru-cm.net/).
 
-**Status:** early / usable for day-to-day SSH testing (version **0.1.2**).
+**Status:** early / usable for day-to-day SSH testing (version **0.1.4**).
 Screenshot coming later.
 
 ## Install

@@ -16,59 +16,40 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-namespace RooTerm.Tab
+namespace RooTerm.Tab.Script
 {
 	/**
-	 * Script sender.
+	 * Command list for {@link RooTerm.Dialog.Script}.
 	 *
-	 * Lists {@link RooTerm.Store.Script}. Add command and a row
-	 * activate {@link RooTerm.Dialog.Script}. Shell role ``script``: same
-	 * Register / Show / Hide as Preferences.
+	 * Search, the nickname column, and the command column.
+	 * Double-click and the play button both open
+	 * {@link RooTerm.Tab.Script.Edit}.
 	 *
 	 * == Example ==
 	 *
 	 * {{{
-	 * var sender = new RooTerm.Tab.Script(window);
-	 * sender.present();
+	 * var list = new RooTerm.Tab.Script.List(sender);
 	 * }}}
 	 */
-	public class Script : Adw.ApplicationWindow
+	public class List : Gtk.Box
 	{
-		public RooTerm.Store.Script store;
-		public RooTerm.Dialog.Script dialog;
-		public RooTerm.Dialog.Plan? batch;
+		private weak RooTerm.Dialog.Script sender;
 		private RooTerm.Filter.Script filter;
-		private weak RooTerm.MainWindow main;
 
 		/**
-		 * @param window main window, for the open database
+		 * @param sender script sender window
 		 */
-		public Script(RooTerm.MainWindow window)
+		public List(RooTerm.Dialog.Script sender)
 		{
 			Object(
-				application: window.application,
-				title: "Script sender",
-				deletable: false,
-				hide_on_close: false,
-				default_width: 860,
-				default_height: 520
+				orientation: Gtk.Orientation.VERTICAL,
+				spacing: 0,
+				hexpand: true,
+				vexpand: true
 			);
-			this.main = window;
-			this.add_css_class("floating-dialog");
-			this.store = new RooTerm.Store.Script(window.tree.db);
-			this.dialog = new RooTerm.Dialog.Script(this.store, this, window);
-			this.map.connect(() => {
-				GLib.Idle.add(() => {
-					this.main.shell.register(this, "script");
-					return false;
-				});
-			});
-			this.close_request.connect(() => {
-				this.main.dbus.call_shell_async("hide", new GLib.Variant("(s)", "script"));
-				return true;
-			});
+			this.sender = sender;
 			this.filter = new RooTerm.Filter.Script();
-			var listed = new Gtk.FilterListModel(this.store, this.filter) {
+			var listed = new Gtk.FilterListModel(sender.store, this.filter) {
 				incremental = false
 			};
 			var names = new Gtk.SignalListItemFactory();
@@ -145,9 +126,8 @@ namespace RooTerm.Tab
 					if (row == null) {
 						return;
 					}
-					var plan = new RooTerm.Dialog.Plan(this.main, this);
-					plan.open(row, this.main.tree);
-					this.batch = plan;
+					this.sender.edit.load(row);
+					this.sender.show_page(RooTerm.Dialog.Script.Page.EDIT);
 				});
 				item.child = button;
 			});
@@ -178,16 +158,6 @@ namespace RooTerm.Tab
 			}, "list");
 			body.add_named(empty, "empty");
 			body.visible_child_name = "empty";
-			var close = new Gtk.Button.with_label("Close");
-			close.clicked.connect(() => {
-				this.close();
-			});
-			var add = new Gtk.Button.with_label("Add command") {
-				css_classes = { "suggested-action" }
-			};
-			add.clicked.connect(() => {
-				this.dialog.open(new RooTerm.SQT.Script());
-			});
 			var search = new Gtk.SearchEntry() {
 				placeholder_text = "Search commands",
 				hexpand = true
@@ -202,22 +172,10 @@ namespace RooTerm.Tab
 				margin_bottom = 12
 			};
 			search_row.append(search);
-			var box = new Gtk.Box(Gtk.Orientation.VERTICAL, 0);
-			box.append(search_row);
-			box.append(body);
-			var header = new Adw.HeaderBar() {
-				show_start_title_buttons = false,
-				show_end_title_buttons = false
-			};
-			header.pack_start(close);
-			header.pack_end(add);
-			var toolbar = new Adw.ToolbarView() {
-				content = box
-			};
-			toolbar.add_top_bar(header);
-			this.content = toolbar;
-			this.store.notify["empty"].connect(() => {
-				if (this.store.empty) {
+			this.append(search_row);
+			this.append(body);
+			this.sender.store.notify["empty"].connect(() => {
+				if (this.sender.store.empty) {
 					body.visible_child_name = "empty";
 					return;
 				}
@@ -228,10 +186,11 @@ namespace RooTerm.Tab
 				if (row == null) {
 					return;
 				}
-				this.dialog.open(row);
+				this.sender.edit.load(row);
+				this.sender.show_page(RooTerm.Dialog.Script.Page.EDIT);
 			});
-			this.store.load();
-			if (this.store.empty) {
+			this.sender.store.load();
+			if (this.sender.store.empty) {
 				body.visible_child_name = "empty";
 				return;
 			}

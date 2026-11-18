@@ -274,6 +274,124 @@ namespace RooTerm.Host
 		}
 
 		/**
+		 * Move ``conn`` under ``parent``, or to the root when ``parent`` is null.
+		 * Sessions, the uuid map, and {@link flat} stay put. Writes
+		 * ``parent_uuid`` and ``position``.
+		 *
+		 * @param conn Row to move
+		 * @param parent New parent, or ``null`` for a root row
+		 * @return Whether the row changed parent
+		 */
+		public bool reparent(Connection conn, Connection? parent)
+		{
+			if (conn.parent == parent) {
+				return false;
+			}
+			var walk = parent;
+			while (walk != null) {
+				if (walk == conn) {
+					return false;
+				}
+				walk = walk.parent;
+			}
+			var weight = conn.children_open;
+			if (conn.sessions.get_n_items() > 0) {
+				weight++;
+			}
+			var from = conn.parent == null ? this : conn.parent.children;
+			var pos = 0u;
+			if (from.find(conn, out pos)) {
+				from.items.remove_at((int) pos);
+				from.items_changed(pos, 1, 0);
+			}
+			from.expandable.remove(conn);
+			if (weight != 0) {
+				var up = conn.parent;
+				while (up != null) {
+					up.children_open -= weight;
+					up = up.parent;
+				}
+			}
+			conn.tree_row = null;
+			conn.parent = parent;
+			conn.parent_uuid = parent == null ? "" : parent.uuid;
+			var onto = parent == null ? this : parent.children;
+			var next = 0;
+			for (var i = 0; i < onto.items.size; i++) {
+				var sibling = onto.items.get(i).position;
+				if (sibling >= next) {
+					next = sibling + 1;
+				}
+			}
+			var at = onto.items.size;
+			onto.items.add(conn);
+			onto.items_changed(at, 0, 1);
+			switch (conn.kind) {
+				case ConnectionKind.GROUP:
+				case ConnectionKind.LOCAL:
+					onto.expandable.add(conn);
+					break;
+
+				case ConnectionKind.HOST:
+					if (conn.lxc_host) {
+						onto.expandable.add(conn);
+					}
+					break;
+
+				default:
+					break;
+			}
+			if (weight != 0) {
+				var up = parent;
+				while (up != null) {
+					up.children_open += weight;
+					up = up.parent;
+				}
+				this.open_changed();
+			}
+			conn.position = next;
+			conn.kind_code = (int) conn.kind;
+			conn.updated_dt = (int) new GLib.DateTime.now_local().to_unix();
+			if (conn.id < 1) {
+				return true;
+			}
+			new SQ.Query<Connection>(this.db, "connection").updateById(conn);
+			return true;
+		}
+
+		/**
+		 * Groups live only at the root. A group stored under another row
+		 * is moved to the root and saved.
+		 */
+		public void flatten_groups()
+		{
+			var nested = new Gee.ArrayList<Connection>();
+			var pending = new Gee.ArrayList<Connection>();
+			for (var i = 0; i < this.size; i++) {
+				pending.add(this.get(i));
+			}
+			var at = 0;
+			while (at < pending.size) {
+				var conn = pending.get(at);
+				at++;
+				for (var i = 0; i < conn.children.size; i++) {
+					pending.add(conn.children.get(i));
+				}
+				if (conn.kind != ConnectionKind.GROUP || conn.parent == null) {
+					continue;
+				}
+				nested.add(conn);
+			}
+			foreach (var conn in nested) {
+				var from = conn.parent != null ? conn.parent.name : "";
+				if (!this.reparent(conn, null)) {
+					continue;
+				}
+				GLib.debug("group moved to root name=%s from=%s", conn.name, from);
+			}
+		}
+
+		/**
 		 * Expand this layer's rows that have children, then
 		 * {@link GLib.Idle.add} {@link expand_all} on those children's lists.
 		 * Nested {@link Gtk.TreeListRow}s exist only after the parent expands.
@@ -370,6 +488,7 @@ namespace RooTerm.Host
 						GLib.warning("connections rename failed");
 					}
 				}
+				tree.flatten_groups();
 				return tree;
 			}
 			var rows = new Gee.ArrayList<Connection>();
@@ -382,6 +501,7 @@ namespace RooTerm.Host
 					string hosts;
 					GLib.FileUtils.get_contents(path, out hosts);
 					TreeNodes.from_json(Json.from_string(hosts), tree);
+					tree.flatten_groups();
 					tree.migrate();
 				} catch (GLib.Error e) {
 					GLib.warning("connections load failed: %s", e.message);
@@ -426,6 +546,7 @@ namespace RooTerm.Host
 				by_id.get((int) fwd.connection_id).forwards.add(fwd);
 			}
 			GLib.debug("connections loaded count=%d", rows.size);
+			tree.flatten_groups();
 			if (!GLib.FileUtils.test(path, GLib.FileTest.IS_REGULAR)) {
 				return tree;
 			}

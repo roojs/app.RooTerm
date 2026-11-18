@@ -87,7 +87,7 @@ namespace RooTerm
 		/**
 		 * Script library window. Opened from the terminal right-click menu.
 		 */
-		public Tab.Script scripts;
+		public Dialog.Script scripts;
 		/**
 		 * Extension install / readiness / window {@link GnomeShell.register}.
 		 */
@@ -252,7 +252,7 @@ namespace RooTerm
 			}
 			this.shell = new GnomeShell(this);
 			this.connection_editor = new Dialog.Connection(this);
-			this.scripts = new Tab.Script(this);
+			this.scripts = new Dialog.Script(this);
 			this.map.connect(() => {
 				this.shell.register(this, "main");
 			});
