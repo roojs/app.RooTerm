@@ -135,7 +135,9 @@ namespace RooTerm.Dialog
 				margin_top = 12
 			};
 			success_title.add_css_class("heading");
-			var success_hint = new Gtk.Label("Use this to validate completion or success.") {
+			var success_hint = new Gtk.Label("Use this to validate completion or success. " +
+				"To check a command worked, add && echo \"SUCCEEDED\" at the end of it " +
+				"and use SUCCEEDED here.") {
 				xalign = 0,
 				wrap = true,
 				margin_start = 16,

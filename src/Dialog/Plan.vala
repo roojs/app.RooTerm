@@ -51,6 +51,8 @@ namespace RooTerm.Dialog
 		private Gtk.SearchEntry search;
 		private Gtk.Button select;
 		private Gtk.Button run;
+		private Gtk.Button cancel;
+		private Gtk.Button dismiss;
 		private Adw.ToggleGroup scopes;
 		private Gtk.Stack body;
 		private int opened = 0;
@@ -79,8 +81,8 @@ namespace RooTerm.Dialog
 				transient_for: parent,
 				deletable: false,
 				hide_on_close: true,
-				default_width: 720,
-				default_height: 520
+				default_width: 1008,
+				default_height: 728
 			);
 			this.main = main;
 			this.hosts = main.tree;
@@ -286,6 +288,7 @@ namespace RooTerm.Dialog
 				hexpand = true,
 				vexpand = true
 			};
+			tabs.add_css_class("vte-host");
 			var strip = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 2) {
 				hexpand = true
 			};
@@ -294,12 +297,28 @@ namespace RooTerm.Dialog
 				hexpand = true,
 				vexpand = true
 			};
+			running.add_css_class("vte-path");
 			running.append(tabs);
 			running.append(strip);
 			this.body.add_named(running, "run");
-			var close = new Gtk.Button.with_label("Close");
-			close.clicked.connect(() => {
+			this.dismiss = new Gtk.Button.with_label("Close");
+			this.dismiss.clicked.connect(() => {
+				if (this.jobs.size > 0) {
+					this.closing = true;
+				}
 				this.close();
+			});
+			this.cancel = new Gtk.Button.with_label("Cancel") {
+				visible = false
+			};
+			this.cancel.add_css_class("destructive-action");
+			this.cancel.clicked.connect(() => {
+				this.stopped = true;
+				for (var i = 0; i < this.jobs.size; i++) {
+					this.jobs.get(i).halt = true;
+				}
+				this.cancel.visible = false;
+				this.dismiss.visible = true;
 			});
 			this.run = new Gtk.Button.with_label("Run") {
 				sensitive = false
@@ -315,14 +334,6 @@ namespace RooTerm.Dialog
 			tools.append(this.scopes);
 			tools.append(this.select);
 			this.run.clicked.connect(() => {
-				if (this.run.label == "Cancel") {
-					this.stopped = true;
-					this.run.sensitive = false;
-					for (var i = 0; i < this.jobs.size; i++) {
-						this.jobs.get(i).halt = true;
-					}
-					return;
-				}
 				this.task.is_draft = false;
 				this.tasks.save(this.task);
 				this.run.sensitive = false;
@@ -357,30 +368,11 @@ namespace RooTerm.Dialog
 				if (this.goal == 0) {
 					return;
 				}
+				this.cancel.visible = true;
+				this.dismiss.visible = false;
 				tools.visible = false;
 				this.body.visible_child_name = "run";
 				this.title = "executing .... %d/%d".printf(0, this.goal);
-				GLib.Timeout.add(2000, () => {
-					if (this.stopped) {
-						return false;
-					}
-					this.run.label = "Cancel";
-					this.run.sensitive = true;
-					this.run.remove_css_class("suggested-action");
-					this.run.add_css_class("destructive-action");
-					return false;
-				});
-				GLib.Timeout.add(10000, () => {
-					if (this.stopped) {
-						return false;
-					}
-					this.sending = true;
-					this.title = "starting...";
-					for (var i = 0; i < this.jobs.size; i++) {
-						this.feed(this.jobs.get(i));
-					}
-					return false;
-				});
 				for (var i = 0; i < chosen.size; i++) {
 					this.append_job(chosen.get(i), tabs, strip);
 				}
@@ -391,8 +383,9 @@ namespace RooTerm.Dialog
 				show_start_title_buttons = false,
 				show_end_title_buttons = false
 			};
-			header.pack_start(close);
-			header.pack_end(this.run);
+			header.pack_start(this.run);
+			header.pack_end(this.dismiss);
+			header.pack_end(this.cancel);
 			var box = new Gtk.Box(Gtk.Orientation.VERTICAL, 0);
 			box.append(tools);
 			box.append(this.body);
@@ -408,6 +401,9 @@ namespace RooTerm.Dialog
 				});
 			});
 			this.close_request.connect(() => {
+				if (this.cancel.visible) {
+					return true;
+				}
 				if (this.closing || this.picks.size == 0) {
 					for (var i = 0; i < this.jobs.size; i++) {
 						var pid = this.jobs.get(i).terminal.child_pid;
@@ -529,6 +525,8 @@ namespace RooTerm.Dialog
 			this.passed = 0;
 			this.opened = 0;
 			this.jobs.clear();
+			this.cancel.visible = false;
+			this.dismiss.visible = true;
 			this.title = "Hosts to execute commands";
 			if (script.path.strip() != "") {
 				this.title = "Hosts to execute '" + script.path.strip() + "'";
@@ -561,6 +559,13 @@ namespace RooTerm.Dialog
 			target.started = (int64) new GLib.DateTime.now_local().to_unix();
 			this.targets.save(target);
 			var term = new Terminal.Ssh(conn, this.main.config);
+			var shown = this.main.sessions.stack.pages.visible_child as Host.Page;
+			if (shown != null && shown.current != null) {
+				term.terminal.font_desc = shown.current.terminal.font_desc;
+				term.terminal.font_scale = shown.current.terminal.font_scale;
+			}
+			GLib.debug("batch font name=%s font=%s scale=%s",
+				conn.name, term.terminal.font_desc.to_string(), term.terminal.font_scale.to_string());
 			var page = tabs.append(term);
 			page.title = conn.name;
 			var tick_icon = new Gtk.Image.from_icon_name("emblem-ok-symbolic") {
@@ -583,7 +588,8 @@ namespace RooTerm.Dialog
 				target = target,
 				page = page,
 				chip = chip,
-				tick_icon = tick_icon
+				tick_icon = tick_icon,
+				plan = this
 			};
 			this.jobs.add(job);
 			job.run.begin((obj, res) => {
@@ -601,9 +607,7 @@ namespace RooTerm.Dialog
 				if (this.finished == 0 && !this.sending) {
 					this.title = "executing .... %d/%d".printf(this.opened, this.goal);
 				}
-				if (!this.sending) {
-					return;
-				}
+				GLib.debug("shell up name=%s kind=%s", conn.name, conn.kind.to_string());
 				this.feed(job);
 			});
 		}
@@ -619,11 +623,16 @@ namespace RooTerm.Dialog
 		private void feed(Jobs.Batch job)
 		{
 			if (this.stopped || job.feeding) {
+				GLib.debug("feed skip name=%s stopped=%d feeding=%d",
+					job.connection.name, this.stopped ? 1 : 0, job.feeding ? 1 : 0);
 				return;
 			}
 			if (job.current_state != Jobs.Job.State.DONE) {
+				GLib.debug("feed skip name=%s state=%s",
+					job.connection.name, job.current_state.to_string());
 				return;
 			}
+			GLib.debug("feed name=%s", job.connection.name);
 			job.feeding = true;
 			job.inject.begin((obj, res) => {
 				try {
@@ -658,15 +667,22 @@ namespace RooTerm.Dialog
 			if (job.tick) {
 				job.tick_icon.visible = true;
 			}
-			this.title = "completed %d/%d - success %d/%d".printf(
-				this.finished,
-				this.goal,
-				this.passed,
-				this.goal
-			);
+			if (this.script.success_regex.strip().length == 0) {
+				this.title = "completed %d/%d".printf(this.finished, this.goal);
+			}
+			if (this.script.success_regex.strip().length > 0) {
+				this.title = "completed %d/%d - success %d/%d".printf(
+					this.finished,
+					this.goal,
+					this.passed,
+					this.goal
+				);
+			}
 			if (this.finished < this.goal) {
 				return;
 			}
+			this.cancel.visible = false;
+			this.dismiss.visible = true;
 			this.task.completed = (int64) new GLib.DateTime.now_local().to_unix();
 			this.tasks.save(this.task);
 		}

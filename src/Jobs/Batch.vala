@@ -36,6 +36,7 @@ namespace RooTerm.Jobs
 	public class Batch : OpenSession
 	{
 		public RooTerm.SQT.Script script = new RooTerm.SQT.Script();
+		public RooTerm.Dialog.Plan plan;
 		public RooTerm.SQT.TaskTarget target = new RooTerm.SQT.TaskTarget();
 		public RooTerm.Store.TaskTarget targets;
 		public Adw.TabPage page;
@@ -45,6 +46,12 @@ namespace RooTerm.Jobs
 		public bool feeding = false;
 		public bool tick = false;
 		public bool passed = false;
+		/**
+		 * Cursor row of the command just sent.
+		 * That row is still the old prompt.
+		 * The next prompt is a later row.
+		 */
+		private long prompt_row = -1;
 
 		/**
 		 * @param window Main window (secrets and login prompts)
@@ -126,7 +133,9 @@ namespace RooTerm.Jobs
 		/**
 		 * Feed {@link RooTerm.SQT.Script.body} after the shell is up.
 		 *
-		 * An LXC row runs ``lxc-attach`` first. Blank lines are
+		 * An LXC row runs ``lxc-attach`` first. The title then
+		 * says ``about to run`` and counts five dots down
+		 * to one. Blank lines are
 		 * skipped. Each other line is {@link inject_line}. The text
 		 * from the last line to that prompt is matched with
 		 * {@link RooTerm.SQT.Script.success_regex}.
@@ -140,6 +149,7 @@ namespace RooTerm.Jobs
 			this.tick = false;
 			this.passed = false;
 			if (this.halt) {
+				GLib.debug("inject halt name=%s", this.connection.name);
 				this.target.is_cancelled = true;
 				this.target.success = 1;
 				this.target.ended = (int64) new GLib.DateTime.now_local().to_unix();
@@ -148,16 +158,50 @@ namespace RooTerm.Jobs
 			}
 			if (this.connection.kind == Host.ConnectionKind.LXC) {
 				this.current_state = State.UNKNOWN;
+				long hold_col, hold_row;
+				this.terminal.terminal.get_cursor_position(out hold_col, out hold_row);
+				this.prompt_row = hold_row;
+				GLib.debug("attach send name=%s lxc=%s row=%ld",
+					this.connection.name, this.connection.lxc_name, hold_row);
 				this.terminal.terminal.feed_child(
 					("lxc-attach -n " + this.connection.lxc_name + "\n").data);
-				if (!yield this.expect(State.WAIT_SHELL_PROMPT, 60000)) {
+				var attached = yield this.expect(State.WAIT_SHELL_PROMPT, 60000);
+				if (!attached && this.current_state != State.WAIT_ROOT_PROMPT) {
+					GLib.debug("attach timeout name=%s state=%s",
+						this.connection.name, this.current_state.to_string());
 					throw new Error.TIMEOUT("lxc attach timeout name=%s".printf(this.connection.name));
+				}
+				GLib.debug("attach prompt name=%s state=%s",
+					this.connection.name, this.current_state.to_string());
+			}
+			GLib.debug("dots start name=%s", this.connection.name);
+			for (var dots = 5; dots > 0; dots--) {
+				this.plan.title = "about to run " + string.nfill(dots, '.');
+				if (dots == 1) {
+					GLib.debug("dots one name=%s", this.connection.name);
+					break;
+				}
+				GLib.Timeout.add(1000, () => {
+					this.inject.callback();
+					return false;
+				});
+				yield;
+				if (this.halt) {
+					GLib.debug("dots halt name=%s", this.connection.name);
+					this.target.is_cancelled = true;
+					this.target.success = 1;
+					this.target.ended = (int64) new GLib.DateTime.now_local().to_unix();
+					this.targets.save(this.target);
+					return;
 				}
 			}
 			var parts = this.script.body.split("\n");
+			GLib.debug("body start name=%s chars=%d parts=%d",
+				this.connection.name, this.script.body.length, parts.length);
 			var text = "";
 			for (var i = 0; i < parts.length; i++) {
 				if (this.halt) {
+					GLib.debug("body halt name=%s index=%d", this.connection.name, i);
 					this.target.is_cancelled = true;
 					this.target.success = 1;
 					this.target.ended = (int64) new GLib.DateTime.now_local().to_unix();
@@ -166,10 +210,13 @@ namespace RooTerm.Jobs
 				}
 				var line = parts[i].replace("\r", "");
 				if (line.strip().length == 0) {
+					GLib.debug("body skip blank name=%s index=%d", this.connection.name, i);
 					continue;
 				}
 				text = yield this.inject_line(line);
 			}
+			GLib.debug("body loop done name=%s identifier=%s",
+				this.connection.name, this.target.identifier.to_string());
 			this.passed = true;
 			this.target.success = 0;
 			if (this.script.success_regex.strip().length == 0) {
@@ -206,11 +253,18 @@ namespace RooTerm.Jobs
 			long start_col, start_row;
 			this.terminal.terminal.get_cursor_position(out start_col, out start_row);
 			this.current_state = State.UNKNOWN;
+			this.prompt_row = start_row;
+			GLib.debug("body line name=%s row=%ld text=%s", this.connection.name, start_row, line);
 			this.terminal.terminal.feed_child((line + "\n").data);
-			if (!yield this.expect(State.WAIT_SHELL_PROMPT, 60000)) {
+			var prompted = yield this.expect(State.WAIT_SHELL_PROMPT, 60000);
+			if (!prompted && this.current_state != State.WAIT_ROOT_PROMPT) {
+				GLib.debug("body line timeout name=%s state=%s text=%s",
+					this.connection.name, this.current_state.to_string(), line);
 				throw new Error.TIMEOUT("command timeout name=%s".printf(this.connection.name));
 			}
 			this.target.identifier++;
+			GLib.debug("body line prompt name=%s identifier=%s",
+				this.connection.name, this.target.identifier.to_string());
 			this.targets.save(this.target);
 			long end_col, end_row;
 			this.terminal.terminal.get_cursor_position(out end_col, out end_row);
@@ -221,6 +275,32 @@ namespace RooTerm.Jobs
 				return "";
 			}
 			return sample;
+		}
+
+		/**
+		 * Skip the prompt on the row we just typed on.
+		 * A later row is the next prompt.
+		 * A ``#`` prompt stays a root prompt.
+		 *
+		 * @param cursor_line Non-empty cursor row text
+		 */
+		protected override void on_content(string cursor_line)
+		{
+			if (this.prompt_row < 0) {
+				base.on_content(cursor_line);
+				return;
+			}
+			long col, row;
+			this.terminal.terminal.get_cursor_position(out col, out row);
+			if (row <= this.prompt_row) {
+				GLib.debug("prompt hold name=%s row=%ld line=%s",
+					this.connection.name, row, cursor_line);
+				return;
+			}
+			this.prompt_row = -1;
+			GLib.debug("prompt release name=%s row=%ld line=%s",
+				this.connection.name, row, cursor_line);
+			base.on_content(cursor_line);
 		}
 	}
 }
