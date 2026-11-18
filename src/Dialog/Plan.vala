@@ -56,6 +56,16 @@ namespace RooTerm.Dialog
 		private int opened = 0;
 		private int goal = 0;
 		private bool closing = false;
+		private bool stopped = false;
+		private RooTerm.SQT.Script script {
+			get; set; default = new RooTerm.SQT.Script();
+		}
+		private bool sending = false;
+		private int finished = 0;
+		private int passed = 0;
+		private Gee.ArrayList<Jobs.Batch> jobs {
+			get; set; default = new Gee.ArrayList<Jobs.Batch>();
+		}
 
 		/**
 		 * @param main Main window (database and Shell)
@@ -306,12 +316,17 @@ namespace RooTerm.Dialog
 			tools.append(this.select);
 			this.run.clicked.connect(() => {
 				if (this.run.label == "Cancel") {
+					this.stopped = true;
 					this.run.sensitive = false;
+					for (var i = 0; i < this.jobs.size; i++) {
+						this.jobs.get(i).halt = true;
+					}
 					return;
 				}
 				this.task.is_draft = false;
 				this.tasks.save(this.task);
 				this.run.sensitive = false;
+				this.stopped = false;
 				var chosen = new Gee.ArrayList<Host.Connection>();
 				var pending = new Gee.ArrayList<Host.Connection>();
 				for (var i = 0; i < this.hosts.size; i++) {
@@ -344,42 +359,33 @@ namespace RooTerm.Dialog
 				}
 				tools.visible = false;
 				this.body.visible_child_name = "run";
-				this.title = "executing .... 0/" + this.goal.to_string();
+				this.title = "executing .... %d/%d".printf(0, this.goal);
+				GLib.Timeout.add(2000, () => {
+					if (this.stopped) {
+						return false;
+					}
+					this.run.label = "Cancel";
+					this.run.sensitive = true;
+					this.run.remove_css_class("suggested-action");
+					this.run.add_css_class("destructive-action");
+					return false;
+				});
+				GLib.Timeout.add(10000, () => {
+					if (this.stopped) {
+						return false;
+					}
+					this.sending = true;
+					this.title = "starting...";
+					for (var i = 0; i < this.jobs.size; i++) {
+						this.feed(this.jobs.get(i));
+					}
+					return false;
+				});
 				for (var i = 0; i < chosen.size; i++) {
-					var conn = chosen.get(i);
-					var term = new Terminal.Ssh(conn, this.main.config);
-					var page = tabs.append(term);
-					page.title = conn.name;
-					var chip = new Gtk.Button.with_label(conn.name);
-					chip.add_css_class("flat");
-					chip.clicked.connect(() => {
-						tabs.selected_page = page;
-					});
-					strip.append(chip);
-					var job = new Jobs.Batch(this.main, conn, term);
-					job.run.begin((obj, res) => {
-						try {
-							job.run.end(res);
-						} catch (Jobs.Error e) {
-							GLib.warning("batch open failed name=%s: %s",
-								conn.name, e.message);
-						}
-						this.opened++;
-						this.title = "executing .... " + this.opened.to_string()
-							+ "/" + this.goal.to_string();
-						if (this.opened < this.goal) {
-							return;
-						}
-						this.title = "starting...";
-						GLib.Timeout.add(10000, () => {
-							this.run.label = "Cancel";
-							this.run.sensitive = true;
-							this.run.remove_css_class("suggested-action");
-							this.run.add_css_class("destructive-action");
-							return false;
-						});
-					});
+					this.append_job(chosen.get(i), tabs, strip);
 				}
+				this.goal = this.jobs.size;
+				this.title = "executing .... %d/%d".printf(0, this.goal);
 			});
 			var header = new Adw.HeaderBar() {
 				show_start_title_buttons = false,
@@ -403,6 +409,13 @@ namespace RooTerm.Dialog
 			});
 			this.close_request.connect(() => {
 				if (this.closing || this.picks.size == 0) {
+					for (var i = 0; i < this.jobs.size; i++) {
+						var pid = this.jobs.get(i).terminal.child_pid;
+						if (pid < 1) {
+							continue;
+						}
+						Posix.kill(pid, Posix.Signal.TERM);
+					}
 					this.main.dbus.call_shell_async("hide", new GLib.Variant("(s)", "plan"));
 					return false;
 				}
@@ -501,10 +514,9 @@ namespace RooTerm.Dialog
 		 */
 		public void open(RooTerm.SQT.Script script, Host.TreeNodes tree)
 		{
+			this.script = script;
 			this.task = new RooTerm.SQT.Task() {
-				name = script.path,
 				is_script = true,
-				command = script.body,
 				script_id = script.id,
 				is_draft = true
 			};
@@ -512,6 +524,11 @@ namespace RooTerm.Dialog
 			this.hosts = tree;
 			this.picks.clear();
 			this.closing = false;
+			this.sending = false;
+			this.finished = 0;
+			this.passed = 0;
+			this.opened = 0;
+			this.jobs.clear();
 			this.title = "Hosts to execute commands";
 			if (script.path.strip() != "") {
 				this.title = "Hosts to execute '" + script.path.strip() + "'";
@@ -522,6 +539,136 @@ namespace RooTerm.Dialog
 				this.main.dbus.call_shell_async("show", new GLib.Variant("(s)", "plan"));
 				return false;
 			});
+		}
+
+		/**
+		 * Open one ticked host and keep the job on {@link jobs}.
+		 *
+		 * @param conn host or container to run
+		 * @param tabs terminal pages in this window
+		 * @param strip tab buttons along the bottom
+		 */
+		private void append_job(Host.Connection conn, Adw.TabView tabs, Gtk.Box strip)
+		{
+			var rows = new Gee.ArrayList<RooTerm.SQT.TaskTarget>();
+			RooTerm.SQT.TaskTarget.query(this.main.tree.db).select(
+				"WHERE id = " + this.picks.get((int) conn.id).to_string(),
+				rows);
+			if (rows.size == 0) {
+				return;
+			}
+			var target = rows.get(0);
+			target.started = (int64) new GLib.DateTime.now_local().to_unix();
+			this.targets.save(target);
+			var term = new Terminal.Ssh(conn, this.main.config);
+			var page = tabs.append(term);
+			page.title = conn.name;
+			var tick_icon = new Gtk.Image.from_icon_name("emblem-ok-symbolic") {
+				visible = false
+			};
+			var chip_box = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 6);
+			chip_box.append(new Gtk.Label(conn.name));
+			chip_box.append(tick_icon);
+			var chip = new Gtk.Button() {
+				child = chip_box,
+				tooltip_text = conn.name
+			};
+			chip.add_css_class("flat");
+			chip.clicked.connect(() => {
+				tabs.selected_page = page;
+			});
+			strip.append(chip);
+			var job = new Jobs.Batch(this.main, conn, term) {
+				script = this.script,
+				target = target,
+				page = page,
+				chip = chip,
+				tick_icon = tick_icon
+			};
+			this.jobs.add(job);
+			job.run.begin((obj, res) => {
+				try {
+					job.run.end(res);
+				} catch (Jobs.Error e) {
+					GLib.warning("batch open failed name=%s: %s", conn.name, e.message);
+					target.ended = (int64) new GLib.DateTime.now_local().to_unix();
+					target.success = 1;
+					this.targets.save(target);
+					this.finish(job);
+					return;
+				}
+				this.opened++;
+				if (this.finished == 0 && !this.sending) {
+					this.title = "executing .... %d/%d".printf(this.opened, this.goal);
+				}
+				if (!this.sending) {
+					return;
+				}
+				this.feed(job);
+			});
+		}
+
+		/**
+		 * Start {@link Jobs.Batch.inject} once this shell is up.
+		 *
+		 * A stopped run, a job already feeding, or a shell that is
+		 * not up yet does nothing.
+		 *
+		 * @param job batch login for one machine
+		 */
+		private void feed(Jobs.Batch job)
+		{
+			if (this.stopped || job.feeding) {
+				return;
+			}
+			if (job.current_state != Jobs.Job.State.DONE) {
+				return;
+			}
+			job.feeding = true;
+			job.inject.begin((obj, res) => {
+				try {
+					job.inject.end(res);
+				} catch (GLib.Error e) {
+					GLib.warning("batch inject failed name=%s: %s", job.connection.name, e.message);
+					job.passed = false;
+					job.tick = false;
+					job.target.ended = (int64) new GLib.DateTime.now_local().to_unix();
+					job.target.success = 1;
+					this.targets.save(job.target);
+				}
+				this.finish(job);
+			});
+		}
+
+		/**
+		 * One target has finished. Update the title and the tick.
+		 *
+		 * The title is ``completed 8/10 - success 4/10``.
+		 * Finished out of selected, then passed out of selected.
+		 * The last finish sets ``task.completed``.
+		 *
+		 * @param job machine that just finished
+		 */
+		private void finish(Jobs.Batch job)
+		{
+			this.finished++;
+			if (job.passed) {
+				this.passed++;
+			}
+			if (job.tick) {
+				job.tick_icon.visible = true;
+			}
+			this.title = "completed %d/%d - success %d/%d".printf(
+				this.finished,
+				this.goal,
+				this.passed,
+				this.goal
+			);
+			if (this.finished < this.goal) {
+				return;
+			}
+			this.task.completed = (int64) new GLib.DateTime.now_local().to_unix();
+			this.tasks.save(this.task);
 		}
 
 		/**

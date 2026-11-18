@@ -44,6 +44,11 @@ namespace RooTerm.SQT
 		public string action { get; set; default = ""; }
 		public string body { get; set; default = ""; }
 		public bool allow_all { get; set; default = false; }
+		/**
+		 * Optional regex for the last command's output. Empty skips the check.
+		 * Column name is ''success_regex''.
+		 */
+		public string success_regex { get; set; default = ""; }
 		public int added_dt { get; set; default = 0; }
 		public int updated_dt { get; set; default = 0; }
 		public int deleted_dt { get; set; default = 0; }
@@ -77,12 +82,16 @@ namespace RooTerm.SQT
 					app                  TEXT NOT NULL DEFAULT '',
 					action               TEXT NOT NULL DEFAULT '',
 					body                 TEXT NOT NULL DEFAULT '',
-					allow_all            INTEGER NOT NULL DEFAULT 0
+					allow_all            INTEGER NOT NULL DEFAULT 0,
+					success_regex        TEXT NOT NULL DEFAULT ''
 				);
 				""";
 			if (Sqlite.OK != db.db.exec(ddl, null, out errmsg)) {
 				GLib.warning("script create failed: %s", db.db.errmsg());
 			}
+			db.db.exec(
+				"ALTER TABLE script ADD COLUMN success_regex TEXT NOT NULL DEFAULT '';",
+				null, out errmsg);
 			init_db_audit(db, "script");
 		}
 	}
