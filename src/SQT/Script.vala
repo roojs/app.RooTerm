@@ -49,6 +49,11 @@ namespace RooTerm.SQT
 		 * Column name is ''success_regex''.
 		 */
 		public string success_regex { get; set; default = ""; }
+		/**
+		 * Host batch becomes root before the body.
+		 * Column name is ''run_as_root''. Off leaves the login user.
+		 */
+		public bool run_as_root { get; set; default = false; }
 		public int added_dt { get; set; default = 0; }
 		public int updated_dt { get; set; default = 0; }
 		public int deleted_dt { get; set; default = 0; }
@@ -83,7 +88,8 @@ namespace RooTerm.SQT
 					action               TEXT NOT NULL DEFAULT '',
 					body                 TEXT NOT NULL DEFAULT '',
 					allow_all            INTEGER NOT NULL DEFAULT 0,
-					success_regex        TEXT NOT NULL DEFAULT ''
+					success_regex        TEXT NOT NULL DEFAULT '',
+					run_as_root          INTEGER NOT NULL DEFAULT 0
 				);
 				""";
 			if (Sqlite.OK != db.db.exec(ddl, null, out errmsg)) {
@@ -91,6 +97,9 @@ namespace RooTerm.SQT
 			}
 			db.db.exec(
 				"ALTER TABLE script ADD COLUMN success_regex TEXT NOT NULL DEFAULT '';",
+				null, out errmsg);
+			db.db.exec(
+				"ALTER TABLE script ADD COLUMN run_as_root INTEGER NOT NULL DEFAULT 0;",
 				null, out errmsg);
 			init_db_audit(db, "script");
 		}

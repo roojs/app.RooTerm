@@ -21,7 +21,12 @@ namespace RooTerm.Jobs
 	/**
 	 * Batch SSH open for one planning target.
 	 *
-	 * Same login as {@link OpenSession}, including sudo when set.
+	 * Same login as {@link OpenSession}.
+	 * A host becomes root when {@link RooTerm.SQT.Script.run_as_root}
+	 * is set. An LXC row with sudo after login becomes root on the
+	 * host first. {@link inject} then runs ``lxc-attach``, which is
+	 * root inside the container. An LXC row without that sudo stops
+	 * before login: attach needs root on the host.
 	 * Stops at the shell. Does not run ``lxc-console``.
 	 * {@link inject} runs ``lxc-attach`` and the command lines.
 	 * The caller already built the terminal.
@@ -127,13 +132,29 @@ namespace RooTerm.Jobs
 		}
 
 		/**
-		 * Spawn, log in, and sudo when that host asks for it.
+		 * Spawn and log in.
+		 *
+		 * A host calls {@link SudoLogin.sudo} when the script is
+		 * ticked run-as-root. An LXC row calls it when that
+		 * connection has sudo after login, so the host can run
+		 * ``lxc-attach``. Attach does not sudo. It starts a root
+		 * shell inside the container. An LXC row without that sudo
+		 * prints the reason and stops. It does not log in.
 		 */
 		public override async void run() throws Error
 		{
+			if (this.connection.kind == Host.ConnectionKind.LXC
+					&& !this.connection.sudo_after_login) {
+				GLib.debug("attach refused name=%s", this.connection.name);
+				this.terminal.terminal.feed(
+					"[no root on this host, cannot lxc-attach]\r\n".data);
+				throw new Error.FAIL("no root name=%s".printf(this.connection.name));
+			}
 			this.terminal.spawn();
 			yield this.login();
-			if (this.connection.sudo_after_login) {
+			if (this.connection.kind == Host.ConnectionKind.LXC) {
+				yield this.sudo();
+			} else if (this.script.run_as_root) {
 				yield this.sudo();
 			}
 			this.current_state = State.DONE;

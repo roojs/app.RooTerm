@@ -21,10 +21,12 @@ namespace RooTerm.Tab.Script
 	/**
 	 * Edit one {@link RooTerm.SQT.Script} inside {@link RooTerm.Dialog.Script}.
 	 *
-	 * Nickname, the commands to run, and an optional success criteria
-	 * line. Run/Test is the header button. It saves, then opens the
-	 * host picker without clearing its ticks. Save sits on the
-	 * bottom and writes the row without leaving.
+	 * Nickname, the commands to run, an optional success criteria
+	 * line, and a run-as-root tick on the nickname row. Run/Test is
+	 * the header button. It saves, then opens the host picker without
+	 * clearing its ticks. Save sits on the bottom and writes the row
+	 * without leaving. A ticked save runs ``pkexec /usr/bin/true``
+	 * first. A dismissed or failed check does not write the row.
 	 * {@link load} is a new visit: the saved row is shown and the
 	 * host ticks are cleared.
 	 *
@@ -51,7 +53,12 @@ namespace RooTerm.Tab.Script
 		private Gtk.Entry path_entry;
 		private Gtk.TextView body;
 		private Gtk.Entry success_entry;
+		private Gtk.CheckButton root_check;
 		private Gtk.Button delete_btn;
+		/**
+		 * True while ``pkexec`` is waiting for the keyboard.
+		 */
+		private bool authorizing = false;
 
 		/**
 		 * @param sender script sender window
@@ -88,6 +95,10 @@ namespace RooTerm.Tab.Script
 			};
 			path_row.append(nickname);
 			path_row.append(this.path_entry);
+			this.root_check = new Gtk.CheckButton.with_label("Run as root") {
+				valign = Gtk.Align.CENTER
+			};
+			path_row.append(this.root_check);
 			var command_title = new Gtk.Label("Command to Run") {
 				xalign = 0,
 				margin_start = 16,
@@ -194,12 +205,16 @@ namespace RooTerm.Tab.Script
 		 * Save click. ''testing'' opens the host picker and stays in
 		 * this visit, so the ticks are kept.
 		 *
-		 * An empty nickname or a bad regex does not save.
+		 * An empty nickname or a bad regex does not save. Run as root
+		 * asks PolicyKit before the row is written.
 		 *
 		 * @param testing true from Run/Test
 		 */
 		private void on_save_click(bool testing)
 		{
+			if (this.authorizing) {
+				return;
+			}
 			if (this.path_entry.text.strip().length == 0) {
 				return;
 			}
@@ -220,9 +235,62 @@ namespace RooTerm.Tab.Script
 					return;
 				}
 			}
+			if (!this.root_check.active) {
+				this.write(testing, pattern);
+				return;
+			}
+			this.authorizing = true;
+			this.authorize.begin(testing, pattern, (obj, res) => {
+				this.authorizing = false;
+				this.authorize.end(res);
+			});
+		}
+
+		/**
+		 * ``pkexec /usr/bin/true`` before a root script is stored.
+		 *
+		 * PolicyKit may reuse a recent grant and show no dialog.
+		 * Any other result leaves the stored row unchanged.
+		 *
+		 * @param testing true from Run/Test
+		 * @param pattern stripped success criteria
+		 */
+		private async void authorize(bool testing, string pattern)
+		{
+			try {
+				var proc = new GLib.Subprocess.newv(
+					{ "pkexec", "/usr/bin/true" },
+					GLib.SubprocessFlags.STDOUT_SILENCE | GLib.SubprocessFlags.STDERR_SILENCE
+				);
+				yield proc.wait_check_async();
+			} catch (GLib.Error e) {
+				GLib.debug("root auth failed: %s", e.message);
+				var alert = new Adw.AlertDialog(
+					"Run as root was not authorized. The command was not saved.",
+					null
+				) {
+					default_response = "ok",
+					close_response = "ok"
+				};
+				alert.add_response("ok", "OK");
+				alert.present(this.sender);
+				return;
+			}
+			this.write(testing, pattern);
+		}
+
+		/**
+		 * Write the form onto {@link row} and store it.
+		 *
+		 * @param testing true from Run/Test
+		 * @param pattern stripped success criteria
+		 */
+		private void write(bool testing, string pattern)
+		{
 			this.row.path = this.path_entry.text.strip();
 			this.row.body = this.body.buffer.text;
 			this.row.success_regex = pattern;
+			this.row.run_as_root = this.root_check.active;
 			this.sender.store.save(this.row);
 			this.delete_btn.visible = this.row.id > 0;
 			if (!testing) {
@@ -255,6 +323,7 @@ namespace RooTerm.Tab.Script
 			this.path_entry.text = row.path;
 			this.body.buffer.text = row.body;
 			this.success_entry.text = row.success_regex;
+			this.root_check.active = row.run_as_root;
 			this.delete_btn.visible = row.id > 0;
 			this.sender.hosts.picks.clear();
 			this.sender.hosts.picks_changed();

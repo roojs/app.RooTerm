@@ -25,7 +25,9 @@ namespace RooTerm.Tab.Script
 	 * indent. A tick still asks {@link RooTerm.Store.TaskTarget.save}.
 	 * Clearing the tick asks {@link RooTerm.Store.TaskTarget.remove}.
 	 * Ticks stay while the same command is being tested. {@link Edit.load}
-	 * clears them.
+	 * clears them. A root script leaves a host with no sudo path
+	 * unticked. A container with no sudo path stays unticked for
+	 * every script. That row reads ``name (no root)``.
 	 *
 	 * == Example ==
 	 *
@@ -141,15 +143,20 @@ namespace RooTerm.Tab.Script
 
 					default:
 						check.visible = false;
+						check.sensitive = false;
 						check.active = false;
 						return;
 				}
 				check.visible = true;
+				check.sensitive = this.accepts(conn);
 				check.set_data<int>("silence", 1);
-				check.active = this.picks.has_key((int) conn.id);
+				check.active = this.accepts(conn) && this.picks.has_key((int) conn.id);
 				check.set_data<int>("silence", 0);
 				check.set_data<ulong>("pick-sid", check.notify["active"].connect(() => {
 					if (check.get_data<int>("silence") != 0) {
+						return;
+					}
+					if (!this.accepts(conn)) {
 						return;
 					}
 					var id = (int) conn.id;
@@ -171,7 +178,8 @@ namespace RooTerm.Tab.Script
 					this.refresh_select();
 				}));
 				check.set_data<ulong>("sync-sid", this.picks_changed.connect(() => {
-					var want = this.picks.has_key((int) conn.id);
+					var want = this.accepts(conn) && this.picks.has_key((int) conn.id);
+					check.sensitive = this.accepts(conn);
 					if (check.active == want) {
 						return;
 					}
@@ -212,6 +220,7 @@ namespace RooTerm.Tab.Script
 					hexpand = true,
 					ellipsize = Pango.EllipsizeMode.END
 				};
+				item.set_data("name-label", label);
 				var row_box = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 6);
 				row_box.append(icon);
 				row_box.append(label);
@@ -221,15 +230,6 @@ namespace RooTerm.Tab.Script
 				};
 				item.child = expander;
 				item.bind_property("item", expander, "list-row", GLib.BindingFlags.SYNC_CREATE);
-				new Gtk.PropertyExpression(
-					typeof(Host.Connection),
-					new Gtk.PropertyExpression(
-						typeof(Gtk.TreeListRow),
-						new Gtk.PropertyExpression(typeof(Gtk.ListItem), null, "item"),
-						"item"
-					),
-					"name"
-				).bind(label, "label", item);
 				new Gtk.PropertyExpression(
 					typeof(Host.Connection),
 					new Gtk.PropertyExpression(
@@ -248,6 +248,24 @@ namespace RooTerm.Tab.Script
 					),
 					"hide-expander"
 				).bind(expander, "hide-expander", item);
+			});
+			names.bind.connect((obj) => {
+				var item = (Gtk.ListItem) obj;
+				var list_row = (Gtk.TreeListRow) item.item;
+				var conn = (Host.Connection) list_row.item;
+				var label = item.get_data<Gtk.Label>("name-label");
+				this.paint_name(label, conn);
+				item.set_data<ulong>("name-sid", this.picks_changed.connect(() => {
+					this.paint_name(label, conn);
+				}));
+			});
+			names.unbind.connect((obj) => {
+				var item = (Gtk.ListItem) obj;
+				var old = item.get_data<ulong>("name-sid");
+				if (old != 0) {
+					this.disconnect(old);
+					item.set_data<ulong>("name-sid", 0);
+				}
 			});
 			grid.append_column(new Gtk.ColumnViewColumn("Host", names) {
 				expand = true
@@ -358,13 +376,8 @@ namespace RooTerm.Tab.Script
 					if (!this.filter.match(conn)) {
 						continue;
 					}
-					switch (conn.kind) {
-						case Host.ConnectionKind.HOST:
-						case Host.ConnectionKind.LXC:
-							break;
-
-						default:
-							continue;
+					if (!this.accepts(conn)) {
+						continue;
 					}
 					ids.add((int) conn.id);
 					if (!this.picks.has_key((int) conn.id)) {
@@ -399,10 +412,99 @@ namespace RooTerm.Tab.Script
 		}
 
 		/**
+		 * Name cell. A host with no sudo path reads ``name (no root)``
+		 * while the script runs as root. A container with no sudo path
+		 * always reads that, because attach needs root on the host.
+		 *
+		 * @param label row label
+		 * @param conn host-tree row
+		 */
+		private void paint_name(Gtk.Label label, Host.Connection conn)
+		{
+			var blocked = (conn.kind == Host.ConnectionKind.LXC && !conn.sudo_after_login)
+				|| (conn.kind == Host.ConnectionKind.HOST
+					&& this.script.run_as_root
+					&& !conn.sudo_after_login);
+			label.label = blocked ? conn.name + " (no root)" : conn.name;
+			if (blocked) {
+				label.add_css_class("dim-label");
+			} else {
+				label.remove_css_class("dim-label");
+			}
+		}
+
+		/**
+		 * Drop ticks on rows this script cannot run on.
+		 */
+		private void drop_blocked()
+		{
+			var drop = new Gee.ArrayList<int>();
+			var pending = new Gee.ArrayList<Host.Connection>();
+			for (var i = 0; i < this.nodes.size; i++) {
+				pending.add(this.nodes.get(i));
+			}
+			var at = 0;
+			while (at < pending.size) {
+				var conn = pending.get(at);
+				at++;
+				for (var i = 0; i < conn.children.size; i++) {
+					pending.add(conn.children.get(i));
+				}
+				var id = (int) conn.id;
+				if (this.picks.has_key(id) && !this.accepts(conn)) {
+					drop.add(id);
+				}
+			}
+			if (drop.size == 0) {
+				return;
+			}
+			for (var i = 0; i < drop.size; i++) {
+				var id = drop.get(i);
+				var target = new RooTerm.SQT.TaskTarget() {
+					id = this.picks.get(id)
+				};
+				this.targets.remove(target);
+				this.picks.unset(id);
+			}
+			this.picks_changed();
+		}
+
+		/**
+		 * Whether this visit may tick ''conn''.
+		 *
+		 * A script that stays the login user can use any host, and a
+		 * container that has sudo after login. A root script can use
+		 * a host that has sudo after login. A container without that
+		 * sudo cannot attach.
+		 *
+		 * @param conn host-tree row
+		 * @return true when the checkbox can be turned on
+		 */
+		private bool accepts(Host.Connection conn)
+		{
+			switch (conn.kind) {
+				case Host.ConnectionKind.HOST:
+				case Host.ConnectionKind.LXC:
+					break;
+
+				default:
+					return false;
+			}
+			if (conn.kind == Host.ConnectionKind.LXC) {
+				return conn.sudo_after_login;
+			}
+			if (this.script.run_as_root) {
+				return conn.sudo_after_login;
+			}
+			return true;
+		}
+
+		/**
 		 * Select all becomes Select none when every matching row is ticked.
 		 */
 		public void refresh_select()
 		{
+			this.drop_blocked();
 			var total = 0;
 			var picked = 0;
 			var pending = new Gee.ArrayList<Host.Connection>();
@@ -419,13 +521,8 @@ namespace RooTerm.Tab.Script
 				if (!this.filter.match(conn)) {
 					continue;
 				}
-				switch (conn.kind) {
-					case Host.ConnectionKind.HOST:
-					case Host.ConnectionKind.LXC:
-						break;
-
-					default:
-						continue;
+				if (!this.accepts(conn)) {
+					continue;
 				}
 				total++;
 				if (this.picks.has_key((int) conn.id)) {

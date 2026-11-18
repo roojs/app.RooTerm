@@ -204,11 +204,8 @@ namespace RooTerm.Tab.Script
 			target.started = (int64) new GLib.DateTime.now_local().to_unix();
 			this.sender.hosts.targets.save(target);
 			var term = new Terminal.Ssh(conn, this.sender.main.config);
-			var shown = this.sender.main.sessions.stack.pages.visible_child as Host.Page;
-			if (shown != null && shown.current != null) {
-				term.terminal.font_desc = shown.current.terminal.font_desc;
-				term.terminal.font_scale = shown.current.terminal.font_scale;
-			}
+			term.terminal.font_desc = this.sender.main.config.font_desc();
+			term.terminal.font_scale = 1;
 			GLib.debug("batch font name=%s font=%s scale=%s",
 				conn.name, term.terminal.font_desc.to_string(), term.terminal.font_scale.to_string());
 			var page = this.tabs.append(term);

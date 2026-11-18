@@ -14,6 +14,18 @@ as `## [X.Y.Z] - YYYY-MM-DD` and setting `meson.build` to the same version
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-11-18
+
+### Added
+
+- Script sender: Run as root on the nickname row. Saving a ticked script asks PolicyKit before the row is stored
+
+### Fixed
+
+- A host batch becomes root with `sudo -i` when the script is ticked run as root, then sends the body
+- An LXC batch runs `sudo -i` on the host when that connection asks, then `lxc-attach`. A container with no sudo path stays unticked and does not log in
+- Batch terminals use the preference font size
+
 ## [0.1.4] - 2026-11-18
 
 ### Added

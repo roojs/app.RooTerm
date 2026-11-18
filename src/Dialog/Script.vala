@@ -217,6 +217,7 @@ namespace RooTerm.Dialog
 					this.header.pack_start(this.back_btn);
 					this.header.pack_end(this.run.start_btn);
 					this.hosts.refresh_select();
+					this.hosts.picks_changed();
 					break;
 
 				case Page.RUN:
