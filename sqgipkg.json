@@ -47,44 +47,6 @@
             ]
           }
         ]
-      },
-      {
-        "arch": "aarch64",
-        "build_dir": "build-linux-aarch64",
-        "entry_linux": "build-linux-aarch64/rooterm",
-        "deb": {
-          "download": true,
-          "suite": "plucky",
-          "packages": [
-            "libgtk-4-dev",
-            "gir1.2-gtk-4.0",
-            "libadwaita-1-dev",
-            "gir1.2-adw-1",
-            "libvte-2.91-gtk4-dev",
-            "gir1.2-vte-3.91",
-            "libgee-0.8-dev",
-            "libglib2.0-dev",
-            "libgcrypt20-dev",
-            "libyaml-dev",
-            "libjson-glib-dev",
-            "libsecret-1-dev",
-            "libsqlite3-dev",
-            "libocsqlite-dev",
-            "gobject-introspection",
-            "libgirepository1.0-dev"
-          ]
-        },
-        "inherit_native_projects": false,
-        "native_projects": [
-          {
-            "name": "rooterm",
-            "dir": ".",
-            "build": [
-              "./scripts/release/meson-sqgipkg-setup.sh linux \"$SQGI_LINUX_BUILD_DIR\"",
-              "meson compile -C \"$SQGI_LINUX_BUILD_DIR\" ./rooterm:executable"
-            ]
-          }
-        ]
       }
     ]
   }
