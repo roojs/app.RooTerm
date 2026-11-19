@@ -30,12 +30,23 @@ run_root() {
   fi
 }
 
+run_root install -d -m 0755 /etc/pki/rpm-gpg
+run_root curl -fsSL https://roojs.github.io/repos/key.gpg \
+  -o /etc/pki/rpm-gpg/RPM-GPG-KEY-roojs
+run_root rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-roojs
+run_root curl -fsSL https://roojs.github.io/repos/repo \
+  -o /etc/yum.repos.d/roojs.repo
+run_root sed -i \
+  's|^gpgkey=.*|gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-roojs|' \
+  /etc/yum.repos.d/roojs.repo
+
 run_root dnf -y install \
   rpm-build rpmdevtools \
   meson ninja-build gcc pkgconf-pkg-config vala desktop-file-utils \
   gtk4-devel libadwaita-devel vte291-gtk4-devel \
   libgee-devel libgcrypt-devel libyaml-devel \
-  json-glib-devel libsecret-devel \
+  json-glib-devel libsecret-devel libocsqlite-devel \
+  'pkgconfig(sqlite3)' \
   openssh-clients
 
 TOPDIR="${ROOT}/.rpmbuild"

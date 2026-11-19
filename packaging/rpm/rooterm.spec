@@ -20,7 +20,10 @@ BuildRequires:  pkgconfig(libgcrypt)
 BuildRequires:  pkgconfig(yaml-0.1)
 BuildRequires:  pkgconfig(json-glib-1.0)
 BuildRequires:  pkgconfig(libsecret-1)
+BuildRequires:  pkgconfig(sqlite3)
+BuildRequires:  libocsqlite-devel
 
+Requires:       libocsqlite
 Requires:       openssh-clients
 
 %description

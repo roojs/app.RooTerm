@@ -15,7 +15,9 @@ Build-Depends: debhelper-compat (= 13),
                libgcrypt20-dev,
                libyaml-dev,
                libjson-glib-dev,
-               libsecret-1-dev
+               libsecret-1-dev,
+               libsqlite3-dev,
+               libocsqlite-dev
 Standards-Version: 4.6.2
 Homepage: https://github.com/roojs/app.RooTerm
 Vcs-Browser: https://github.com/roojs/app.RooTerm
@@ -26,6 +28,7 @@ Package: rooterm
 Architecture: any
 Depends: ${shlibs:Depends},
          ${misc:Depends},
+         libocsqlite1,
          openssh-client
 Description: SSH host manager and terminal for GNOME
  Roo Term is a thin SSH host manager and terminal for GNOME — a crossover
