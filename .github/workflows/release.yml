@@ -26,28 +26,40 @@ env:
 jobs:
   build-debian:
     name: Build Debian package
+    # 24.04 ships libadwaita 1.5. Adw.ToggleGroup needs 1.7, which 25.04 has.
+    # The image has no git and no sudo; checkout and the apt scripts run as root.
     runs-on: ubuntu-24.04
+    container:
+      image: ubuntu:25.04
+    defaults:
+      run:
+        shell: bash
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      ROOJS_APT_SUITE: plucky
+      TZ: UTC
     steps:
+      - name: Install git
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends git ca-certificates
+
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Install build dependencies
-        env:
-          ROOJS_APT_SUITE: plucky
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
+          set -euo pipefail
+          chmod +x scripts/ci/enable-roojs-apt.sh scripts/ci/install-libvte-plucky.sh
+          ./scripts/ci/enable-roojs-apt.sh
+          apt-get install -y --no-install-recommends \
             build-essential debhelper devscripts meson ninja-build \
             pkg-config valac desktop-file-utils \
             libgtk-4-dev libadwaita-1-dev \
             libgee-0.8-dev libgcrypt20-dev libyaml-dev \
             libjson-glib-dev libsecret-1-dev \
-            libsqlite3-dev
-          # Noble has no roojs suite. libocsqlite is published for Plucky.
-          chmod +x scripts/ci/enable-roojs-apt.sh
-          ./scripts/ci/enable-roojs-apt.sh
-          sudo apt-get install -y --no-install-recommends libocsqlite-dev
-          # Noble’s VTE is 0.76; termprop needs ≥ 0.78 — pull Plucky VTE.
+            libsqlite3-dev libocsqlite-dev
+          # 25.04 already has VTE ≥ 0.78. The script only reaches into Plucky on Noble.
           ./scripts/ci/install-libvte-plucky.sh
 
       - name: Derive debian/changelog from CHANGELOG.md
