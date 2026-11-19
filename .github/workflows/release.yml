@@ -108,8 +108,15 @@ jobs:
           path: artifacts/*.rpm
 
   build-appimage:
-    name: Build AppImages
+    name: Build AppImage ${{ matrix.arch }}
     runs-on: ubuntu-24.04
+    # Two runners. One job would add the two builds together; the release
+    # clock is whichever one is still running. Cache keys include the arch
+    # so the two saves do not reserve the same key.
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, aarch64]
     steps:
       - name: Checkout RooTerm
         uses: actions/checkout@v4
@@ -117,22 +124,31 @@ jobs:
           path: RooTerm
 
       - name: Restore sqgipkg dependency cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: RooTerm/.sqgipkg
-          key: sqgipkg-deps-v1-${{ inputs.refresh_cache && github.run_id || 'stable' }}-${{ hashFiles('RooTerm/sqgipkg.json', 'RooTerm/scripts/release/sqgi.revision') }}
+          key: sqgipkg-deps-${{ matrix.arch }}-v2-${{ inputs.refresh_cache && github.run_id || 'stable' }}-${{ hashFiles('RooTerm/sqgipkg.json', 'RooTerm/scripts/release/sqgi.revision') }}
           restore-keys: |
-            sqgipkg-deps-v1-stable-
+            ${{ inputs.refresh_cache && 'sqgipkg-deps-nocache-' || format('sqgipkg-deps-{0}-v2-stable-', matrix.arch) }}
 
+      # Do not hash RooTerm/** . A sysroot cache under RooTerm/.ci-cache is
+      # full of symlinks, and hashFiles walks that on the post step.
       - name: Restore sqgipkg Meson build cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
-          path: |
-            RooTerm/build-linux-x86_64
-            RooTerm/build-linux-aarch64
-          key: sqgipkg-meson-v1-${{ inputs.refresh_cache && github.run_id || 'stable' }}-${{ hashFiles('RooTerm/**/*.vala', 'RooTerm/**/meson.build', 'RooTerm/meson.build', 'RooTerm/sqgipkg.json') }}
+          path: RooTerm/build-linux-${{ matrix.arch }}
+          key: sqgipkg-meson-${{ matrix.arch }}-v2-${{ inputs.refresh_cache && github.run_id || 'stable' }}-${{ hashFiles('RooTerm/src/**/*.vala', 'RooTerm/vapi/**', 'RooTerm/meson.build', 'RooTerm/sqgipkg.json', 'RooTerm/scripts/release/meson-sqgipkg-setup.sh') }}
           restore-keys: |
-            sqgipkg-meson-v1-stable-
+            ${{ inputs.refresh_cache && 'sqgipkg-meson-nocache-' || format('sqgipkg-meson-{0}-v2-stable-', matrix.arch) }}
+
+      - name: Restore sqgipkg Linux sysroot cache
+        id: sqgipkg-sysroot
+        uses: actions/cache/restore@v6
+        with:
+          path: RooTerm/.ci-cache/sqgipkg
+          key: sqgipkg-linux-${{ matrix.arch }}-v1-${{ inputs.refresh_cache && github.run_id || 'stable' }}-${{ hashFiles('RooTerm/sqgipkg.json', 'RooTerm/scripts/release/sqgi.revision') }}
+          restore-keys: |
+            ${{ inputs.refresh_cache && 'sqgipkg-linux-nocache-' || format('sqgipkg-linux-{0}-v1-stable-', matrix.arch) }}
 
       - name: Install host build dependencies
         working-directory: RooTerm
@@ -144,8 +160,6 @@ jobs:
             build-essential cmake ninja-build pkg-config git file ca-certificates \
             wget curl meson valac gobject-introspection \
             libglib2.0-dev libgirepository1.0-dev libffi-dev libcairo2-dev \
-            gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
-            qemu-user-static binfmt-support squashfs-tools \
             desktop-file-utils
           # sqgipkg downloads libocsqlite-dev from the roojs archive.
           chmod +x scripts/ci/enable-roojs-apt.sh
@@ -170,12 +184,21 @@ jobs:
           ref: ${{ steps.sqgi.outputs.rev }}
 
       - name: Restore sqgi build cache
-        uses: actions/cache@v4
+        id: sqgi-build
+        uses: actions/cache/restore@v6
         with:
           path: sqgi/build
-          key: sqgi-build-v1-${{ hashFiles('RooTerm/scripts/release/sqgi.revision') }}
-          restore-keys: |
-            sqgi-build-v1-
+          key: sqgi-build-v2-${{ hashFiles('RooTerm/scripts/release/sqgi.revision') }}
+          restore-keys: sqgi-build-v2-
+
+      - name: Install AppImage build dependencies
+        run: |
+          extra=""
+          if [ "${{ matrix.arch }}" = "aarch64" ]; then
+            extra="gcc-aarch64-linux-gnu g++-aarch64-linux-gnu qemu-user-static binfmt-support"
+          fi
+          sudo apt-get install -y --no-install-recommends \
+            squashfs-tools $extra
 
       - name: Build and install sqgi
         run: |
@@ -184,30 +207,48 @@ jobs:
           sudo cmake --install sqgi/build --prefix /usr/local
           sudo ldconfig
 
-      - name: Build Linux x86_64 AppImage
+      - name: Save sqgi build cache
+        if: success() && steps.sqgi-build.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        continue-on-error: true
+        with:
+          path: sqgi/build
+          key: ${{ steps.sqgi-build.outputs.cache-primary-key }}
+
+      - name: Build Linux ${{ matrix.arch }} AppImage
         working-directory: RooTerm
         run: |
           chmod +x scripts/release/meson-sqgipkg-setup.sh
-          sqgipkg --target appimage --appimage-arch x86_64 --sqgi-source-dir "$GITHUB_WORKSPACE/sqgi"
+          refresh=""
+          if [ "${{ inputs.refresh_cache }}" = "true" ]; then
+            refresh=--refresh-linux-packages
+          fi
+          sqgipkg --target appimage --appimage-arch "${{ matrix.arch }}" \
+            --sqgi-source-dir "$GITHUB_WORKSPACE/sqgi" \
+            --linux-deb-sysroot-cache "$GITHUB_WORKSPACE/RooTerm/.ci-cache/sqgipkg/linux-sysroots" \
+            $refresh
 
-      - name: Build Linux aarch64 AppImage
-        working-directory: RooTerm
-        run: |
-          sqgipkg --target appimage --appimage-arch aarch64 --sqgi-source-dir "$GITHUB_WORKSPACE/sqgi"
+      - name: Save sqgipkg Linux sysroot cache
+        if: success() && steps.sqgipkg-sysroot.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        continue-on-error: true
+        with:
+          path: RooTerm/.ci-cache/sqgipkg
+          key: ${{ steps.sqgipkg-sysroot.outputs.cache-primary-key }}
 
       - name: Collect AppImage artifacts
         working-directory: RooTerm
         run: |
           set -euo pipefail
           mkdir -p artifacts
-          cp dist-linux-x86_64/RooTerm.AppImage artifacts/RooTerm-x86_64.AppImage
-          cp dist-linux-aarch64/RooTerm.AppImage artifacts/RooTerm-aarch64.AppImage
+          cp "dist-linux-${{ matrix.arch }}/RooTerm.AppImage" \
+            "artifacts/RooTerm-${{ matrix.arch }}.AppImage"
           ls -lh artifacts
 
       - name: Upload AppImage artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: rooterm-appimage
+          name: rooterm-appimage-${{ matrix.arch }}
           path: RooTerm/artifacts/*
 
   publish:
